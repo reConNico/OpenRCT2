@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,7 +9,9 @@
 
 #ifndef DISABLE_OPENGL
 
-#    include "DrawRectShader.h"
+    #include "DrawRectShader.h"
+
+using namespace OpenRCT2::Ui;
 
 namespace
 {
@@ -20,15 +22,18 @@ namespace
     };
 } // namespace
 
-constexpr VDStruct VertexData[4] = {
+constexpr VDStruct kVertexData[4] = {
     { 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f },
     { 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f },
     { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f },
     { 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f },
 };
 
+constexpr size_t kInitialInstancesBufferSize = 32768;
+
 DrawRectShader::DrawRectShader()
     : OpenGLShaderProgram("drawrect")
+    , _maxInstancesBufferSize(kInitialInstancesBufferSize)
 {
     GetLocations();
 
@@ -37,7 +42,7 @@ DrawRectShader::DrawRectShader()
     glGenVertexArrays(1, &_vao);
 
     glBindBuffer(GL_ARRAY_BUFFER, _vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(VertexData), VertexData, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(kVertexData), kVertexData, GL_STATIC_DRAW);
 
     glBindVertexArray(_vao);
 
@@ -52,6 +57,8 @@ DrawRectShader::DrawRectShader()
     glVertexAttribPointer(vVertVec, 2, GL_FLOAT, GL_FALSE, sizeof(VDStruct), reinterpret_cast<void*>(offsetof(VDStruct, vec)));
 
     glBindBuffer(GL_ARRAY_BUFFER, _vboInstances);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(DrawRectCommand) * kInitialInstancesBufferSize, nullptr, GL_STREAM_DRAW);
+
     glVertexAttribIPointer(vClip, 4, GL_INT, sizeof(DrawRectCommand), reinterpret_cast<void*>(offsetof(DrawRectCommand, clip)));
     glVertexAttribIPointer(
         vTexColourAtlas, 1, GL_INT, sizeof(DrawRectCommand),
@@ -163,7 +170,16 @@ void DrawRectShader::SetInstances(const RectCommandBatch& instances)
     glBindVertexArray(_vao);
 
     glBindBuffer(GL_ARRAY_BUFFER, _vboInstances);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(DrawRectCommand) * instances.size(), instances.data(), GL_STREAM_DRAW);
+
+    if (instances.size() > _maxInstancesBufferSize)
+    {
+        glBufferData(GL_ARRAY_BUFFER, sizeof(DrawRectCommand) * instances.size(), instances.data(), GL_STREAM_DRAW);
+        _maxInstancesBufferSize = instances.size();
+    }
+    else
+    {
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(DrawRectCommand) * instances.size(), instances.data());
+    }
 
     _instanceCount = static_cast<GLsizei>(instances.size());
 }

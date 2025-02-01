@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,8 +10,6 @@
 #pragma once
 
 #include <openrct2/Context.h>
-#include <openrct2/common.h>
-#include <openrct2/ui/UiContext.h>
 
 union SDL_Event;
 
@@ -32,15 +30,17 @@ namespace OpenRCT2::Ui
 
     public:
         bool IsActive();
-        TextInputSession* Start(utf8* buffer, size_t bufferSize);
+        TextInputSession* Start(u8string& buffer, size_t maxLength);
         void Stop();
         void HandleMessage(const SDL_Event* e);
 
     private:
-        void CursorHome();
-        void CursorEnd();
-        void CursorLeft();
-        void CursorRight();
+        void CaretMoveToStart();
+        void CaretMoveToEnd();
+        void CaretMoveLeft();
+        void CaretMoveRight();
+        void CaretMoveToLeftToken();
+        void CaretMoveToRightToken();
         void Insert(const utf8* text);
         void InsertCodepoint(codepoint_t codepoint);
         void Clear();

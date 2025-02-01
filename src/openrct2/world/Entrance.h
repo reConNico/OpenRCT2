@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,59 +10,28 @@
 #pragma once
 
 #include "../Identifiers.h"
-#include "../common.h"
 #include "Location.hpp"
-#include "Map.h"
 
-#include <vector>
+struct CoordsXYE;
 
-#pragma pack(push, 1)
-struct rct_entrance_type
-{
-    rct_string_id string_idx; // 0x00
-    uint32_t image_id;        // 0x02
-    uint8_t scrolling_mode;   // 0x06
-    uint8_t text_height;      // 0x07
-};
-assert_struct_size(rct_entrance_type, 8);
-#pragma pack(pop)
-
-struct TileElement;
-
-enum
-{
-    ENTRANCE_ELEMENT_FLAGS2_LEGACY_PATH_ENTRY = (1 << 0),
-};
-
-namespace EntranceSequence
-{
-    constexpr const uint8_t Centre = 0;
-    constexpr const uint8_t Left = 1;
-    constexpr const uint8_t Right = 2;
-}; // namespace EntranceSequence
-
-constexpr const uint8_t ParkEntranceHeight = 12 * COORDS_Z_STEP;
-constexpr const uint8_t RideEntranceHeight = 7 * COORDS_Z_STEP;
-constexpr const uint8_t RideExitHeight = 5 * COORDS_Z_STEP;
+constexpr uint8_t ParkEntranceHeight = 12 * kCoordsZStep;
+constexpr uint8_t RideEntranceHeight = 7 * kCoordsZStep;
+constexpr uint8_t RideExitHeight = 5 * kCoordsZStep;
 
 extern bool gParkEntranceGhostExists;
 extern CoordsXYZD gParkEntranceGhostPosition;
 
-#define MAX_PARK_ENTRANCES 256
-
-constexpr int32_t MaxRideEntranceOrExitHeight = 244 * COORDS_Z_STEP;
-
-extern std::vector<CoordsXYZD> gParkEntrances;
+constexpr int32_t MaxRideEntranceOrExitHeight = 244 * kCoordsZStep;
 
 extern CoordsXYZD gRideEntranceExitGhostPosition;
 extern StationIndex gRideEntranceExitGhostStationIndex;
 
-void park_entrance_remove_ghost();
-money32 park_entrance_place_ghost(const CoordsXYZD& entranceLoc);
+void ParkEntranceRemoveGhost();
+int32_t ParkEntranceGetIndex(const CoordsXYZ& entrancePos);
 
-void reset_park_entrance();
-void maze_entrance_hedge_replacement(const CoordsXYE& entrance);
-void maze_entrance_hedge_removal(const CoordsXYE& entrance);
+void ParkEntranceReset();
+void MazeEntranceHedgeReplacement(const CoordsXYE& entrance);
+void MazeEntranceHedgeRemoval(const CoordsXYE& entrance);
 
-void fix_park_entrance_locations();
-void UpdateParkEntranceLocations();
+void ParkEntranceFixLocations();
+void ParkEntranceUpdateLocations();

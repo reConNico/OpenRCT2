@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,11 +10,13 @@
 #include "Object.h"
 
 #include "../Context.h"
+#include "../Diagnostic.h"
 #include "../core/File.h"
 #include "../core/FileStream.h"
 #include "../core/Memory.hpp"
 #include "../core/String.hpp"
 #include "../core/ZipStream.hpp"
+#include "../drawing/Image.h"
 #include "../localisation/Language.h"
 #include "../localisation/LocalisationService.h"
 #include "../localisation/StringIds.h"
@@ -23,17 +25,13 @@
 #include "ObjectRepository.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstring>
 #include <stdexcept>
 
 using namespace OpenRCT2;
 
-ObjectType& operator++(ObjectType& d, int)
-{
-    return d = (d == ObjectType::Count) ? ObjectType::Ride : static_cast<ObjectType>(static_cast<uint8_t>(d) + 1);
-}
-
-ObjectEntryDescriptor::ObjectEntryDescriptor(const rct_object_entry& newEntry)
+ObjectEntryDescriptor::ObjectEntryDescriptor(const RCTObjectEntry& newEntry)
 {
     if (!newEntry.IsEmpty())
     {
@@ -84,6 +82,47 @@ std::string_view ObjectEntryDescriptor::GetName() const
     return Generation == ObjectGeneration::JSON ? Identifier : Entry.GetName();
 }
 
+std::string ObjectEntryDescriptor::ToString() const
+{
+    if (Generation == ObjectGeneration::DAT)
+    {
+        char buffer[32];
+        std::snprintf(&buffer[0], 9, "%08X", Entry.flags);
+        buffer[8] = '|';
+        std::memcpy(&buffer[9], Entry.name, 8);
+        buffer[17] = '|';
+        std::snprintf(&buffer[18], 9, "%8X", Entry.checksum);
+        return std::string(buffer);
+    }
+    else
+    {
+        return std::string(GetName());
+    }
+}
+
+static uint32_t ParseHex(std::string_view x)
+{
+    assert(x.size() != 8);
+    char buffer[9];
+    std::memcpy(buffer, x.data(), 8);
+    buffer[8] = 0;
+    char* endp{};
+    return static_cast<uint32_t>(std::strtol(buffer, &endp, 16));
+}
+
+ObjectEntryDescriptor ObjectEntryDescriptor::Parse(std::string_view identifier)
+{
+    if (identifier.size() == 26 && identifier[8] == '|' && identifier[17] == '|')
+    {
+        RCTObjectEntry entry{};
+        entry.flags = ParseHex(identifier.substr(0, 8));
+        entry.SetName(identifier.substr(9, 8));
+        entry.checksum = ParseHex(identifier.substr(18));
+        return ObjectEntryDescriptor(entry);
+    }
+    return ObjectEntryDescriptor(identifier);
+}
+
 bool ObjectEntryDescriptor::operator==(const ObjectEntryDescriptor& rhs) const
 {
     if (Generation != rhs.Generation)
@@ -119,37 +158,9 @@ void Object::PopulateTablesFromJson(IReadObjectContext* context, json_t& root)
     _usesFallbackImages = _imageTable.ReadJson(context, root);
 }
 
-rct_object_entry Object::ParseObjectEntry(const std::string& s)
-{
-    rct_object_entry entry = {};
-    std::fill_n(entry.name, sizeof(entry.name), ' ');
-    auto copyLen = std::min<size_t>(8, s.size());
-    std::copy_n(s.c_str(), copyLen, entry.name);
-    return entry;
-}
-
-std::string Object::GetOverrideString(uint8_t index) const
-{
-    auto legacyIdentifier = GetLegacyIdentifier();
-    const auto& localisationService = OpenRCT2::GetContext()->GetLocalisationService();
-    auto stringId = localisationService.GetObjectOverrideStringId(legacyIdentifier, index);
-
-    const utf8* result = nullptr;
-    if (stringId != STR_NONE)
-    {
-        result = language_get_string(stringId);
-    }
-    return String::ToStd(result);
-}
-
 std::string Object::GetString(ObjectStringID index) const
 {
-    auto sz = GetOverrideString(static_cast<uint8_t>(index));
-    if (sz.empty())
-    {
-        sz = GetStringTable().GetString(index);
-    }
-    return sz;
+    return GetStringTable().GetString(index);
 }
 
 std::string Object::GetString(int32_t language, ObjectStringID index) const
@@ -157,21 +168,16 @@ std::string Object::GetString(int32_t language, ObjectStringID index) const
     return GetStringTable().GetString(language, index);
 }
 
-ObjectEntryDescriptor Object::GetScgWallsHeader() const
-{
-    return ObjectEntryDescriptor("rct2.scenery_group.scgwalls");
-}
-
 ObjectEntryDescriptor Object::GetScgPathXHeader() const
 {
     return ObjectEntryDescriptor("rct2.scenery_group.scgpathx");
 }
 
-rct_object_entry Object::CreateHeader(const char name[DAT_NAME_LENGTH + 1], uint32_t flags, uint32_t checksum)
+RCTObjectEntry Object::CreateHeader(const char name[kDatNameLength + 1], uint32_t flags, uint32_t checksum)
 {
-    rct_object_entry header = {};
+    RCTObjectEntry header = {};
     header.flags = flags;
-    std::copy_n(name, DAT_NAME_LENGTH, header.name);
+    std::copy_n(name, kDatNameLength, header.name);
     header.checksum = checksum;
     return header;
 }
@@ -187,8 +193,8 @@ void Object::SetSourceGames(const std::vector<ObjectSourceGame>& sourceGames)
 }
 
 #ifdef __WARN_SUGGEST_FINAL_METHODS__
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wsuggest-final-methods"
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wsuggest-final-methods"
 #endif
 
 std::string Object::GetName() const
@@ -201,7 +207,25 @@ std::string Object::GetName(int32_t language) const
     return GetString(language, ObjectStringID::NAME);
 }
 
-void rct_object_entry::SetName(std::string_view value)
+ImageIndex Object::LoadImages()
+{
+    if (_baseImageId == kImageIndexUndefined)
+    {
+        _baseImageId = GfxObjectAllocateImages(GetImageTable().GetImages(), GetImageTable().GetCount());
+    }
+    return _baseImageId;
+}
+
+void Object::UnloadImages()
+{
+    if (_baseImageId != kImageIndexUndefined)
+    {
+        GfxObjectFreeImages(_baseImageId, GetImageTable().GetCount());
+        _baseImageId = kImageIndexUndefined;
+    }
+}
+
+void RCTObjectEntry::SetName(std::string_view value)
 {
     std::memset(name, ' ', sizeof(name));
     std::memcpy(name, value.data(), std::min(sizeof(name), value.size()));
@@ -217,7 +241,16 @@ void Object::SetAuthors(std::vector<std::string>&& authors)
     _authors = std::move(authors);
 }
 
-bool rct_object_entry::IsEmpty() const
+bool Object::IsCompatibilityObject() const
+{
+    return _isCompatibilityObject;
+}
+void Object::SetIsCompatibilityObject(const bool on)
+{
+    _isCompatibilityObject = on;
+}
+
+bool RCTObjectEntry::IsEmpty() const
 {
     uint64_t a, b;
     std::memcpy(&a, reinterpret_cast<const uint8_t*>(this), 8);
@@ -230,7 +263,7 @@ bool rct_object_entry::IsEmpty() const
     return false;
 }
 
-bool rct_object_entry::operator==(const rct_object_entry& rhs) const
+bool RCTObjectEntry::operator==(const RCTObjectEntry& rhs) const
 {
     const auto a = this;
     const auto b = &rhs;
@@ -267,7 +300,7 @@ bool rct_object_entry::operator==(const rct_object_entry& rhs) const
     return true;
 }
 
-bool rct_object_entry::operator!=(const rct_object_entry& rhs) const
+bool RCTObjectEntry::operator!=(const RCTObjectEntry& rhs) const
 {
     return !(*this == rhs);
 }
@@ -303,25 +336,95 @@ uint64_t ObjectAsset::GetSize() const
     return 0;
 }
 
-std::unique_ptr<IStream> ObjectAsset::GetStream() const
+std::vector<uint8_t> ObjectAsset::GetData() const
 {
     if (_zipPath.empty())
     {
-        return std::make_unique<FileStream>(_path, FILE_MODE_OPEN);
+        return File::ReadAllBytes(_path);
     }
 
     auto zipArchive = Zip::TryOpen(_zipPath, ZIP_ACCESS::READ);
     if (zipArchive != nullptr)
     {
-        auto stream = zipArchive->GetFileStream(_path);
-        if (stream != nullptr)
-        {
-            return std::make_unique<ZipStreamWrapper>(std::move(zipArchive), std::move(stream));
-        }
+        return zipArchive->GetFileData(_path);
     }
     return {};
 }
 
+std::unique_ptr<IStream> ObjectAsset::GetStream() const
+{
+    try
+    {
+        if (_zipPath.empty())
+        {
+            return std::make_unique<FileStream>(_path, FILE_MODE_OPEN);
+        }
+
+        auto zipArchive = Zip::TryOpen(_zipPath, ZIP_ACCESS::READ);
+        if (zipArchive != nullptr)
+        {
+            auto stream = zipArchive->GetFileStream(_path);
+            if (stream != nullptr)
+            {
+                return std::make_unique<ZipStreamWrapper>(std::move(zipArchive), std::move(stream));
+            }
+        }
+    }
+    catch (...)
+    {
+    }
+    return {};
+}
+
+u8string VersionString(const ObjectVersion& version)
+{
+    return std::to_string(std::get<0>(version)) + "." + std::to_string(std::get<1>(version)) + "."
+        + std::to_string(std::get<2>(version));
+}
+
+ObjectVersion VersionTuple(std::string_view version)
+{
+    if (version.empty())
+    {
+        return std::make_tuple(0, 0, 0);
+    }
+
+    auto nums = String::split(version, ".");
+    uint16_t versions[VersionNumFields] = {};
+    if (nums.size() > VersionNumFields)
+    {
+        LOG_WARNING("%i fields found in version string '%s', expected X.Y.Z", nums.size(), version);
+    }
+    if (nums.size() == 0)
+    {
+        LOG_WARNING("No fields found in version string '%s', expected X.Y.Z", version);
+        return std::make_tuple(0, 0, 0);
+    }
+    try
+    {
+        size_t highestIndex = std::min(nums.size(), VersionNumFields);
+        for (size_t i = 0; i < highestIndex; i++)
+        {
+            auto value = stoll(nums.at(i));
+            constexpr auto maxValue = std::numeric_limits<uint16_t>().max();
+            if (value > maxValue)
+            {
+                LOG_WARNING(
+                    "Version value too high in version string '%.*s', version value will be capped to %i.",
+                    static_cast<int>(version.size()), version.data(), maxValue);
+                value = maxValue;
+            }
+            versions[i] = value;
+        }
+    }
+    catch (const std::exception&)
+    {
+        LOG_WARNING("Malformed version string '%.*s', expected X.Y.Z", static_cast<int>(version.size()), version.data());
+    }
+
+    return std::make_tuple(versions[0], versions[1], versions[2]);
+}
+
 #ifdef __WARN_SUGGEST_FINAL_METHODS__
-#    pragma GCC diagnostic pop
+    #pragma GCC diagnostic pop
 #endif

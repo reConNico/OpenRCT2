@@ -1,8 +1,10 @@
-#!/bin/sh -e
+#!/usr/bin/env sh
+
+set -e
 
 readlink_bin='readlink'
 
-if [[ "$OSTYPE" == "darwin"* ]]; then
+if [ "$(uname)" == "Darwin" ]; then
   if ! [ -x "$(command -v greadlink)" ]; then
     echo 'Please install greadlink with Homebrew: brew install coreutils'
     exit 1
@@ -14,4 +16,4 @@ fi
 basedir="$($readlink_bin -f `dirname $0`/..)"
 cd $basedir
 
-scripts/run-clang-format.py -r src test --exclude src/thirdparty
+scripts/run-clang-format.py --clang-format-executable /usr/lib/llvm19/bin/clang-format -r src test data/shaders --exclude src/thirdparty

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,9 +9,13 @@
 
 #include "TrackSetBrakeSpeedAction.h"
 
+#include "../Diagnostic.h"
 #include "../management/Finance.h"
+#include "../world/tile_element/TrackElement.h"
 
-TrackSetBrakeSpeedAction::TrackSetBrakeSpeedAction(const CoordsXYZ& loc, track_type_t trackType, uint8_t brakeSpeed)
+using namespace OpenRCT2;
+
+TrackSetBrakeSpeedAction::TrackSetBrakeSpeedAction(const CoordsXYZ& loc, OpenRCT2::TrackElemType trackType, uint8_t brakeSpeed)
     : _loc(loc)
     , _trackType(trackType)
     , _brakeSpeed(brakeSpeed)
@@ -57,19 +61,28 @@ GameActions::Result TrackSetBrakeSpeedAction::QueryExecute(bool isExecuting) con
 
     if (!LocationValid(_loc))
     {
-        return GameActions::Result(GameActions::Status::NotOwned, STR_NONE, STR_NONE);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_CHANGE_THIS, STR_OFF_EDGE_OF_MAP);
     }
 
-    TileElement* tileElement = map_get_track_element_at_of_type(_loc, _trackType);
+    TileElement* tileElement = MapGetTrackElementAtOfType(_loc, _trackType);
     if (tileElement == nullptr)
     {
-        log_warning("Invalid game command for setting brakes speed. x = %d, y = %d", _loc.x, _loc.y);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+        LOG_ERROR("Track element of type %u not found at x = %d, y = %d, z = %d", _trackType, _loc.x, _loc.y, _loc.z);
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_TILE_ELEMENT_NOT_FOUND);
+    }
+
+    if (_brakeSpeed > kMaximumTrackSpeed)
+    {
+        LOG_WARNING("Invalid speed for track, speed = %d", _brakeSpeed);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_SPEED_TOO_HIGH, kStringIdNone);
     }
 
     if (isExecuting)
     {
-        tileElement->AsTrack()->SetBrakeBoosterSpeed(_brakeSpeed);
+        GetTrackElementOriginAndApplyChanges(
+            { _loc, tileElement->GetDirection() }, tileElement->AsTrack()->GetTrackType(), _brakeSpeed, nullptr,
+            TRACK_ELEMENT_SET_BRAKE_BOOSTER_SPEED);
     }
     return res;
 }

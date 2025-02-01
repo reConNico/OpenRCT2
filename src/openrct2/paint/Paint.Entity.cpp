@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -20,39 +20,46 @@
 #include "../entity/Particle.h"
 #include "../entity/Staff.h"
 #include "../interface/Viewport.h"
+#include "../profiling/Profiling.h"
 #include "../ride/RideData.h"
 #include "../ride/TrackDesign.h"
 #include "../ride/Vehicle.h"
-#include "../ride/VehiclePaint.h"
 #include "../world/Climate.h"
 #include "../world/MapAnimation.h"
 #include "../world/Park.h"
 #include "Paint.h"
+#include "vehicle/VehiclePaint.h"
+
+#include <cassert>
+
+using namespace OpenRCT2;
+using namespace OpenRCT2::Drawing;
 
 /**
  * Paint Quadrant
  *  rct2: 0x0069E8B0
  */
-void EntityPaintSetup(paint_session* session, const CoordsXY& pos)
+void EntityPaintSetup(PaintSession& session, const CoordsXY& pos)
 {
-    if (!map_is_location_valid(pos))
-    {
-        return;
-    }
-    if (gTrackDesignSaveMode || (session->ViewFlags & VIEWPORT_FLAG_INVISIBLE_SPRITES))
-    {
-        return;
-    }
+    PROFILED_FUNCTION();
 
-    rct_drawpixelinfo* dpi = &session->DPI;
-    if (dpi->zoom_level > ZoomLevel{ 2 })
+    if (!MapIsLocationValid(pos))
+    {
+        return;
+    }
+    if (gTrackDesignSaveMode || (session.ViewFlags & VIEWPORT_FLAG_HIDE_ENTITIES))
     {
         return;
     }
 
-    const bool highlightPathIssues = (session->ViewFlags & VIEWPORT_FLAG_HIGHLIGHT_PATH_ISSUES);
+    if (session.DPI.zoom_level > ZoomLevel{ 2 })
+    {
+        return;
+    }
 
-    for (const auto* spr : EntityTileList(pos))
+    const bool highlightPathIssues = (session.ViewFlags & VIEWPORT_FLAG_HIGHLIGHT_PATH_ISSUES);
+
+    for (auto* spr : EntityTileList(pos))
     {
         if (highlightPathIssues)
         {
@@ -76,50 +83,54 @@ void EntityPaintSetup(paint_session* session, const CoordsXY& pos)
         // Here converting from land/path/etc height scale to pixel height scale.
         // Note: peeps/scenery on slopes will be above the base
         // height of the slope element, and consequently clipped.
-        if ((session->ViewFlags & VIEWPORT_FLAG_CLIP_VIEW))
+        if ((session.ViewFlags & VIEWPORT_FLAG_CLIP_VIEW))
         {
-            if (entityPos.z > (gClipHeight * COORDS_Z_STEP))
+            if (entityPos.z > (gClipHeight * kCoordsZStep))
             {
                 continue;
             }
-            if (entityPos.x < gClipSelectionA.x || entityPos.x > gClipSelectionB.x)
+            if (entityPos.x < gClipSelectionA.x || entityPos.x > (gClipSelectionB.x + kCoordsXYStep - 1))
             {
                 continue;
             }
-            if (entityPos.y < gClipSelectionA.y || entityPos.y > gClipSelectionB.y)
+            if (entityPos.y < gClipSelectionA.y || entityPos.y > (gClipSelectionB.y + kCoordsXYStep - 1))
             {
                 continue;
             }
         }
 
-        dpi = &session->DPI;
+        auto screenCoords = Translate3DTo2DWithZ(session.CurrentRotation, spr->GetLocation());
+        auto spriteRect = ScreenRect(
+            screenCoords - ScreenCoordsXY{ spr->SpriteData.Width, spr->SpriteData.HeightMin },
+            screenCoords + ScreenCoordsXY{ spr->SpriteData.Width, spr->SpriteData.HeightMax });
 
-        if (dpi->y + dpi->height <= spr->SpriteRect.GetTop() || spr->SpriteRect.GetBottom() <= dpi->y
-            || dpi->x + dpi->width <= spr->SpriteRect.GetLeft() || spr->SpriteRect.GetRight() <= dpi->x)
+        const ZoomLevel zoom = session.DPI.zoom_level;
+        if (session.DPI.y + session.DPI.height <= zoom.ApplyInversedTo(spriteRect.GetTop())
+            || zoom.ApplyInversedTo(spriteRect.GetBottom()) <= session.DPI.y
+            || session.DPI.x + session.DPI.width <= zoom.ApplyInversedTo(spriteRect.GetLeft())
+            || zoom.ApplyInversedTo(spriteRect.GetRight()) <= session.DPI.x)
         {
             continue;
         }
 
-        int32_t image_direction = session->CurrentRotation;
+        int32_t image_direction = session.CurrentRotation;
         image_direction <<= 3;
-        image_direction += spr->sprite_direction;
+        image_direction += spr->Orientation;
         image_direction &= 0x1F;
 
-        session->CurrentlyDrawnItem = spr;
-        session->SpritePosition.x = entityPos.x;
-        session->SpritePosition.y = entityPos.y;
-        session->InteractionType = ViewportInteractionItem::Entity;
+        session.CurrentlyDrawnEntity = spr;
+        session.SpritePosition.x = entityPos.x;
+        session.SpritePosition.y = entityPos.y;
+        session.InteractionType = ViewportInteractionItem::Entity;
 
         switch (spr->Type)
         {
             case EntityType::Vehicle:
                 spr->As<Vehicle>()->Paint(session, image_direction);
-#ifdef __ENABLE_LIGHTFX__
-                if (lightfx_for_vehicles_is_available())
+                if (LightFx::ForVehiclesIsAvailable())
                 {
-                    lightfx_add_lights_magic_vehicle(spr->As<Vehicle>());
+                    LightFx::AddLightsMagicVehicle(spr->As<Vehicle>());
                 }
-#endif
                 break;
             case EntityType::Guest:
             case EntityType::Staff:

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,7 +9,9 @@
 
 #ifndef DISABLE_OPENGL
 
-#    include "ApplyPaletteShader.h"
+    #include "ApplyPaletteShader.h"
+
+using namespace OpenRCT2::Ui;
 
 namespace
 {
@@ -20,7 +22,7 @@ namespace
     };
 } // namespace
 
-constexpr VDStruct VertexData[4] = {
+constexpr VDStruct kVertexData[4] = {
     { -1.0f, -1.0f, 0.0f, 0.0f },
     { 1.0f, -1.0f, 1.0f, 0.0f },
     { -1.0f, 1.0f, 0.0f, 1.0f },
@@ -36,7 +38,7 @@ ApplyPaletteShader::ApplyPaletteShader()
     glGenVertexArrays(1, &_vao);
 
     glBindBuffer(GL_ARRAY_BUFFER, _vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(VertexData), VertexData, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(kVertexData), kVertexData, GL_STATIC_DRAW);
 
     glBindVertexArray(_vao);
     glVertexAttribPointer(

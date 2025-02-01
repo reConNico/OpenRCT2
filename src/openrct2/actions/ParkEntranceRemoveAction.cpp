@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,14 +9,24 @@
 
 #include "ParkEntranceRemoveAction.h"
 
+#include "../Diagnostic.h"
+#include "../GameState.h"
 #include "../OpenRCT2.h"
 #include "../management/Finance.h"
 #include "../world/Entrance.h"
 #include "../world/Park.h"
+#include "../world/tile_element/EntranceElement.h"
+
+using namespace OpenRCT2;
 
 ParkEntranceRemoveAction::ParkEntranceRemoveAction(const CoordsXYZ& loc)
     : _loc(loc)
 {
+}
+
+void ParkEntranceRemoveAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit(_loc);
 }
 
 uint16_t ParkEntranceRemoveAction::GetActionFlags() const
@@ -33,9 +43,9 @@ void ParkEntranceRemoveAction::Serialise(DataSerialiser& stream)
 
 GameActions::Result ParkEntranceRemoveAction::Query() const
 {
-    if (!(gScreenFlags & SCREEN_FLAGS_EDITOR) && !gCheatsSandboxMode)
+    if (!(gScreenFlags & SCREEN_FLAGS_EDITOR) && !GetGameState().Cheats.sandboxMode)
     {
-        return GameActions::Result(GameActions::Status::NotInEditorMode, STR_CANT_REMOVE_THIS, STR_NONE);
+        return GameActions::Result(GameActions::Status::NotInEditorMode, STR_CANT_REMOVE_THIS, kStringIdNone);
     }
 
     auto res = GameActions::Result();
@@ -43,11 +53,14 @@ GameActions::Result ParkEntranceRemoveAction::Query() const
     res.Position = _loc;
     res.ErrorTitle = STR_CANT_REMOVE_THIS;
 
-    auto entranceIndex = park_entrance_get_index(_loc);
-    if (!LocationValid(_loc) || entranceIndex == -1)
+    if (!LocationValid(_loc))
     {
-        log_error("Could not find entrance at x = %d, y = %d, z = %d", _loc.x, _loc.y, _loc.z);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, STR_NONE);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, STR_OFF_EDGE_OF_MAP);
+    }
+    if (ParkEntranceGetIndex(_loc) == -1)
+    {
+        LOG_ERROR("No park entrance at x = %d, y = %d, z = %d", _loc.x, _loc.y, _loc.z);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, kStringIdNone);
     }
     return res;
 }
@@ -59,14 +72,15 @@ GameActions::Result ParkEntranceRemoveAction::Execute() const
     res.Position = _loc;
     res.ErrorTitle = STR_CANT_REMOVE_THIS;
 
-    auto entranceIndex = park_entrance_get_index(_loc);
+    auto entranceIndex = ParkEntranceGetIndex(_loc);
     if (entranceIndex == -1)
     {
-        log_error("Could not find entrance at x = %d, y = %d, z = %d", _loc.x, _loc.y, _loc.z);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, STR_NONE);
+        LOG_ERROR("No park entrance at x = %d, y = %d, z = %d", _loc.x, _loc.y, _loc.z);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, kStringIdNone);
     }
 
-    auto direction = (gParkEntrances[entranceIndex].direction - 1) & 3;
+    auto& gameState = GetGameState();
+    auto direction = (gameState.Park.Entrances[entranceIndex].direction - 1) & 3;
 
     // Centre (sign)
     ParkEntranceRemoveSegment(_loc);
@@ -79,19 +93,19 @@ GameActions::Result ParkEntranceRemoveAction::Execute() const
     ParkEntranceRemoveSegment(
         { _loc.x - CoordsDirectionDelta[direction].x, _loc.y - CoordsDirectionDelta[direction].y, _loc.z });
 
-    gParkEntrances.erase(gParkEntrances.begin() + entranceIndex);
+    gameState.Park.Entrances.erase(gameState.Park.Entrances.begin() + entranceIndex);
     return res;
 }
 
 void ParkEntranceRemoveAction::ParkEntranceRemoveSegment(const CoordsXYZ& loc) const
 {
-    auto entranceElement = map_get_park_entrance_element_at(loc, true);
+    auto entranceElement = MapGetParkEntranceElementAt(loc, true);
     if (entranceElement == nullptr)
     {
         return;
     }
 
-    map_invalidate_tile({ loc, entranceElement->GetBaseZ(), entranceElement->GetClearanceZ() });
+    MapInvalidateTile({ loc, entranceElement->GetBaseZ(), entranceElement->GetClearanceZ() });
     entranceElement->Remove();
-    update_park_fences({ loc.x, loc.y });
+    Park::UpdateFences({ loc.x, loc.y });
 }

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,11 +11,20 @@
 
 #include "../Context.h"
 #include "../OpenRCT2.h"
+#include "../ui/WindowManager.h"
+
+using namespace OpenRCT2;
 
 LoadOrQuitAction::LoadOrQuitAction(LoadOrQuitModes mode, PromptMode savePromptMode)
     : _mode(mode)
     , _savePromptMode(savePromptMode)
 {
+}
+
+void LoadOrQuitAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit("mode", _mode);
+    visitor.Visit("savePromptMode", _savePromptMode);
 }
 
 uint16_t LoadOrQuitAction::GetActionFlags() const
@@ -42,13 +51,16 @@ GameActions::Result LoadOrQuitAction::Execute() const
     {
         case LoadOrQuitModes::OpenSavePrompt:
             gSavePromptMode = _savePromptMode;
-            context_open_window(WC_SAVE_PROMPT);
+            ContextOpenWindow(WindowClass::SavePrompt);
             break;
         case LoadOrQuitModes::CloseSavePrompt:
-            window_close_by_class(WC_SAVE_PROMPT);
+        {
+            auto* windowMgr = Ui::GetWindowManager();
+            windowMgr->CloseByClass(WindowClass::SavePrompt);
             break;
+        }
         default:
-            game_load_or_quit_no_save_prompt();
+            GameLoadOrQuitNoSavePrompt();
             break;
     }
     return GameActions::Result();

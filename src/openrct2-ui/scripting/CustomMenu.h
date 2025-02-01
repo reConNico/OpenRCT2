@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,27 +11,36 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include <memory>
-#    include <openrct2/Context.h>
-#    include <openrct2/interface/Cursors.h>
-#    include <openrct2/scripting/Duktape.hpp>
-#    include <openrct2/scripting/ScriptEngine.h>
-#    include <string>
-#    include <vector>
+    #include <memory>
+    #include <openrct2/Context.h>
+    #include <openrct2/interface/Cursors.h>
+    #include <openrct2/scripting/Duktape.hpp>
+    #include <openrct2/scripting/ScriptEngine.h>
+    #include <string>
+    #include <vector>
 
 enum class CursorID : uint8_t;
 
 namespace OpenRCT2::Scripting
 {
+    enum class CustomToolbarMenuItemKind
+    {
+        Standard,
+        Toolbox,
+    };
+
     class CustomToolbarMenuItem
     {
     public:
         std::shared_ptr<Plugin> Owner;
+        CustomToolbarMenuItemKind Kind;
         std::string Text;
         DukValue Callback;
 
-        CustomToolbarMenuItem(std::shared_ptr<Plugin> owner, const std::string& text, DukValue callback)
+        CustomToolbarMenuItem(
+            std::shared_ptr<Plugin> owner, CustomToolbarMenuItemKind kind, const std::string& text, DukValue callback)
             : Owner(owner)
+            , Kind(kind)
             , Text(text)
             , Callback(callback)
         {
@@ -99,8 +108,10 @@ namespace OpenRCT2::Scripting
     void InitialiseCustomMenuItems(ScriptEngine& scriptEngine);
     void InitialiseCustomTool(ScriptEngine& scriptEngine, const DukValue& dukValue);
 
-    template<> DukValue ToDuk(duk_context* ctx, const CursorID& value);
-    template<> CursorID FromDuk(const DukValue& s);
+    template<>
+    DukValue ToDuk(duk_context* ctx, const CursorID& value);
+    template<>
+    CursorID FromDuk(const DukValue& s);
 
 } // namespace OpenRCT2::Scripting
 

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,12 +9,16 @@
 
 #include "MusicObject.h"
 
+#include "../AssetPackManager.h"
 #include "../Context.h"
 #include "../OpenRCT2.h"
 #include "../PlatformEnvironment.h"
+#include "../audio/AudioContext.h"
+#include "../audio/AudioSource.h"
 #include "../core/IStream.hpp"
 #include "../core/Json.hpp"
 #include "../core/Path.hpp"
+#include "../drawing/Image.h"
 #include "../localisation/StringIds.h"
 #include "../ride/Ride.h"
 #include "RideObject.h"
@@ -22,33 +26,81 @@
 #include <memory>
 
 using namespace OpenRCT2;
+using namespace OpenRCT2::Audio;
 
-constexpr size_t DEFAULT_BYTES_PER_TICK = 1378;
+constexpr size_t kDefaultBytesPerTick = 1378;
 
 void MusicObject::Load()
 {
     GetStringTable().Sort();
-    NameStringId = language_allocate_object_string(GetName());
+    NameStringId = LanguageAllocateObjectString(GetName());
 
+    // Start with base images
+    _loadedSampleTable.LoadFrom(_sampleTable, 0, _sampleTable.GetCount());
+
+    // Override samples from asset packs
+    auto context = GetContext();
+    auto assetManager = context->GetAssetPackManager();
+    if (assetManager != nullptr)
+    {
+        assetManager->LoadSamplesForObject(GetIdentifier(), _loadedSampleTable);
+    }
+
+    // Load metadata of samples
+    auto audioContext = GetContext()->GetAudioContext();
     for (auto& track : _tracks)
     {
-        track.BytesPerTick = DEFAULT_BYTES_PER_TICK;
-        track.Size = track.Asset.GetSize();
+        auto stream = track.Asset.GetStream();
+        if (stream != nullptr)
+        {
+            auto source = audioContext->CreateStreamFromWAV(std::move(stream));
+            if (source != nullptr)
+            {
+                track.BytesPerTick = source->GetBytesPerSecond() / 40;
+                track.Size = source->GetLength();
+                source->Release();
+            }
+            else
+            {
+                track.BytesPerTick = kDefaultBytesPerTick;
+                track.Size = track.Asset.GetSize();
+            }
+        }
+        else
+        {
+            track.BytesPerTick = kDefaultBytesPerTick;
+            track.Size = track.Asset.GetSize();
+        }
     }
+
+    _hasPreview = !!GetImageTable().GetCount();
+    _previewImageId = LoadImages();
 }
 
 void MusicObject::Unload()
 {
-    language_free_object_string(NameStringId);
+    LanguageFreeObjectString(NameStringId);
+    UnloadImages();
+
+    _hasPreview = false;
+    _previewImageId = 0;
     NameStringId = 0;
 }
 
-void MusicObject::DrawPreview(rct_drawpixelinfo* dpi, int32_t width, int32_t height) const
+void MusicObject::DrawPreview(DrawPixelInfo& dpi, int32_t width, int32_t height) const
 {
     // Write (no image)
     int32_t x = width / 2;
     int32_t y = height / 2;
-    DrawTextBasic(dpi, { x, y }, STR_WINDOW_NO_IMAGE, {}, { TextAlignment::CENTRE });
+    if (_hasPreview)
+        GfxDrawSprite(dpi, ImageId(_previewImageId), { 0, 0 });
+    else
+        DrawTextBasic(dpi, { x, y }, STR_WINDOW_NO_IMAGE, {}, { TextAlignment::CENTRE });
+}
+
+bool MusicObject::HasPreview() const
+{
+    return _hasPreview;
 }
 
 void MusicObject::ReadJson(IReadObjectContext* context, json_t& root)
@@ -56,6 +108,7 @@ void MusicObject::ReadJson(IReadObjectContext* context, json_t& root)
     _originalStyleId = {};
     _rideTypes.clear();
     _tracks.clear();
+    _niceFactor = MusicNiceFactor::Neutral;
 
     auto& properties = root["properties"];
     if (properties != nullptr)
@@ -64,6 +117,12 @@ void MusicObject::ReadJson(IReadObjectContext* context, json_t& root)
         if (originalStyleId.is_number_integer())
         {
             _originalStyleId = originalStyleId.get<uint8_t>();
+        }
+
+        const auto& niceFactor = properties["niceFactor"];
+        if (niceFactor.is_number_integer())
+        {
+            _niceFactor = static_cast<MusicNiceFactor>(std::clamp<int8_t>(niceFactor.get<int8_t>(), -1, 1));
         }
 
         const auto& jRideTypes = properties["rideTypes"];
@@ -90,7 +149,7 @@ void MusicObject::ParseRideTypes(const json_t& jRideTypes)
         if (!szRideType.empty())
         {
             auto rideType = RideObject::ParseRideType(szRideType);
-            if (rideType != RIDE_TYPE_NULL)
+            if (rideType != kRideTypeNull)
             {
                 _rideTypes.push_back(rideType);
             }
@@ -100,6 +159,7 @@ void MusicObject::ParseRideTypes(const json_t& jRideTypes)
 
 void MusicObject::ParseTracks(IReadObjectContext& context, json_t& jTracks)
 {
+    auto& entries = _sampleTable.GetEntries();
     for (auto& jTrack : jTracks)
     {
         if (jTrack.is_object())
@@ -114,7 +174,12 @@ void MusicObject::ParseTracks(IReadObjectContext& context, json_t& jTracks)
             }
             else
             {
-                track.Asset = GetAsset(context, source);
+                auto asset = GetAsset(context, source);
+
+                auto& entry = entries.emplace_back();
+                entry.Asset = asset;
+
+                track.Asset = asset;
                 _tracks.push_back(std::move(track));
             }
         }
@@ -126,7 +191,7 @@ std::optional<uint8_t> MusicObject::GetOriginalStyleId() const
     return _originalStyleId;
 }
 
-bool MusicObject::SupportsRideType(uint8_t rideType)
+bool MusicObject::SupportsRideType(ride_type_t rideType)
 {
     if (_rideTypes.size() == 0)
     {
@@ -152,13 +217,17 @@ const MusicObjectTrack* MusicObject::GetTrack(size_t trackIndex) const
     return {};
 }
 
+IAudioSource* MusicObject::GetTrackSample(size_t trackIndex) const
+{
+    return _loadedSampleTable.LoadSample(static_cast<uint32_t>(trackIndex));
+}
+
 ObjectAsset MusicObject::GetAsset(IReadObjectContext& context, std::string_view path)
 {
     if (path.find("$RCT2:DATA/") == 0)
     {
-        auto platformEnvironment = GetContext()->GetPlatformEnvironment();
-        auto dir = platformEnvironment->GetDirectoryPath(DIRBASE::RCT2, DIRID::DATA);
-        auto path2 = Path::Combine(dir, std::string(path.substr(11)));
+        auto env = GetContext()->GetPlatformEnvironment();
+        auto path2 = env->FindFile(DIRBASE::RCT2, DIRID::DATA, path.substr(11));
         return ObjectAsset(path2);
     }
 

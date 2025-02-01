@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,20 +9,20 @@
 
 #ifndef DISABLE_NETWORK
 
-#    include "NetworkKey.h"
+    #include "NetworkKey.h"
 
-#    include "../Diagnostic.h"
-#    include "../core/Crypt.h"
-#    include "../core/IStream.hpp"
+    #include "../Diagnostic.h"
+    #include "../core/Crypt.h"
+    #include "../core/Guard.hpp"
+    #include "../core/IStream.hpp"
+    #include "../core/String.hpp"
 
-#    include <vector>
+    #include <vector>
 
-NetworkKey::NetworkKey()
-{
-}
-NetworkKey::~NetworkKey()
-{
-}
+using namespace OpenRCT2;
+
+NetworkKey::NetworkKey() = default;
+NetworkKey::~NetworkKey() = default;
 
 void NetworkKey::Unload()
 {
@@ -39,7 +39,7 @@ bool NetworkKey::Generate()
     }
     catch (const std::exception& e)
     {
-        log_error("NetworkKey::Generate failed: %s", e.what());
+        LOG_ERROR("NetworkKey::Generate failed: %s", e.what());
         return false;
     }
 }
@@ -51,12 +51,12 @@ bool NetworkKey::LoadPrivate(OpenRCT2::IStream* stream)
     size_t size = static_cast<size_t>(stream->GetLength());
     if (size == static_cast<size_t>(-1))
     {
-        log_error("unknown size, refusing to load key");
+        LOG_ERROR("unknown size, refusing to load key");
         return false;
     }
     if (size > 4 * 1024 * 1024)
     {
-        log_error("Key file suspiciously large, refusing to load it");
+        LOG_ERROR("Key file suspiciously large, refusing to load it");
         return false;
     }
 
@@ -71,7 +71,7 @@ bool NetworkKey::LoadPrivate(OpenRCT2::IStream* stream)
     }
     catch (const std::exception& e)
     {
-        log_error("NetworkKey::LoadPrivate failed: %s", e.what());
+        LOG_ERROR("NetworkKey::LoadPrivate failed: %s", e.what());
         return false;
     }
 }
@@ -83,12 +83,12 @@ bool NetworkKey::LoadPublic(OpenRCT2::IStream* stream)
     size_t size = static_cast<size_t>(stream->GetLength());
     if (size == static_cast<size_t>(-1))
     {
-        log_error("unknown size, refusing to load key");
+        LOG_ERROR("unknown size, refusing to load key");
         return false;
     }
     if (size > 4 * 1024 * 1024)
     {
-        log_error("Key file suspiciously large, refusing to load it");
+        LOG_ERROR("Key file suspiciously large, refusing to load it");
         return false;
     }
 
@@ -103,7 +103,7 @@ bool NetworkKey::LoadPublic(OpenRCT2::IStream* stream)
     }
     catch (const std::exception& e)
     {
-        log_error("NetworkKey::LoadPublic failed: %s", e.what());
+        LOG_ERROR("NetworkKey::LoadPublic failed: %s", e.what());
         return false;
     }
 }
@@ -122,7 +122,7 @@ bool NetworkKey::SavePrivate(OpenRCT2::IStream* stream)
     }
     catch (const std::exception& e)
     {
-        log_error("NetworkKey::SavePrivate failed: %s", e.what());
+        LOG_ERROR("NetworkKey::SavePrivate failed: %s", e.what());
         return false;
     }
 }
@@ -141,7 +141,7 @@ bool NetworkKey::SavePublic(OpenRCT2::IStream* stream)
     }
     catch (const std::exception& e)
     {
-        log_error("NetworkKey::SavePublic failed: %s", e.what());
+        LOG_ERROR("NetworkKey::SavePublic failed: %s", e.what());
         return false;
     }
 }
@@ -176,25 +176,16 @@ std::string NetworkKey::PublicKeyHash()
             throw std::runtime_error("No key found");
         }
         auto hash = Crypt::SHA1(key.c_str(), key.size());
-
-        std::string result;
-        result.reserve(hash.size() * 2);
-        for (auto b : hash)
-        {
-            char buf[3];
-            snprintf(buf, 3, "%02x", b);
-            result.append(buf);
-        }
-        return result;
+        return String::StringFromHex(hash);
     }
     catch (const std::exception& e)
     {
-        log_error("Failed to create hash of public key: %s", e.what());
+        LOG_ERROR("Failed to create hash of public key: %s", e.what());
     }
     return nullptr;
 }
 
-bool NetworkKey::Sign(const uint8_t* md, const size_t len, std::vector<uint8_t>& signature)
+bool NetworkKey::Sign(const uint8_t* md, const size_t len, std::vector<uint8_t>& signature) const
 {
     try
     {
@@ -204,12 +195,12 @@ bool NetworkKey::Sign(const uint8_t* md, const size_t len, std::vector<uint8_t>&
     }
     catch (const std::exception& e)
     {
-        log_error("NetworkKey::Sign failed: %s", e.what());
+        LOG_ERROR("NetworkKey::Sign failed: %s", e.what());
         return false;
     }
 }
 
-bool NetworkKey::Verify(const uint8_t* md, const size_t len, const std::vector<uint8_t>& signature)
+bool NetworkKey::Verify(const uint8_t* md, const size_t len, const std::vector<uint8_t>& signature) const
 {
     try
     {
@@ -218,7 +209,7 @@ bool NetworkKey::Verify(const uint8_t* md, const size_t len, const std::vector<u
     }
     catch (const std::exception& e)
     {
-        log_error("NetworkKey::Verify failed: %s", e.what());
+        LOG_ERROR("NetworkKey::Verify failed: %s", e.what());
         return false;
     }
 }

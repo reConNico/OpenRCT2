@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -12,23 +12,17 @@
 #include "Path.hpp"
 #include "String.hpp"
 
-#include <algorithm>
 #include <string_view>
 
 #ifndef _WIN32
-#    include <sys/stat.h>
+    #include <sys/stat.h>
 #else
-#    include <io.h>
-#endif
-
-#if defined(__linux__) && !defined(__ANDROID__)
-#    define ftello ftello64
-#    define fseeko fseeko64
+    #include <io.h>
 #endif
 
 #ifdef _MSC_VER
-#    define ftello _ftelli64
-#    define fseeko _fseeki64
+    #define ftello _ftelli64
+    #define fseeko _fseeki64
 #endif
 
 namespace OpenRCT2
@@ -83,8 +77,8 @@ namespace OpenRCT2
         }
 
 #ifdef _WIN32
-        auto pathW = String::ToWideChar(path);
-        auto modeW = String::ToWideChar(mode);
+        auto pathW = String::toWideChar(path);
+        auto modeW = String::toWideChar(mode);
         _file = _wfopen(pathW.c_str(), modeW.c_str());
 #else
         if (fileMode == FILE_MODE_OPEN)
@@ -103,7 +97,7 @@ namespace OpenRCT2
 #endif
         if (_file == nullptr)
         {
-            throw IOException(String::StdFormat("Unable to open '%s'", path));
+            throw IOException(String::stdFormat("Unable to open '%s'", path));
         }
 
 #ifdef _WIN32
@@ -184,9 +178,11 @@ namespace OpenRCT2
         {
             return;
         }
-        if (fwrite(buffer, static_cast<size_t>(length), 1, _file) != 1)
+        if (auto count = fwrite(buffer, static_cast<size_t>(length), 1, _file); count != 1)
         {
-            throw IOException("Unable to write to file.");
+            std::string error = "Unable to write " + std::to_string(length) + " bytes to file. Count = " + std::to_string(count)
+                + ", errno = " + std::to_string(errno);
+            throw IOException(error);
         }
 
         uint64_t position = GetPosition();

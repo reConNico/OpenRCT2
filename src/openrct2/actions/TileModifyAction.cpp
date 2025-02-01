@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,18 +9,30 @@
 
 #include "TileModifyAction.h"
 
+#include "../Context.h"
+#include "../Diagnostic.h"
+#include "../windows/Intent.h"
 #include "../world/TileInspector.h"
 
 using namespace OpenRCT2;
 
 TileModifyAction::TileModifyAction(
-    CoordsXY loc, TileModifyType setting, uint32_t value1, uint32_t value2, TileElement pasteElement)
+    CoordsXY loc, TileModifyType setting, uint32_t value1, uint32_t value2, TileElement pasteElement, Banner pasteBanner)
     : _loc(loc)
     , _setting(setting)
     , _value1(value1)
     , _value2(value2)
     , _pasteElement(pasteElement)
+    , _pasteBanner(pasteBanner)
 {
+}
+
+void TileModifyAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit(_loc);
+    visitor.Visit("setting", _setting);
+    visitor.Visit("value1", _value1);
+    visitor.Visit("value2", _value2);
 }
 
 uint16_t TileModifyAction::GetActionFlags() const
@@ -32,7 +44,8 @@ void TileModifyAction::Serialise(DataSerialiser& stream)
 {
     GameAction::Serialise(stream);
 
-    stream << DS_TAG(_loc) << DS_TAG(_setting) << DS_TAG(_value1) << DS_TAG(_value2) << DS_TAG(_pasteElement);
+    stream << DS_TAG(_loc) << DS_TAG(_setting) << DS_TAG(_value1) << DS_TAG(_value2) << DS_TAG(_pasteElement)
+           << DS_TAG(_pasteBanner);
 }
 
 GameActions::Result TileModifyAction::Query() const
@@ -49,7 +62,7 @@ GameActions::Result TileModifyAction::QueryExecute(bool isExecuting) const
 {
     if (!LocationValid(_loc))
     {
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_LAND_NOT_OWNED_BY_PARK, STR_NONE);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_CHANGE_THIS, STR_OFF_EDGE_OF_MAP);
     }
     auto res = GameActions::Result();
     switch (_setting)
@@ -81,7 +94,7 @@ GameActions::Result TileModifyAction::QueryExecute(bool isExecuting) const
         }
         case TileModifyType::AnyPaste:
         {
-            res = TileInspector::PasteElementAt(_loc, _pasteElement, isExecuting);
+            res = TileInspector::PasteElementAt(_loc, _pasteElement, _pasteBanner, isExecuting);
             break;
         }
         case TileModifyType::AnySort:
@@ -118,6 +131,13 @@ GameActions::Result TileModifyAction::QueryExecute(bool isExecuting) const
             const auto elementIndex = _value1;
             const bool sloped = _value2;
             res = TileInspector::PathSetSloped(_loc, elementIndex, sloped, isExecuting);
+            break;
+        }
+        case TileModifyType::PathSetJunctionRailings:
+        {
+            const auto elementIndex = _value1;
+            const bool hasJunctionRailing = _value2;
+            res = TileInspector::PathSetJunctionRailings(_loc, elementIndex, hasJunctionRailing, isExecuting);
             break;
         }
         case TileModifyType::PathSetBroken:
@@ -175,11 +195,11 @@ GameActions::Result TileModifyAction::QueryExecute(bool isExecuting) const
             res = TileInspector::TrackSetChain(_loc, elementIndex, false, setChain, isExecuting);
             break;
         }
-        case TileModifyType::TrackSetBlockBrake:
+        case TileModifyType::TrackSetBrake:
         {
             const auto elementIndex = _value1;
-            const bool blockBrake = _value2;
-            res = TileInspector::TrackSetBlockBrake(_loc, elementIndex, blockBrake, isExecuting);
+            const bool isClosed = _value2;
+            res = TileInspector::TrackSetBrakeClosed(_loc, elementIndex, isClosed, isExecuting);
             break;
         }
         case TileModifyType::TrackSetIndestructible:
@@ -210,14 +230,29 @@ GameActions::Result TileModifyAction::QueryExecute(bool isExecuting) const
             res = TileInspector::BannerToggleBlockingEdge(_loc, elementIndex, edgeIndex, isExecuting);
             break;
         }
+        case TileModifyType::WallSetAnimationIsBackwards:
+        {
+            const auto elementIndex = _value1;
+            const bool broken = _value2;
+            res = TileInspector::WallSetAnimationIsBackwards(_loc, elementIndex, broken, isExecuting);
+            break;
+        }
         default:
-            log_error("invalid instruction");
-            return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+            LOG_ERROR("Invalid tile modification type %u", _setting);
+            return GameActions::Result(
+                GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_VALUE_OUT_OF_RANGE);
     }
 
     res.Position.x = _loc.x;
     res.Position.y = _loc.y;
-    res.Position.z = tile_element_height(_loc);
+    res.Position.z = TileElementHeight(_loc);
+
+    if (isExecuting)
+    {
+        MapInvalidateTileFull(_loc);
+        auto intent = Intent(INTENT_ACTION_TILE_MODIFY);
+        ContextBroadcastIntent(&intent);
+    }
 
     return res;
 }

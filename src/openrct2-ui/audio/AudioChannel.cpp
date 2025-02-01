@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,16 +9,17 @@
 
 #include "AudioContext.h"
 #include "AudioFormat.h"
+#include "SDLAudioSource.h"
 
 #include <algorithm>
 #include <cmath>
 #include <openrct2/audio/AudioSource.h>
-#include <openrct2/common.h>
 #include <speex/speex_resampler.h>
 
 namespace OpenRCT2::Audio
 {
-    template<typename AudioSource_ = ISDLAudioSource> class AudioChannelImpl : public ISDLAudioChannel
+    template<typename AudioSource_ = SDLAudioSource>
+    class AudioChannelImpl final : public ISDLAudioChannel
     {
         static_assert(std::is_base_of_v<IAudioSource, AudioSource_>);
 
@@ -42,13 +43,12 @@ namespace OpenRCT2::Audio
         bool _stopping = false;
         bool _done = true;
         bool _deleteondone = false;
-        bool _deletesourceondone = false;
 
     public:
         AudioChannelImpl()
         {
             AudioChannelImpl::SetRate(1);
-            AudioChannelImpl::SetVolume(MIXER_VOLUME_MAX);
+            AudioChannelImpl::SetVolume(kMixerVolumeMax);
             AudioChannelImpl::SetPan(0.5f);
         }
 
@@ -58,10 +58,6 @@ namespace OpenRCT2::Audio
             {
                 speex_resampler_destroy(_resampler);
                 _resampler = nullptr;
-            }
-            if (_deletesourceondone)
-            {
-                delete _source;
             }
         }
 
@@ -159,7 +155,7 @@ namespace OpenRCT2::Audio
 
         void SetVolume(int32_t volume) override
         {
-            _volume = std::clamp(volume, 0, MIXER_VOLUME_MAX);
+            _volume = std::clamp(volume, 0, kMixerVolumeMax);
         }
 
         [[nodiscard]] float GetPan() const override
@@ -189,7 +185,7 @@ namespace OpenRCT2::Audio
             return _stopping;
         }
 
-        void SetStopping(bool value) override
+        void SetStopping(bool value) final override
         {
             _stopping = value;
         }
@@ -214,11 +210,6 @@ namespace OpenRCT2::Audio
             _deleteondone = value;
         }
 
-        void SetDeleteSourceOnDone(bool value) override
-        {
-            _deletesourceondone = value;
-        }
-
         [[nodiscard]] bool IsPlaying() const override
         {
             return !_done;
@@ -232,6 +223,11 @@ namespace OpenRCT2::Audio
             _done = false;
         }
 
+        void Stop() override
+        {
+            SetStopping(true);
+        }
+
         void UpdateOldVolume() override
         {
             _oldvolume = _volume;
@@ -242,8 +238,7 @@ namespace OpenRCT2::Audio
         [[nodiscard]] AudioFormat GetFormat() const override
         {
             AudioFormat result = {};
-            // The second check is there because NullAudioSource does not implement GetFormat. Avoid calling it.
-            if (_source != nullptr && _source->GetLength() > 0)
+            if (_source != nullptr)
             {
                 result = _source->GetFormat();
             }
@@ -264,13 +259,13 @@ namespace OpenRCT2::Audio
                     bytesRead += readLen;
                     _offset += readLen;
                 }
-                if (_offset >= _source->GetLength())
+                if (readLen == 0 || _offset >= _source->GetLength())
                 {
                     if (_loop == 0)
                     {
                         _done = true;
                     }
-                    else if (_loop == MIXER_LOOP_INFINITE)
+                    else if (_loop == kMixerLoopInfinite)
                     {
                         _offset = 0;
                     }

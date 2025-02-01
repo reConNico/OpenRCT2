@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,11 +9,11 @@
 
 #ifndef DISABLE_NETWORK
 
-#    include "NetworkPlayer.h"
+    #include "NetworkPlayer.h"
 
-#    include "../interface/Window.h"
-#    include "../localisation/Localisation.h"
-#    include "NetworkPacket.h"
+    #include "../core/Money.hpp"
+    #include "../ui/WindowManager.h"
+    #include "NetworkPacket.h"
 
 void NetworkPlayer::SetName(std::string_view name)
 {
@@ -31,16 +31,23 @@ void NetworkPlayer::Read(NetworkPacket& packet)
 
 void NetworkPlayer::Write(NetworkPacket& packet)
 {
-    packet.WriteString(static_cast<const char*>(Name.c_str()));
+    packet.WriteString(Name);
     packet << Id << Flags << Group << LastAction << LastActionCoord.x << LastActionCoord.y << LastActionCoord.z << MoneySpent
            << CommandsRan;
 }
 
-void NetworkPlayer::AddMoneySpent(money32 cost)
+void NetworkPlayer::IncrementNumCommands()
+{
+    CommandsRan++;
+    auto* windowMgr = OpenRCT2::Ui::GetWindowManager();
+    windowMgr->InvalidateByNumber(WindowClass::Player, Id);
+}
+
+void NetworkPlayer::AddMoneySpent(money64 cost)
 {
     MoneySpent += cost;
-    CommandsRan++;
-    window_invalidate_by_number(WC_PLAYER, Id);
+    auto* windowMgr = OpenRCT2::Ui::GetWindowManager();
+    windowMgr->InvalidateByNumber(WindowClass::Player, Id);
 }
 
 #endif

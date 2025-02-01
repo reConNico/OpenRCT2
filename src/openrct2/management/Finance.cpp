@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,52 +11,44 @@
 
 #include "../Context.h"
 #include "../Game.h"
+#include "../GameState.h"
 #include "../OpenRCT2.h"
+#include "../core/EnumUtils.hpp"
 #include "../entity/Peep.h"
 #include "../entity/Staff.h"
-#include "../interface/Window.h"
-#include "../localisation/Date.h"
-#include "../localisation/Localisation.h"
+#include "../localisation/Localisation.Date.h"
+#include "../profiling/Profiling.h"
 #include "../ride/Ride.h"
+#include "../ride/RideManager.hpp"
 #include "../scenario/Scenario.h"
+#include "../ui/WindowManager.h"
 #include "../util/Util.h"
 #include "../windows/Intent.h"
 #include "../world/Park.h"
 
+#include <numeric>
+
+using namespace OpenRCT2;
+
 // Monthly research funding costs
-const money32 research_cost_table[RESEARCH_FUNDING_COUNT] = {
-    MONEY(0, 00),   // No funding
-    MONEY(100, 00), // Minimum funding
-    MONEY(200, 00), // Normal funding
-    MONEY(400, 00), // Maximum funding
+const money64 research_cost_table[RESEARCH_FUNDING_COUNT] = {
+    0.00_GBP,   // No funding
+    100.00_GBP, // Minimum funding
+    200.00_GBP, // Normal funding
+    400.00_GBP, // Maximum funding
 };
 
-static constexpr const int32_t dword_988E60[static_cast<int32_t>(ExpenditureType::Count)] = {
+static constexpr int32_t dword_988E60[EnumValue(ExpenditureType::Count)] = {
     1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0,
 };
-
-money64 gInitialCash;
-money64 gCash;
-money64 gBankLoan;
-uint8_t gBankLoanInterestRate;
-money64 gMaxBankLoan;
-money64 gCurrentExpenditure;
-money64 gCurrentProfit;
-money64 gHistoricalProfit;
-money64 gWeeklyProfitAverageDividend;
-uint16_t gWeeklyProfitAverageDivisor;
-money64 gCashHistory[FINANCE_GRAPH_SIZE];
-money64 gWeeklyProfitHistory[FINANCE_GRAPH_SIZE];
-money64 gParkValueHistory[FINANCE_GRAPH_SIZE];
-money64 gExpenditureTable[EXPENDITURE_TABLE_MONTH_COUNT][static_cast<int32_t>(ExpenditureType::Count)];
 
 /**
  * Checks the condition if the game is required to use money.
  * @param flags game command flags.
  */
-bool finance_check_money_required(uint32_t flags)
+bool FinanceCheckMoneyRequired(uint32_t flags)
 {
-    if (gParkFlags & PARK_FLAGS_NO_MONEY)
+    if (GetGameState().Park.Flags & PARK_FLAGS_NO_MONEY)
         return false;
     if (gScreenFlags & SCREEN_FLAGS_EDITOR)
         return false;
@@ -72,9 +64,9 @@ bool finance_check_money_required(uint32_t flags)
  * @param cost.
  * @param flags game command flags.
  */
-bool finance_check_affordability(money32 cost, uint32_t flags)
+bool FinanceCheckAffordability(money64 cost, uint32_t flags)
 {
-    return !finance_check_money_required(flags) || cost <= 0 || cost <= gCash;
+    return !FinanceCheckMoneyRequired(flags) || cost <= 0 || cost <= GetGameState().Cash;
 }
 
 /**
@@ -83,36 +75,39 @@ bool finance_check_affordability(money32 cost, uint32_t flags)
  * @param amount (eax)
  * @param type passed via global var 0x0141F56C (RCT2_ADDRESS_NEXT_EXPENDITURE_TYPE), our type is that var/4.
  */
-void finance_payment(money32 amount, ExpenditureType type)
+void FinancePayment(money64 amount, ExpenditureType type)
 {
     // overflow check
-    gCash = add_clamp_money32(gCash, -amount);
+    auto& gameState = GetGameState();
+    gameState.Cash = AddClamp<money64>(gameState.Cash, -amount);
 
-    gExpenditureTable[0][static_cast<int32_t>(type)] -= amount;
-    if (dword_988E60[static_cast<int32_t>(type)] & 1)
+    gameState.ExpenditureTable[0][EnumValue(type)] -= amount;
+    if (dword_988E60[EnumValue(type)] & 1)
     {
         // Cumulative amount of money spent this day
-        gCurrentExpenditure -= amount;
+        gameState.CurrentExpenditure -= amount;
     }
 
     auto intent = Intent(INTENT_ACTION_UPDATE_CASH);
-    context_broadcast_intent(&intent);
+    ContextBroadcastIntent(&intent);
 }
 
 /**
  * Pays the wages of all active staff members in the park.
  *  rct2: 0x006C18A9
  */
-void finance_pay_wages()
+void FinancePayWages()
 {
-    if (gParkFlags & PARK_FLAGS_NO_MONEY)
+    PROFILED_FUNCTION();
+
+    if (GetGameState().Park.Flags & PARK_FLAGS_NO_MONEY)
     {
         return;
     }
 
     for (auto peep : EntityList<Staff>())
     {
-        finance_payment(GetStaffWage(peep->AssignedStaffType) / 4, ExpenditureType::Wages);
+        FinancePayment(GetStaffWage(peep->AssignedStaffType) / 4, ExpenditureType::Wages);
     }
 }
 
@@ -120,43 +115,50 @@ void finance_pay_wages()
  * Pays the current research level's cost.
  * rct2: 0x00684DA5
  **/
-void finance_pay_research()
+void FinancePayResearch()
 {
-    if (gParkFlags & PARK_FLAGS_NO_MONEY)
+    const auto& gameState = GetGameState();
+    if (gameState.Park.Flags & PARK_FLAGS_NO_MONEY)
     {
         return;
     }
 
-    const uint8_t level = gResearchFundingLevel;
-    finance_payment(research_cost_table[level] / 4, ExpenditureType::Research);
+    const uint8_t level = gameState.ResearchFundingLevel;
+    FinancePayment(research_cost_table[level] / 4, ExpenditureType::Research);
 }
 
 /**
  * Pay interest on current loans.
  *  rct2: 0x0069E092
  */
-void finance_pay_interest()
+void FinancePayInterest()
 {
-    if (gParkFlags & PARK_FLAGS_NO_MONEY)
+    const auto& gameState = GetGameState();
+
+    if (gameState.Park.Flags & PARK_FLAGS_NO_MONEY)
     {
         return;
     }
 
     // This variable uses the 64-bit type as the computation below can involve multiplying very large numbers
-    // that will overflow money32 if the loan is greater than (1 << 31) / (5 * current_interest_rate)
-    const money64 current_loan = gBankLoan;
-    const uint8_t current_interest_rate = gBankLoanInterestRate;
-    const money32 interest_to_pay = (current_loan * 5 * current_interest_rate) >> 14;
+    // that will overflow money64 if the loan is greater than (1 << 31) / (5 * current_interest_rate)
+    const money64 current_loan = gameState.BankLoan;
+    const auto current_interest_rate = gameState.BankLoanInterestRate;
+    const money64 interest_to_pay = (gameState.Park.Flags & PARK_FLAGS_RCT1_INTEREST)
+        ? (current_loan / 2400)
+        : (current_loan * 5 * current_interest_rate) >> 14;
 
-    finance_payment(interest_to_pay, ExpenditureType::Interest);
+    FinancePayment(interest_to_pay, ExpenditureType::Interest);
 }
 
 /**
  *
  *  rct2: 0x006AC885
  */
-void finance_pay_ride_upkeep()
+void FinancePayRideUpkeep()
 {
+    PROFILED_FUNCTION();
+
     for (auto& ride : GetRideManager())
     {
         if (!(ride.lifecycle_flags & RIDE_LIFECYCLE_EVER_BEEN_OPENED))
@@ -164,14 +166,14 @@ void finance_pay_ride_upkeep()
             ride.Renew();
         }
 
-        if (ride.status != RideStatus::Closed && !(gParkFlags & PARK_FLAGS_NO_MONEY))
+        if (ride.status != RideStatus::Closed && !(GetGameState().Park.Flags & PARK_FLAGS_NO_MONEY))
         {
-            int16_t upkeep = ride.upkeep_cost;
-            if (upkeep != -1)
+            auto upkeep = ride.upkeep_cost;
+            if (upkeep != kMoney64Undefined)
             {
                 ride.total_profit -= upkeep;
                 ride.window_invalidate_flags |= RIDE_INVALIDATE_RIDE_INCOME;
-                finance_payment(upkeep, ExpenditureType::RideRunningCosts);
+                FinancePayment(upkeep, ExpenditureType::RideRunningCosts);
             }
         }
 
@@ -182,13 +184,22 @@ void finance_pay_ride_upkeep()
     }
 }
 
-void finance_reset_history()
+void FinanceResetHistory()
 {
-    for (int32_t i = 0; i < FINANCE_GRAPH_SIZE; i++)
+    auto& gameState = GetGameState();
+    for (auto i = 0; i < kFinanceHistorySize; i++)
     {
-        gCashHistory[i] = MONEY64_UNDEFINED;
-        gWeeklyProfitHistory[i] = MONEY64_UNDEFINED;
-        gParkValueHistory[i] = MONEY64_UNDEFINED;
+        gameState.CashHistory[i] = kMoney64Undefined;
+        gameState.WeeklyProfitHistory[i] = kMoney64Undefined;
+        gameState.Park.ValueHistory[i] = kMoney64Undefined;
+    }
+
+    for (uint32_t i = 0; i < kExpenditureTableMonthCount; ++i)
+    {
+        for (uint32_t j = 0; j < static_cast<int32_t>(ExpenditureType::Count); ++j)
+        {
+            gameState.ExpenditureTable[i][j] = 0;
+        }
     }
 }
 
@@ -196,49 +207,53 @@ void finance_reset_history()
  *
  *  rct2: 0x0069DEFB
  */
-void finance_init()
+void FinanceInit()
 {
+    auto& gameState = GetGameState();
+
     // It only initialises the first month
     for (uint32_t i = 0; i < static_cast<int32_t>(ExpenditureType::Count); i++)
     {
-        gExpenditureTable[0][i] = 0;
+        gameState.ExpenditureTable[0][i] = 0;
     }
 
-    gCurrentExpenditure = 0;
-    gCurrentProfit = 0;
+    gameState.CurrentExpenditure = 0;
+    gameState.CurrentProfit = 0;
 
-    gWeeklyProfitAverageDividend = 0;
-    gWeeklyProfitAverageDivisor = 0;
+    gameState.WeeklyProfitAverageDividend = 0;
+    gameState.WeeklyProfitAverageDivisor = 0;
 
-    gInitialCash = MONEY(10000, 00); // Cheat detection
+    gameState.InitialCash = 10000.00_GBP; // Cheat detection
 
-    gCash = MONEY(10000, 00);
-    gBankLoan = MONEY(10000, 00);
-    gMaxBankLoan = MONEY(20000, 00);
+    gameState.Cash = 10000.00_GBP;
+    gameState.BankLoan = 10000.00_GBP;
+    gameState.MaxBankLoan = 20000.00_GBP;
 
-    gHistoricalProfit = 0;
-
-    gBankLoanInterestRate = 10;
-    gParkValue = 0;
-    gCompanyValue = 0;
-    gScenarioCompletedCompanyValue = MONEY64_UNDEFINED;
-    gTotalAdmissions = 0;
-    gTotalIncomeFromAdmissions = 0;
-    gScenarioCompletedBy = "?";
+    gameState.BankLoanInterestRate = 10;
+    gameState.Park.Value = 0;
+    gameState.CompanyValue = 0;
+    gameState.HistoricalProfit = 0;
+    gameState.ScenarioCompletedCompanyValue = kMoney64Undefined;
+    gameState.TotalAdmissions = 0;
+    gameState.TotalIncomeFromAdmissions = 0;
+    gameState.ScenarioCompletedBy = std::string("?");
 }
 
 /**
  *
  *  rct2: 0x0069E79A
  */
-void finance_update_daily_profit()
+void FinanceUpdateDailyProfit()
 {
-    gCurrentProfit = 7 * gCurrentExpenditure;
-    gCurrentExpenditure = 0; // Reset daily expenditure
+    PROFILED_FUNCTION();
+    auto& gameState = GetGameState();
 
-    money32 current_profit = 0;
+    gameState.CurrentProfit = 7 * gameState.CurrentExpenditure;
+    gameState.CurrentExpenditure = 0; // Reset daily expenditure
 
-    if (!(gParkFlags & PARK_FLAGS_NO_MONEY))
+    money64 current_profit = 0;
+
+    if (!(gameState.Park.Flags & PARK_FLAGS_NO_MONEY))
     {
         // Staff costs
         for (auto peep : EntityList<Staff>())
@@ -247,17 +262,17 @@ void finance_update_daily_profit()
         }
 
         // Research costs
-        uint8_t level = gResearchFundingLevel;
+        uint8_t level = gameState.ResearchFundingLevel;
         current_profit -= research_cost_table[level];
 
         // Loan costs
-        money32 current_loan = gBankLoan;
+        auto current_loan = gameState.BankLoan;
         current_profit -= current_loan / 600;
 
         // Ride costs
         for (auto& ride : GetRideManager())
         {
-            if (ride.status != RideStatus::Closed && ride.upkeep_cost != MONEY16_UNDEFINED)
+            if (ride.status != RideStatus::Closed && ride.upkeep_cost != kMoney64Undefined)
             {
                 current_profit -= 2 * ride.upkeep_cost;
             }
@@ -267,33 +282,34 @@ void finance_update_daily_profit()
     // This is not equivalent to / 4 due to rounding of negative numbers
     current_profit = current_profit >> 2;
 
-    gCurrentProfit += current_profit;
+    gameState.CurrentProfit += current_profit;
 
     // These are related to weekly profit graph
-    gWeeklyProfitAverageDividend += gCurrentProfit;
-    gWeeklyProfitAverageDivisor += 1;
+    gameState.WeeklyProfitAverageDividend += gameState.CurrentProfit;
+    gameState.WeeklyProfitAverageDivisor += 1;
 
-    window_invalidate_by_class(WC_FINANCES);
+    auto* windowMgr = Ui::GetWindowManager();
+    windowMgr->InvalidateByClass(WindowClass::Finances);
 }
 
-money64 finance_get_initial_cash()
+money64 FinanceGetInitialCash()
 {
-    return gInitialCash;
+    return GetGameState().InitialCash;
 }
 
-money64 finance_get_current_loan()
+money64 FinanceGetCurrentLoan()
 {
-    return gBankLoan;
+    return GetGameState().BankLoan;
 }
 
-money64 finance_get_maximum_loan()
+money64 FinanceGetMaximumLoan()
 {
-    return gMaxBankLoan;
+    return GetGameState().MaxBankLoan;
 }
 
-money64 finance_get_current_cash()
+money64 FinanceGetCurrentCash()
 {
-    return gCash;
+    return GetGameState().Cash;
 }
 
 /**
@@ -301,60 +317,62 @@ money64 finance_get_current_cash()
  * If the table is full, accumulate the sum of the oldest month first
  * rct2: 0x0069DEAD
  */
-void finance_shift_expenditure_table()
+void FinanceShiftExpenditureTable()
 {
-    // If EXPENDITURE_TABLE_MONTH_COUNT months have passed then is full, sum the oldest month
-    if (gDateMonthsElapsed >= EXPENDITURE_TABLE_MONTH_COUNT)
+    auto& gameState = GetGameState();
+    // If kExpenditureTableMonthCount months have passed then is full, sum the oldest month
+    if (GetDate().GetMonthsElapsed() >= kExpenditureTableMonthCount)
     {
-        money64 sum = 0;
-        for (uint32_t i = 0; i < static_cast<int32_t>(ExpenditureType::Count); i++)
-        {
-            sum += gExpenditureTable[EXPENDITURE_TABLE_MONTH_COUNT - 1][i];
-        }
-        gHistoricalProfit += sum;
+        const money64 sum = std::accumulate(
+            std::cbegin(gameState.ExpenditureTable[kExpenditureTableMonthCount - 1]),
+            std::cend(gameState.ExpenditureTable[kExpenditureTableMonthCount - 1]), money64{});
+
+        gameState.HistoricalProfit += sum;
     }
 
     // Shift the table
-    for (size_t i = EXPENDITURE_TABLE_MONTH_COUNT - 1; i >= 1; i--)
+    for (size_t i = kExpenditureTableMonthCount - 1; i >= 1; i--)
     {
         for (size_t j = 0; j < static_cast<int32_t>(ExpenditureType::Count); j++)
         {
-            gExpenditureTable[i][j] = gExpenditureTable[i - 1][j];
+            gameState.ExpenditureTable[i][j] = gameState.ExpenditureTable[i - 1][j];
         }
     }
 
     // Zero the beginning of the table, which is the new month
     for (uint32_t i = 0; i < static_cast<int32_t>(ExpenditureType::Count); i++)
     {
-        gExpenditureTable[0][i] = 0;
+        gameState.ExpenditureTable[0][i] = 0;
     }
 
-    window_invalidate_by_class(WC_FINANCES);
+    auto* windowMgr = Ui::GetWindowManager();
+    windowMgr->InvalidateByClass(WindowClass::Finances);
 }
 
 /**
  *
  *  rct2: 0x0069E89B
  */
-void finance_reset_cash_to_initial()
+void FinanceResetCashToInitial()
 {
-    gCash = gInitialCash;
+    auto& gameState = GetGameState();
+    gameState.Cash = gameState.InitialCash;
 }
 
 /**
  * Gets the last month's profit from food, drink and merchandise.
  */
-money64 finance_get_last_month_shop_profit()
+money64 FinanceGetLastMonthShopProfit()
 {
     money64 profit = 0;
-    if (gDateMonthsElapsed != 0)
+    if (GetDate().GetMonthsElapsed() != 0)
     {
-        const auto* lastMonthExpenditure = gExpenditureTable[1];
+        const auto* lastMonthExpenditure = GetGameState().ExpenditureTable[1];
 
-        profit += lastMonthExpenditure[static_cast<int32_t>(ExpenditureType::ShopSales)];
-        profit += lastMonthExpenditure[static_cast<int32_t>(ExpenditureType::ShopStock)];
-        profit += lastMonthExpenditure[static_cast<int32_t>(ExpenditureType::FoodDrinkSales)];
-        profit += lastMonthExpenditure[static_cast<int32_t>(ExpenditureType::FoodDrinkStock)];
+        profit += lastMonthExpenditure[EnumValue(ExpenditureType::ShopSales)];
+        profit += lastMonthExpenditure[EnumValue(ExpenditureType::ShopStock)];
+        profit += lastMonthExpenditure[EnumValue(ExpenditureType::FoodDrinkSales)];
+        profit += lastMonthExpenditure[EnumValue(ExpenditureType::FoodDrinkStock)];
     }
     return profit;
 }

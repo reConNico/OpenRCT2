@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,15 +9,16 @@
 
 #pragma once
 
+#include "ImageIndexType.h"
+
 #include <cassert>
 #include <cstdint>
 #include <limits>
 
 using colour_t = uint8_t;
 enum class FilterPaletteID : int32_t;
-typedef uint32_t ImageIndex;
 
-static constexpr ImageIndex ImageIndexUndefined = std::numeric_limits<ImageIndex>::max();
+static constexpr ImageIndex kImageIndexUndefined = std::numeric_limits<ImageIndex>::max();
 
 enum class ImageCatalogue
 {
@@ -41,24 +42,9 @@ FilterPaletteID GetGlassPaletteId(colour_t);
 struct ImageId
 {
 private:
-    // clang-format off
-    static constexpr uint32_t MASK_INDEX       = 0b00000000000001111111111111111111;
-    static constexpr uint32_t MASK_REMAP       = 0b00000111111110000000000000000000;
-    static constexpr uint32_t MASK_PRIMARY     = 0b00000000111110000000000000000000;
-    static constexpr uint32_t MASK_SECONDARY   = 0b00011111000000000000000000000000;
-    static constexpr uint32_t FLAG_PRIMARY     = 0b00100000000000000000000000000000;
-    static constexpr uint32_t FLAG_BLEND       = 0b01000000000000000000000000000000;
-    static constexpr uint32_t FLAG_SECONDARY   = 0b10000000000000000000000000000000;
-    static constexpr uint32_t SHIFT_REMAP      = 19;
-    static constexpr uint32_t SHIFT_PRIMARY    = 19;
-    static constexpr uint32_t SHIFT_SECONDARY  = 24;
-    static constexpr uint32_t INDEX_UNDEFINED  = 0b00000000000001111111111111111111;
-    static constexpr uint32_t VALUE_UNDEFINED  = INDEX_UNDEFINED;
-
-    static constexpr uint8_t  NEW_FLAG_PRIMARY      = 1;
-    static constexpr uint8_t  NEW_FLAG_BLEND        = 2;
-    static constexpr uint8_t  NEW_FLAG_SECONDARY    = 4;
-    // clang-format on
+    static constexpr uint8_t kFlagPrimary = 1;
+    static constexpr uint8_t kFlagBlend = 2;
+    static constexpr uint8_t kFlagSecondary = 4;
 
     // NONE = No remap
     // BLENDED = No source copy, remap destination only (glass)
@@ -67,51 +53,17 @@ private:
     // PRIMARY | SECONDARY = Remap with primary and secondary colours
     // SECONDARY = Remap with primary, secondary and tertiary colours
 
-    ImageIndex _index = ImageIndexUndefined;
+    ImageIndex _index = kImageIndexUndefined;
     uint8_t _primary = 0;
     uint8_t _secondary = 0;
     uint8_t _tertiary = 0;
     uint8_t _flags = 0;
 
 public:
-    static ImageId FromUInt32(uint32_t value)
-    {
-        ImageId result;
-        result._index = value & MASK_INDEX;
-        if (value & FLAG_SECONDARY)
-            result._primary = (value & MASK_PRIMARY) >> SHIFT_PRIMARY;
-        else
-            result._primary = (value & MASK_REMAP) >> SHIFT_REMAP;
-        if (value & FLAG_SECONDARY)
-            result._secondary = (value & MASK_SECONDARY) >> SHIFT_SECONDARY;
-        if (value & FLAG_PRIMARY)
-            result._flags |= NEW_FLAG_PRIMARY;
-        if (value & FLAG_BLEND)
-            result._flags |= NEW_FLAG_BLEND;
-        if (value & FLAG_SECONDARY)
-            result._flags |= NEW_FLAG_SECONDARY;
-        assert(result.ToUInt32() == value);
-        return result;
-    }
-
-    static ImageId FromUInt32(uint32_t value, uint32_t tertiary)
-    {
-        if (!(value & FLAG_PRIMARY) && (value & FLAG_SECONDARY))
-        {
-            auto result = ImageId::FromUInt32(value).WithTertiary(tertiary);
-            assert(result.ToUInt32() == value);
-            return result;
-        }
-        else
-        {
-            return ImageId::FromUInt32(value);
-        }
-    }
-
     ImageId() = default;
 
     explicit constexpr ImageId(ImageIndex index)
-        : _index(index == INDEX_UNDEFINED ? ImageIndexUndefined : index)
+        : _index(index)
     {
     }
 
@@ -135,50 +87,34 @@ public:
     {
     }
 
-    uint32_t ToUInt32() const
-    {
-        auto result = (_index & MASK_INDEX);
-        result |= (_primary << SHIFT_REMAP) & MASK_REMAP;
-        if (_flags & NEW_FLAG_PRIMARY)
-            result |= FLAG_PRIMARY;
-        if (_flags & NEW_FLAG_SECONDARY)
-        {
-            result |= (_secondary << SHIFT_SECONDARY) & MASK_SECONDARY;
-            result |= FLAG_SECONDARY;
-        }
-        if (_flags & NEW_FLAG_BLEND)
-            result |= FLAG_BLEND;
-        return result;
-    }
-
     bool HasValue() const
     {
-        return GetIndex() != ImageIndexUndefined;
+        return GetIndex() != kImageIndexUndefined;
     }
 
     bool HasPrimary() const
     {
-        return (_flags & NEW_FLAG_PRIMARY) || (_flags & NEW_FLAG_SECONDARY);
+        return (_flags & kFlagPrimary) || (_flags & kFlagSecondary);
     }
 
     bool HasSecondary() const
     {
-        return _flags & NEW_FLAG_SECONDARY;
+        return _flags & kFlagSecondary;
     }
 
     bool HasTertiary() const
     {
-        return !(_flags & NEW_FLAG_PRIMARY) && (_flags & NEW_FLAG_SECONDARY);
+        return !(_flags & kFlagPrimary) && (_flags & kFlagSecondary);
     }
 
     bool IsRemap() const
     {
-        return (_flags & NEW_FLAG_PRIMARY) && !(_flags & NEW_FLAG_SECONDARY);
+        return (_flags & kFlagPrimary) && !(_flags & kFlagSecondary);
     }
 
     bool IsBlended() const
     {
-        return _flags & NEW_FLAG_BLEND;
+        return _flags & kFlagBlend;
     }
 
     ImageIndex GetIndex() const
@@ -208,59 +144,67 @@ public:
 
     ImageCatalogue GetCatalogue() const;
 
-    constexpr ImageId WithIndex(ImageIndex index) const
+    [[nodiscard]] constexpr ImageId WithIndex(ImageIndex index) const
     {
         ImageId result = *this;
         result._index = index;
         return result;
     }
 
-    constexpr ImageId WithIndexOffset(ImageIndex offset) const
+    [[nodiscard]] constexpr ImageId WithIndexOffset(ImageIndex offset) const
     {
         ImageId result = *this;
         result._index += offset;
         return result;
     }
 
-    constexpr ImageId WithRemap(FilterPaletteID paletteId) const
+    [[nodiscard]] constexpr ImageId WithRemap(FilterPaletteID paletteId) const
     {
         return WithRemap(static_cast<uint8_t>(paletteId));
     }
 
-    constexpr ImageId WithRemap(uint8_t paletteId) const
+    [[nodiscard]] constexpr ImageId WithRemap(uint8_t paletteId) const
     {
         ImageId result = *this;
         result._primary = paletteId;
         result._secondary = 0;
         result._tertiary = 0;
-        result._flags |= NEW_FLAG_PRIMARY;
-        result._flags &= ~NEW_FLAG_SECONDARY;
+        result._flags |= kFlagPrimary;
+        result._flags &= ~kFlagSecondary;
         return result;
     }
 
-    constexpr ImageId WithPrimary(colour_t colour) const
+    [[nodiscard]] constexpr ImageId WithPrimary(colour_t colour) const
     {
         ImageId result = *this;
-        result._primary = colour & 31;
-        result._flags |= NEW_FLAG_PRIMARY;
+        result._primary = colour;
+        result._flags |= kFlagPrimary;
         return result;
     }
 
-    constexpr ImageId WithSecondary(colour_t colour) const
+    [[nodiscard]] constexpr ImageId WithSecondary(colour_t colour) const
     {
         ImageId result = *this;
-        result._secondary = colour & 31;
-        result._flags |= NEW_FLAG_SECONDARY;
+        result._secondary = colour;
+        result._flags |= kFlagSecondary;
         return result;
     }
 
-    constexpr ImageId WithTertiary(colour_t tertiary) const
+    [[nodiscard]] constexpr ImageId WithoutSecondary() const
     {
         ImageId result = *this;
-        result._tertiary = tertiary & 31;
-        result._flags &= ~NEW_FLAG_PRIMARY;
-        result._flags |= NEW_FLAG_SECONDARY;
-        if (!(_flags & NEW_FLAG_SECONDARY))
+        result._secondary = 0;
+        result._flags &= ~kFlagSecondary;
+        return result;
+    }
+
+    [[nodiscard]] constexpr ImageId WithTertiary(colour_t tertiary) const
+    {
+        ImageId result = *this;
+        result._tertiary = tertiary;
+        result._flags &= ~kFlagPrimary;
+        result._flags |= kFlagSecondary;
+        if (!(_flags & kFlagSecondary))
         {
             // Tertiary implies primary and secondary, so if colour was remap (8-bit primary) then
             // we need to zero the secondary colour.
@@ -269,29 +213,40 @@ public:
         return result;
     }
 
-    ImageId WithTransparancy(colour_t colour) const
+    [[nodiscard]] ImageId WithTransparency(colour_t colour) const
     {
-        return WithTransparancy(GetGlassPaletteId(colour & 31));
+        return WithTransparency(GetGlassPaletteId(colour));
     }
 
-    ImageId WithTransparancy(FilterPaletteID palette) const
+    [[nodiscard]] ImageId WithTransparency(FilterPaletteID palette) const
     {
         ImageId result = *this;
         result._primary = static_cast<uint8_t>(palette);
         result._secondary = 0;
         result._tertiary = 0;
-        result._flags = NEW_FLAG_BLEND;
+        result._flags = kFlagBlend;
         return result;
     }
 
-    constexpr ImageId WithBlended(bool value) const
+    [[nodiscard]] constexpr ImageId WithBlended(bool value) const
     {
         ImageId result = *this;
         if (value)
-            result._flags |= NEW_FLAG_BLEND;
+            result._flags |= kFlagBlend;
         else
-            result._flags &= ~NEW_FLAG_BLEND;
+            result._flags &= ~kFlagBlend;
         return result;
     }
+
+    constexpr bool operator==(const ImageId& rhs) const
+    {
+        return _index == rhs._index && _primary == rhs._primary && _secondary == rhs._secondary && _tertiary == rhs._tertiary
+            && _flags == rhs._flags;
+    }
+
+    constexpr bool operator!=(const ImageId& rhs) const
+    {
+        return !(*this == rhs);
+    }
 };
-static_assert(sizeof(ImageId) == 8);
+static_assert(sizeof(ImageId) == 8, "The size of this struct is expected to fit in 64 bits for perfomance reasons. See #18555");

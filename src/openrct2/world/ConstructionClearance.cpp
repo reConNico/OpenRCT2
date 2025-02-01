@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,33 +10,49 @@
 #include "ConstructionClearance.h"
 
 #include "../Game.h"
+#include "../GameState.h"
+#include "../localisation/Formatter.h"
+#include "../object/LargeSceneryEntry.h"
+#include "../object/SmallSceneryEntry.h"
+#include "../object/WallSceneryEntry.h"
 #include "../openrct2/Cheats.h"
 #include "../ride/Ride.h"
 #include "../ride/RideData.h"
 #include "Park.h"
+#include "QuarterTile.h"
 #include "Scenery.h"
-#include "SmallScenery.h"
-#include "Surface.h"
+#include "tile_element/EntranceElement.h"
+#include "tile_element/LargeSceneryElement.h"
+#include "tile_element/PathElement.h"
+#include "tile_element/Slope.h"
+#include "tile_element/SmallSceneryElement.h"
+#include "tile_element/SurfaceElement.h"
+#include "tile_element/TileElement.h"
+#include "tile_element/TrackElement.h"
+#include "tile_element/WallElement.h"
 
-static int32_t map_place_clear_func(
-    TileElement** tile_element, const CoordsXY& coords, uint8_t flags, money32* price, bool is_scenery)
+using namespace OpenRCT2;
+
+static int32_t MapPlaceClearFunc(
+    TileElement** tile_element, const CoordsXY& coords, uint8_t flags, money64* price, bool is_scenery)
 {
     if ((*tile_element)->GetType() != TileElementType::SmallScenery)
         return 1;
 
-    if (is_scenery && !(flags & GAME_COMMAND_FLAG_PATH_SCENERY))
+    if (is_scenery && !(flags & GAME_COMMAND_FLAG_TRACK_DESIGN))
         return 1;
 
     auto* scenery = (*tile_element)->AsSmallScenery()->GetEntry();
 
-    if (gParkFlags & PARK_FLAGS_FORBID_TREE_REMOVAL)
+    auto& gameState = GetGameState();
+    if (gameState.Park.Flags & PARK_FLAGS_FORBID_TREE_REMOVAL)
     {
         if (scenery != nullptr && scenery->HasFlag(SMALL_SCENERY_FLAG_IS_TREE))
             return 1;
     }
 
-    if (!(gParkFlags & PARK_FLAGS_NO_MONEY) && scenery != nullptr)
-        *price += scenery->removal_price * 10;
+    if (!(gameState.Park.Flags & PARK_FLAGS_NO_MONEY) && scenery != nullptr)
+        *price += scenery->removal_price;
 
     if (flags & GAME_COMMAND_FLAG_GHOST)
         return 0;
@@ -44,9 +60,9 @@ static int32_t map_place_clear_func(
     if (!(flags & GAME_COMMAND_FLAG_APPLY))
         return 0;
 
-    map_invalidate_tile({ coords, (*tile_element)->GetBaseZ(), (*tile_element)->GetClearanceZ() });
+    MapInvalidateTile({ coords, (*tile_element)->GetBaseZ(), (*tile_element)->GetClearanceZ() });
 
-    tile_element_remove(*tile_element);
+    TileElementRemove(*tile_element);
 
     (*tile_element)--;
     return 0;
@@ -56,23 +72,23 @@ static int32_t map_place_clear_func(
  *
  *  rct2: 0x006E0D6E, 0x006B8D88
  */
-int32_t map_place_scenery_clear_func(TileElement** tile_element, const CoordsXY& coords, uint8_t flags, money32* price)
+int32_t MapPlaceSceneryClearFunc(TileElement** tile_element, const CoordsXY& coords, uint8_t flags, money64* price)
 {
-    return map_place_clear_func(tile_element, coords, flags, price, /*is_scenery=*/true);
+    return MapPlaceClearFunc(tile_element, coords, flags, price, /*is_scenery=*/true);
 }
 
 /**
  *
  *  rct2: 0x006C5A4F, 0x006CDE57, 0x006A6733, 0x0066637E
  */
-int32_t map_place_non_scenery_clear_func(TileElement** tile_element, const CoordsXY& coords, uint8_t flags, money32* price)
+int32_t MapPlaceNonSceneryClearFunc(TileElement** tile_element, const CoordsXY& coords, uint8_t flags, money64* price)
 {
-    return map_place_clear_func(tile_element, coords, flags, price, /*is_scenery=*/false);
+    return MapPlaceClearFunc(tile_element, coords, flags, price, /*is_scenery=*/false);
 }
 
 static bool MapLoc68BABCShouldContinue(
-    TileElement** tileElementPtr, const CoordsXYRangedZ& pos, CLEAR_FUNC clearFunc, uint8_t flags, money32& price,
-    uint8_t crossingMode, bool canBuildCrossing)
+    TileElement** tileElementPtr, const CoordsXYRangedZ& pos, CLEAR_FUNC clearFunc, uint8_t flags, money64& price,
+    CreateCrossingMode crossingMode, bool canBuildCrossing)
 {
     if (clearFunc != nullptr)
     {
@@ -82,20 +98,19 @@ static bool MapLoc68BABCShouldContinue(
         }
     }
 
-    // Crossing mode 1: building track over path
     auto tileElement = *tileElementPtr;
-    if (crossingMode == 1 && canBuildCrossing && tileElement->GetType() == TileElementType::Path
+    if (crossingMode == CreateCrossingMode::trackOverPath && canBuildCrossing && tileElement->GetType() == TileElementType::Path
         && tileElement->GetBaseZ() == pos.baseZ && !tileElement->AsPath()->IsQueue() && !tileElement->AsPath()->IsSloped())
     {
         return true;
     }
-    // Crossing mode 2: building path over track
     else if (
-        crossingMode == 2 && canBuildCrossing && tileElement->GetType() == TileElementType::Track
-        && tileElement->GetBaseZ() == pos.baseZ && tileElement->AsTrack()->GetTrackType() == TrackElemType::Flat)
+        crossingMode == CreateCrossingMode::pathOverTrack && canBuildCrossing
+        && tileElement->GetType() == TileElementType::Track && tileElement->GetBaseZ() == pos.baseZ
+        && tileElement->AsTrack()->GetTrackType() == TrackElemType::Flat)
     {
-        auto ride = get_ride(tileElement->AsTrack()->GetRideIndex());
-        if (ride != nullptr && ride->GetRideTypeDescriptor().HasFlag(RIDE_TYPE_FLAG_SUPPORTS_LEVEL_CROSSINGS))
+        auto ride = GetRide(tileElement->AsTrack()->GetRideIndex());
+        if (ride != nullptr && ride->GetRideTypeDescriptor().HasFlag(RtdFlag::supportsLevelCrossings))
         {
             return true;
         }
@@ -115,7 +130,8 @@ static bool MapLoc68BABCShouldContinue(
  *  bl = bl
  */
 GameActions::Result MapCanConstructWithClearAt(
-    const CoordsXYRangedZ& pos, CLEAR_FUNC clearFunc, QuarterTile quarterTile, uint8_t flags, uint8_t crossingMode, bool isTree)
+    const CoordsXYRangedZ& pos, CLEAR_FUNC clearFunc, QuarterTile quarterTile, uint8_t flags, CreateCrossingMode crossingMode,
+    bool isTree)
 {
     auto res = GameActions::Result();
 
@@ -123,24 +139,24 @@ GameActions::Result MapCanConstructWithClearAt(
     res.SetData(ConstructClearResult{ groundFlags });
 
     bool canBuildCrossing = false;
-    if (map_is_edge(pos))
+    if (MapIsEdge(pos))
     {
         res.Error = GameActions::Status::InvalidParameters;
         res.ErrorMessage = STR_OFF_EDGE_OF_MAP;
         return res;
     }
 
-    if (gCheatsDisableClearanceChecks)
+    if (GetGameState().Cheats.disableClearanceChecks)
     {
         res.SetData(ConstructClearResult{ groundFlags });
         return res;
     }
 
-    TileElement* tileElement = map_get_first_element_at(pos);
+    TileElement* tileElement = MapGetFirstElementAt(pos);
     if (tileElement == nullptr)
     {
         res.Error = GameActions::Status::Unknown;
-        res.ErrorMessage = STR_NONE;
+        res.ErrorMessage = kStringIdNone;
         return res;
     }
 
@@ -159,7 +175,7 @@ GameActions::Result MapCanConstructWithClearAt(
                         continue;
                     }
 
-                    map_obstruction_set_error_text(tileElement, res);
+                    MapGetObstructionErrorText(tileElement, res);
                     res.Error = GameActions::Status::NoClearance;
                     return res;
                 }
@@ -182,11 +198,11 @@ GameActions::Result MapCanConstructWithClearAt(
             }
         }
 
-        if (gParkFlags & PARK_FLAGS_FORBID_HIGH_CONSTRUCTION && !isTree)
+        if (GetGameState().Park.Flags & PARK_FLAGS_FORBID_HIGH_CONSTRUCTION && !isTree)
         {
             const auto heightFromGround = pos.clearanceZ - tileElement->GetBaseZ();
 
-            if (heightFromGround > (18 * COORDS_Z_STEP))
+            if (heightFromGround > (18 * kCoordsZStep))
             {
                 res.Error = GameActions::Status::Disallowed;
                 res.ErrorMessage = STR_LOCAL_AUTHORITY_WONT_ALLOW_CONSTRUCTION_ABOVE_TREE_HEIGHT;
@@ -195,8 +211,8 @@ GameActions::Result MapCanConstructWithClearAt(
         }
 
         // Only allow building crossings directly on a flat surface tile.
-        if (tileElement->GetType() == TileElementType::Surface
-            && (tileElement->AsSurface()->GetSlope()) == TILE_ELEMENT_SLOPE_FLAT && tileElement->GetBaseZ() == pos.baseZ)
+        if (tileElement->GetType() == TileElementType::Surface && (tileElement->AsSurface()->GetSlope()) == kTileSlopeFlat
+            && tileElement->GetBaseZ() == pos.baseZ)
         {
             canBuildCrossing = true;
         }
@@ -205,7 +221,7 @@ GameActions::Result MapCanConstructWithClearAt(
         {
             if (tileElement->GetBaseZ() >= pos.clearanceZ)
             {
-                // loc_68BA81
+                // Loc68BA81
                 groundFlags |= ELEMENT_IS_UNDERGROUND;
                 groundFlags &= ~ELEMENT_IS_ABOVE_GROUND;
             }
@@ -216,31 +232,31 @@ GameActions::Result MapCanConstructWithClearAt(
                 auto southZ = northZ;
                 auto westZ = northZ;
                 const auto slope = tileElement->AsSurface()->GetSlope();
-                if (slope & TILE_ELEMENT_SLOPE_N_CORNER_UP)
+                if (slope & kTileSlopeNCornerUp)
                 {
-                    northZ += LAND_HEIGHT_STEP;
-                    if (slope == (TILE_ELEMENT_SLOPE_S_CORNER_DN | TILE_ELEMENT_SLOPE_DOUBLE_HEIGHT))
-                        northZ += LAND_HEIGHT_STEP;
+                    northZ += kLandHeightStep;
+                    if (slope == (kTileSlopeSCornerDown | kTileSlopeDiagonalFlag))
+                        northZ += kLandHeightStep;
                 }
-                if (slope & TILE_ELEMENT_SLOPE_E_CORNER_UP)
+                if (slope & kTileSlopeECornerUp)
                 {
-                    eastZ += LAND_HEIGHT_STEP;
-                    if (slope == (TILE_ELEMENT_SLOPE_W_CORNER_DN | TILE_ELEMENT_SLOPE_DOUBLE_HEIGHT))
-                        eastZ += LAND_HEIGHT_STEP;
+                    eastZ += kLandHeightStep;
+                    if (slope == (kTileSlopeWCornerDown | kTileSlopeDiagonalFlag))
+                        eastZ += kLandHeightStep;
                 }
-                if (slope & TILE_ELEMENT_SLOPE_S_CORNER_UP)
+                if (slope & kTileSlopeSCornerUp)
                 {
-                    southZ += LAND_HEIGHT_STEP;
-                    if (slope == (TILE_ELEMENT_SLOPE_N_CORNER_DN | TILE_ELEMENT_SLOPE_DOUBLE_HEIGHT))
-                        southZ += LAND_HEIGHT_STEP;
+                    southZ += kLandHeightStep;
+                    if (slope == (kTileSlopeNCornerDown | kTileSlopeDiagonalFlag))
+                        southZ += kLandHeightStep;
                 }
-                if (slope & TILE_ELEMENT_SLOPE_W_CORNER_UP)
+                if (slope & kTileSlopeWCornerUp)
                 {
-                    westZ += LAND_HEIGHT_STEP;
-                    if (slope == (TILE_ELEMENT_SLOPE_E_CORNER_DN | TILE_ELEMENT_SLOPE_DOUBLE_HEIGHT))
-                        westZ += LAND_HEIGHT_STEP;
+                    westZ += kLandHeightStep;
+                    if (slope == (kTileSlopeECornerDown | kTileSlopeDiagonalFlag))
+                        westZ += kLandHeightStep;
                 }
-                const auto baseHeight = pos.baseZ + (4 * COORDS_Z_STEP);
+                const auto baseHeight = pos.baseZ + (4 * kCoordsZStep);
                 const auto baseQuarter = quarterTile.GetBaseQuarterOccupied();
                 const auto zQuarter = quarterTile.GetZQuarterOccupied();
                 if ((!(baseQuarter & 0b0001) || ((zQuarter & 0b0001 || pos.baseZ >= northZ) && baseHeight >= northZ))
@@ -256,7 +272,7 @@ GameActions::Result MapCanConstructWithClearAt(
                     continue;
                 }
 
-                map_obstruction_set_error_text(tileElement, res);
+                MapGetObstructionErrorText(tileElement, res);
                 res.Error = GameActions::Status::NoClearance;
                 return res;
             }
@@ -277,7 +293,7 @@ GameActions::Result MapCanConstructAt(const CoordsXYRangedZ& pos, QuarterTile bl
  *
  *  rct2: 0x0068BB18
  */
-void map_obstruction_set_error_text(TileElement* tileElement, GameActions::Result& res)
+void MapGetObstructionErrorText(TileElement* tileElement, GameActions::Result& res)
 {
     Ride* ride;
 
@@ -291,7 +307,7 @@ void map_obstruction_set_error_text(TileElement* tileElement, GameActions::Resul
             res.ErrorMessage = STR_FOOTPATH_IN_THE_WAY;
             break;
         case TileElementType::Track:
-            ride = get_ride(tileElement->AsTrack()->GetRideIndex());
+            ride = GetRide(tileElement->AsTrack()->GetRideIndex());
             if (ride != nullptr)
             {
                 res.ErrorMessage = STR_X_IN_THE_WAY;
@@ -305,8 +321,8 @@ void map_obstruction_set_error_text(TileElement* tileElement, GameActions::Resul
             auto* sceneryEntry = tileElement->AsSmallScenery()->GetEntry();
             res.ErrorMessage = STR_X_IN_THE_WAY;
             auto ft = Formatter(res.ErrorMessageArgs.data());
-            rct_string_id stringId = sceneryEntry != nullptr ? sceneryEntry->name : static_cast<rct_string_id>(STR_EMPTY);
-            ft.Add<rct_string_id>(stringId);
+            StringId stringId = sceneryEntry != nullptr ? sceneryEntry->name : static_cast<StringId>(kStringIdEmpty);
+            ft.Add<StringId>(stringId);
             break;
         }
         case TileElementType::Entrance:
@@ -328,8 +344,8 @@ void map_obstruction_set_error_text(TileElement* tileElement, GameActions::Resul
             auto* wallEntry = tileElement->AsWall()->GetEntry();
             res.ErrorMessage = STR_X_IN_THE_WAY;
             auto ft = Formatter(res.ErrorMessageArgs.data());
-            rct_string_id stringId = wallEntry != nullptr ? wallEntry->name : static_cast<rct_string_id>(STR_EMPTY);
-            ft.Add<rct_string_id>(stringId);
+            StringId stringId = wallEntry != nullptr ? wallEntry->name : static_cast<StringId>(kStringIdEmpty);
+            ft.Add<StringId>(stringId);
             break;
         }
         case TileElementType::LargeScenery:
@@ -337,8 +353,8 @@ void map_obstruction_set_error_text(TileElement* tileElement, GameActions::Resul
             auto* sceneryEntry = tileElement->AsLargeScenery()->GetEntry();
             res.ErrorMessage = STR_X_IN_THE_WAY;
             auto ft = Formatter(res.ErrorMessageArgs.data());
-            rct_string_id stringId = sceneryEntry != nullptr ? sceneryEntry->name : static_cast<rct_string_id>(STR_EMPTY);
-            ft.Add<rct_string_id>(stringId);
+            StringId stringId = sceneryEntry != nullptr ? sceneryEntry->name : static_cast<StringId>(kStringIdEmpty);
+            ft.Add<StringId>(stringId);
             break;
         }
         case TileElementType::Banner:

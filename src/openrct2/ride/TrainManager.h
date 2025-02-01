@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -7,28 +7,31 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 #pragma once
+
+#include "../Identifiers.h"
+
 #include <cstdint>
 #include <list>
 
 struct Vehicle;
 
-namespace TrainManager
+namespace OpenRCT2::TrainManager
 {
     // Iteration of heads of trains
     class View
     {
     private:
-        const std::list<uint16_t>* vec;
+        const std::list<EntityId>* vec;
 
         class Iterator
         {
         private:
-            std::list<uint16_t>::const_iterator iter;
-            std::list<uint16_t>::const_iterator end;
+            std::list<EntityId>::const_iterator iter;
+            std::list<EntityId>::const_iterator end;
             Vehicle* Entity = nullptr;
 
         public:
-            Iterator(std::list<uint16_t>::const_iterator _iter, std::list<uint16_t>::const_iterator _end)
+            Iterator(std::list<EntityId>::const_iterator _iter, std::list<EntityId>::const_iterator _end)
                 : iter(_iter)
                 , end(_end)
             {
@@ -74,4 +77,4 @@ namespace TrainManager
             return Iterator(std::cend(*vec), std::cend(*vec));
         }
     };
-} // namespace TrainManager
+} // namespace OpenRCT2::TrainManager

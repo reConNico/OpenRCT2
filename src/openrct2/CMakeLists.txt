@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.10)
+
 project(libopenrct2 CXX)
 
 if (CMAKE_BINARY_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -8,32 +9,40 @@ endif ()
 file(GLOB_RECURSE OPENRCT2_CORE_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
 file(GLOB_RECURSE OPENRCT2_CORE_HEADERS "${CMAKE_CURRENT_LIST_DIR}/*.h"
                                         "${CMAKE_CURRENT_LIST_DIR}/*.hpp")
-list(REMOVE_ITEM OPENRCT2_CORE_HEADERS
-    "${CMAKE_CURRENT_LIST_DIR}/thirdparty/filesystem.hpp"
-    "${CMAKE_CURRENT_LIST_DIR}/thirdparty/linenoise.hpp"
-)
 
 if (APPLE)
     file(GLOB_RECURSE OPENRCT2_CORE_MM_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.mm")
     set_source_files_properties(${OPENRCT2_CORE_MM_SOURCES} PROPERTIES COMPILE_FLAGS "-x objective-c++ -fmodules")
 endif ()
 
-add_library(${PROJECT_NAME} ${OPENRCT2_CORE_SOURCES} ${OPENRCT2_CORE_MM_SOURCES})
+if (ENABLE_SCRIPTING)
+    include_directories("${CMAKE_CURRENT_LIST_DIR}/../thirdparty/duktape")
+
+    # duktape is third party, ignore all warnings
+    set(OPENRCT2_DUKTAPE_SOURCES "${CMAKE_CURRENT_LIST_DIR}/../thirdparty/duktape/duktape.cpp")
+    if (MSVC)
+        set_source_files_properties(${OPENRCT2_DUKTAPE_SOURCES} PROPERTIES COMPILE_FLAGS "/w")
+    else ()
+        set_source_files_properties(${OPENRCT2_DUKTAPE_SOURCES} PROPERTIES COMPILE_FLAGS "-w")
+    endif ()
+endif ()
+
+add_library(${PROJECT_NAME} ${OPENRCT2_CORE_SOURCES} ${OPENRCT2_CORE_MM_SOURCES} ${OPENRCT2_DUKTAPE_SOURCES})
+if (CMAKE_COMPILER_IS_GNUCXX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "13")
+	message(WARNING "Buggy GCC 12 detected! Disabling some warnings")
+	set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/localisation/FormatCodes.cpp" PROPERTIES COMPILE_FLAGS "-Wno-restrict")
+	set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/platform/Platform.Posix.cpp" PROPERTIES COMPILE_FLAGS "-Wno-restrict")
+	set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/ride/Ride.cpp" PROPERTIES COMPILE_FLAGS "-Wno-null-dereference")
+	set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/scenario/Scenario.cpp" PROPERTIES COMPILE_FLAGS "-Wno-restrict")
+endif()
 if (APPLE)
     target_link_platform_libraries(${PROJECT_NAME})
 endif ()
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
 SET_CHECK_CXX_FLAGS(${PROJECT_NAME})
 
-# GCC / Clang likes us to pass the -lstdc++fs flag to link C++17 filesystem implementation.
-if (NOT MINGW AND NOT ${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD" AND NOT ${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        target_link_libraries(${PROJECT_NAME} stdc++fs)
-    endif()
-endif()
-
 if (NOT DISABLE_NETWORK OR NOT DISABLE_HTTP)
-    if (WIN32 AND NOT MINGW_TARGET_NT5_1)
+    if (WIN32)
         target_link_libraries(${PROJECT_NAME} bcrypt)
     else ()
         if (APPLE AND NOT MACOS_USE_DEPENDENCIES)
@@ -59,7 +68,7 @@ if (NOT DISABLE_NETWORK AND WIN32)
 endif ()
 
 if (NOT DISABLE_HTTP)
-    if (WIN32 AND NOT MINGW_TARGET_NT5_1)
+    if (WIN32)
         target_link_libraries(${PROJECT_NAME} winhttp)
     else ()
         PKG_CHECK_MODULES(LIBCURL REQUIRED libcurl)
@@ -104,18 +113,18 @@ if (NOT DISABLE_GOOGLE_BENCHMARK)
     endif ()
 endif ()
 
-if (ENABLE_SCRIPTING)
-    find_package(duktape CONFIG REQUIRED)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${DUKTAPE_INCLUDE_DIRS})
-    if (STATIC)
-        target_link_libraries(${PROJECT_NAME} ${DUKTAPE_LIBRARY} ${DUKTAPE_STATIC_LIBRARY})
-    else ()
-        target_link_libraries(${PROJECT_NAME} ${DUKTAPE_LIBRARY})
-    endif ()
-endif ()
-
 # Third party libraries
-if (MSVC)
+if (EMSCRIPTEN)
+    target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${ICU_INCLUDE_DIR})
+    set(USE_FLAGS "${EMSCRIPTEN_FLAGS}")
+    if (NOT DISABLE_VORBIS)
+        set(USE_FLAGS "${USE_FLAGS} -s USE_VORBIS=1 -s USE_OGG=1")
+    endif ()
+    set(SHARED_FLAGS "-fexceptions")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${USE_FLAGS} ${SHARED_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${EMSCRIPTEN_LDFLAGS} --bind ${SHARED_FLAGS}")
+    find_package(SpeexDSP REQUIRED)
+elseif (MSVC)
     find_package(png 1.6 REQUIRED)
     find_package(zlib REQUIRED)
 
@@ -143,7 +152,7 @@ if (STATIC)
                                      ${ZLIB_STATIC_LIBRARIES}
                                      ${LIBZIP_STATIC_LIBRARIES})
 else ()
-    if (NOT MSVC)
+    if (NOT MSVC AND NOT EMSCRIPTEN)
         target_link_libraries(${PROJECT_NAME}
                                      PkgConfig::PNG
                                      PkgConfig::ZLIB
@@ -172,7 +181,12 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} Threads::Threads)
 
-if (NOT MINGW AND NOT MSVC)
+# For some reason, these flags break the check for pthreads. Add them after.
+if (EMSCRIPTEN)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s EXPORTED_FUNCTIONS=_GetVersion,_main --js-library ${ROOT_DIR}/emscripten/deps.js")
+endif()
+
+if (NOT MINGW AND NOT MSVC AND NOT EMSCRIPTEN)
     if (APPLE AND NOT MACOS_USE_DEPENDENCIES)
         execute_process(COMMAND brew --prefix icu4c OUTPUT_VARIABLE HOMEBREW_PREFIX_ICU OUTPUT_STRIP_TRAILING_WHITESPACE)
         # Needed for linking with non-broken icu on Apple platforms
@@ -250,7 +264,7 @@ if (NOT OPENRCT2_COMMIT_SHA1_SHORT STREQUAL "HEAD" AND NOT OPENRCT2_COMMIT_SHA1_
         OPENRCT2_COMMIT_SHA1_SHORT="${OPENRCT2_COMMIT_SHA1_SHORT}")
 endif()
 
-if((X86 OR X86_64) AND NOT MSVC)
+if((X86 OR X86_64) AND NOT MSVC AND NOT EMSCRIPTEN)
     set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/drawing/SSE41Drawing.cpp PROPERTIES COMPILE_FLAGS -msse4.1)
     set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/drawing/AVX2Drawing.cpp PROPERTIES COMPILE_FLAGS -mavx2)
 endif()
@@ -259,7 +273,7 @@ endif()
 # Only valid for Clang for now:
 # - GCC 8 does not support -Wno-pragma-once-outside-header
 # - Other compilers status unknown
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+if (ENABLE_HEADERS_CHECK AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     add_library(${PROJECT_NAME}-headers-check OBJECT ${OPENRCT2_CORE_HEADERS})
     set_target_properties(${PROJECT_NAME}-headers-check PROPERTIES LINKER_LANGUAGE CXX)
     set_source_files_properties(${OPENRCT2_CORE_HEADERS} PROPERTIES LANGUAGE CXX)
@@ -269,4 +283,8 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 else ()
     # Dummy target to ease invocation
     add_custom_target(${PROJECT_NAME}-headers-check)
+endif ()
+
+if (UNIX)
+    add_definitions(-D_FILE_OFFSET_BITS=64)
 endif ()

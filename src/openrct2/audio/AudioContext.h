@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,7 +9,6 @@
 
 #pragma once
 
-#include "../common.h"
 #include "../core/IStream.hpp"
 
 #include <memory>
@@ -29,30 +28,25 @@ namespace OpenRCT2::Audio
     {
         virtual ~IAudioContext() = default;
 
-        virtual IAudioMixer* GetMixer() abstract;
+        virtual IAudioMixer* GetMixer() = 0;
 
-        virtual std::vector<std::string> GetOutputDevices() abstract;
-        virtual void SetOutputDevice(const std::string& deviceName) abstract;
+        virtual std::vector<std::string> GetOutputDevices() = 0;
+        virtual void SetOutputDevice(const std::string& deviceName) = 0;
 
-        virtual IAudioSource* CreateStreamFromWAV(const std::string& path) abstract;
-        virtual IAudioSource* CreateStreamFromWAV(std::unique_ptr<IStream> stream) abstract;
+        virtual IAudioSource* CreateStreamFromCSS(std::unique_ptr<IStream> stream, uint32_t index) = 0;
+        virtual IAudioSource* CreateStreamFromWAV(std::unique_ptr<IStream> stream) = 0;
 
-        virtual void StartTitleMusic() abstract;
+        virtual void StartTitleMusic() = 0;
 
-        virtual IAudioChannel* PlaySound(int32_t soundId, int32_t volume, int32_t pan) abstract;
-        virtual IAudioChannel* PlaySoundAtLocation(int32_t soundId, int16_t x, int16_t y, int16_t z) abstract;
-        virtual IAudioChannel* PlaySoundPanned(int32_t soundId, int32_t pan, int16_t x, int16_t y, int16_t z) abstract;
+        virtual void ToggleAllSounds() = 0;
+        virtual void PauseSounds() = 0;
+        virtual void UnpauseSounds() = 0;
 
-        virtual void ToggleAllSounds() abstract;
-        virtual void PauseSounds() abstract;
-        virtual void UnpauseSounds() abstract;
-
-        virtual void StopAll() abstract;
-        virtual void StopCrowdSound() abstract;
-        virtual void StopWeatherSound() abstract;
-        virtual void StopRideMusic() abstract;
-        virtual void StopTitleMusic() abstract;
-        virtual void StopVehicleSounds() abstract;
+        virtual void StopAll() = 0;
+        virtual void StopCrowdSound() = 0;
+        virtual void StopRideMusic() = 0;
+        virtual void StopTitleMusic() = 0;
+        virtual void StopVehicleSounds() = 0;
     };
 
     [[nodiscard]] std::unique_ptr<IAudioContext> CreateDummyAudioContext();

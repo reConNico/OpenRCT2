@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -7,1014 +7,1111 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
-#include <algorithm>
+#include <cassert>
 #include <iterator>
 #include <limits>
 #include <openrct2-ui/interface/Widget.h>
-#include <openrct2-ui/windows/Window.h>
+#include <openrct2-ui/ride/Construction.h>
+#include <openrct2-ui/windows/Windows.h>
 #include <openrct2/Context.h>
 #include <openrct2/Game.h>
+#include <openrct2/GameState.h>
 #include <openrct2/OpenRCT2.h>
 #include <openrct2/audio/audio.h>
 #include <openrct2/config/Config.h>
 #include <openrct2/core/String.hpp>
-#include <openrct2/localisation/Localisation.h>
+#include <openrct2/localisation/Formatter.h>
+#include <openrct2/localisation/LocalisationService.h>
 #include <openrct2/management/NewsItem.h>
 #include <openrct2/management/Research.h>
 #include <openrct2/network/network.h>
 #include <openrct2/object/ObjectLimits.h>
 #include <openrct2/object/ObjectManager.h>
+#include <openrct2/object/ObjectRepository.h>
 #include <openrct2/object/RideObject.h>
 #include <openrct2/rct1/RCT1.h>
 #include <openrct2/ride/RideData.h>
 #include <openrct2/ride/TrackData.h>
 #include <openrct2/ride/TrackDesignRepository.h>
 #include <openrct2/sprites.h>
-#include <openrct2/util/Util.h>
+#include <openrct2/ui/WindowManager.h>
 #include <openrct2/windows/Intent.h>
 #include <openrct2/world/Park.h>
 
 using namespace OpenRCT2::TrackMetaData;
 
-static constexpr const rct_string_id WINDOW_TITLE = STR_NONE;
-constexpr size_t AVAILABILITY_STRING_SIZE = 256;
-static constexpr const int32_t WH = 382;
-static constexpr const int32_t WW = 601;
-
-static uint8_t _windowNewRideCurrentTab;
-static RideSelection _windowNewRideHighlightedItem[6];
-static RideSelection _windowNewRideListItems[384];
+namespace OpenRCT2::Ui::Windows
+{
+    static constexpr StringId WindowTitle = kStringIdNone;
+    static constexpr int32_t WindowHeight = 382;
+    static constexpr int32_t WindowWidth = 601;
+    static constexpr int32_t RideListItemsMax = 384;
+    static constexpr int32_t RideTabCount = 6;
+    static constexpr int32_t GroupByTrackTypeWidth = 172;
 
 #pragma region Ride type view order
 
-// clang-format off
-/**
- * The order of ride types shown in the new ride window so that the order stays consistent across games and rides of the same
- * type are kept together.
- */
-static constexpr const char RideTypeViewOrder[] = {
-    // Transport rides
-    RIDE_TYPE_MINIATURE_RAILWAY,
-    RIDE_TYPE_MONORAIL,
-    RIDE_TYPE_SUSPENDED_MONORAIL,
-    RIDE_TYPE_CHAIRLIFT,
-    RIDE_TYPE_LIFT,
+    /**
+     * The order of ride types shown in the new ride window so that the order stays consistent across games and rides of the
+     * same type are kept together.
+     */
+    static constexpr ride_type_t RideTypeViewOrder[] = {
+        // Transport rides
+        RIDE_TYPE_MINIATURE_RAILWAY,
+        RIDE_TYPE_MONORAIL,
+        RIDE_TYPE_SUSPENDED_MONORAIL,
+        RIDE_TYPE_CHAIRLIFT,
+        RIDE_TYPE_LIFT,
 
-    // Roller Coasters
-    RIDE_TYPE_SIDE_FRICTION_ROLLER_COASTER,
-    RIDE_TYPE_VIRGINIA_REEL,
-    RIDE_TYPE_REVERSER_ROLLER_COASTER,
-    RIDE_TYPE_WOODEN_ROLLER_COASTER,
-    RIDE_TYPE_WOODEN_WILD_MOUSE,
-    RIDE_TYPE_STEEL_WILD_MOUSE,
-    RIDE_TYPE_SPINNING_WILD_MOUSE,
-    RIDE_TYPE_INVERTED_HAIRPIN_COASTER,
-    RIDE_TYPE_JUNIOR_ROLLER_COASTER,
-    RIDE_TYPE_CLASSIC_MINI_ROLLER_COASTER,
-    RIDE_TYPE_MINI_ROLLER_COASTER,
-    RIDE_TYPE_SPIRAL_ROLLER_COASTER,
-    RIDE_TYPE_MINE_TRAIN_COASTER,
-    RIDE_TYPE_LOOPING_ROLLER_COASTER,
-    RIDE_TYPE_STAND_UP_ROLLER_COASTER,
-    RIDE_TYPE_CORKSCREW_ROLLER_COASTER,
-    RIDE_TYPE_HYPERCOASTER,
-    RIDE_TYPE_LIM_LAUNCHED_ROLLER_COASTER,
-    RIDE_TYPE_TWISTER_ROLLER_COASTER,
-    RIDE_TYPE_HYPER_TWISTER,
-    RIDE_TYPE_GIGA_COASTER,
-    RIDE_TYPE_SUSPENDED_SWINGING_COASTER,
-    RIDE_TYPE_COMPACT_INVERTED_COASTER,
-    RIDE_TYPE_INVERTED_ROLLER_COASTER,
-    RIDE_TYPE_INVERTED_IMPULSE_COASTER,
-    RIDE_TYPE_MINI_SUSPENDED_COASTER,
-    RIDE_TYPE_STEEPLECHASE,
-    RIDE_TYPE_BOBSLEIGH_COASTER,
-    RIDE_TYPE_MINE_RIDE,
-    RIDE_TYPE_HEARTLINE_TWISTER_COASTER,
-    RIDE_TYPE_LAY_DOWN_ROLLER_COASTER,
-    RIDE_TYPE_FLYING_ROLLER_COASTER,
-    RIDE_TYPE_MULTI_DIMENSION_ROLLER_COASTER,
-    RIDE_TYPE_REVERSE_FREEFALL_COASTER,
-    RIDE_TYPE_VERTICAL_DROP_ROLLER_COASTER,
-    RIDE_TYPE_AIR_POWERED_VERTICAL_COASTER,
-    RIDE_TYPE_HYBRID_COASTER,
-    RIDE_TYPE_SINGLE_RAIL_ROLLER_COASTER,
+        // Roller Coasters
+        RIDE_TYPE_SIDE_FRICTION_ROLLER_COASTER,
+        RIDE_TYPE_VIRGINIA_REEL,
+        RIDE_TYPE_REVERSER_ROLLER_COASTER,
+        RIDE_TYPE_CLASSIC_WOODEN_ROLLER_COASTER,
+        RIDE_TYPE_CLASSIC_WOODEN_TWISTER_ROLLER_COASTER,
+        RIDE_TYPE_WOODEN_ROLLER_COASTER,
+        RIDE_TYPE_WOODEN_WILD_MOUSE,
+        RIDE_TYPE_STEEL_WILD_MOUSE,
+        RIDE_TYPE_SPINNING_WILD_MOUSE,
+        RIDE_TYPE_INVERTED_HAIRPIN_COASTER,
+        RIDE_TYPE_JUNIOR_ROLLER_COASTER,
+        RIDE_TYPE_CLASSIC_MINI_ROLLER_COASTER,
+        RIDE_TYPE_MINI_ROLLER_COASTER,
+        RIDE_TYPE_SPIRAL_ROLLER_COASTER,
+        RIDE_TYPE_MINE_TRAIN_COASTER,
+        RIDE_TYPE_LOOPING_ROLLER_COASTER,
+        RIDE_TYPE_STAND_UP_ROLLER_COASTER,
+        RIDE_TYPE_CLASSIC_STAND_UP_ROLLER_COASTER,
+        RIDE_TYPE_CORKSCREW_ROLLER_COASTER,
+        RIDE_TYPE_HYPERCOASTER,
+        RIDE_TYPE_LIM_LAUNCHED_ROLLER_COASTER,
+        RIDE_TYPE_TWISTER_ROLLER_COASTER,
+        RIDE_TYPE_HYPER_TWISTER,
+        RIDE_TYPE_LSM_LAUNCHED_ROLLER_COASTER,
+        RIDE_TYPE_GIGA_COASTER,
+        RIDE_TYPE_SUSPENDED_SWINGING_COASTER,
+        RIDE_TYPE_COMPACT_INVERTED_COASTER,
+        RIDE_TYPE_INVERTED_ROLLER_COASTER,
+        RIDE_TYPE_INVERTED_IMPULSE_COASTER,
+        RIDE_TYPE_LAY_DOWN_ROLLER_COASTER,
+        RIDE_TYPE_FLYING_ROLLER_COASTER,
+        RIDE_TYPE_MULTI_DIMENSION_ROLLER_COASTER,
+        RIDE_TYPE_MINI_SUSPENDED_COASTER,
+        RIDE_TYPE_STEEPLECHASE,
+        RIDE_TYPE_BOBSLEIGH_COASTER,
+        RIDE_TYPE_MINE_RIDE,
+        RIDE_TYPE_HEARTLINE_TWISTER_COASTER,
+        RIDE_TYPE_REVERSE_FREEFALL_COASTER,
+        RIDE_TYPE_VERTICAL_DROP_ROLLER_COASTER,
+        RIDE_TYPE_AIR_POWERED_VERTICAL_COASTER,
+        RIDE_TYPE_HYBRID_COASTER,
+        RIDE_TYPE_SINGLE_RAIL_ROLLER_COASTER,
+        RIDE_TYPE_ALPINE_COASTER,
 
-    // Gentle rides
-    RIDE_TYPE_MONORAIL_CYCLES,
-    RIDE_TYPE_CROOKED_HOUSE,
-    RIDE_TYPE_HAUNTED_HOUSE,
-    RIDE_TYPE_FERRIS_WHEEL,
-    RIDE_TYPE_MAZE,
-    RIDE_TYPE_MERRY_GO_ROUND,
-    RIDE_TYPE_MINI_GOLF,
-    RIDE_TYPE_OBSERVATION_TOWER,
-    RIDE_TYPE_CAR_RIDE,
-    RIDE_TYPE_MONSTER_TRUCKS,
-    RIDE_TYPE_MINI_HELICOPTERS,
-    RIDE_TYPE_SPIRAL_SLIDE,
-    RIDE_TYPE_DODGEMS,
-    RIDE_TYPE_SPACE_RINGS,
-    RIDE_TYPE_CIRCUS,
-    RIDE_TYPE_GHOST_TRAIN,
-    RIDE_TYPE_FLYING_SAUCERS,
+        // Gentle rides
+        RIDE_TYPE_MONORAIL_CYCLES,
+        RIDE_TYPE_CROOKED_HOUSE,
+        RIDE_TYPE_HAUNTED_HOUSE,
+        RIDE_TYPE_FERRIS_WHEEL,
+        RIDE_TYPE_MAZE,
+        RIDE_TYPE_MERRY_GO_ROUND,
+        RIDE_TYPE_MINI_GOLF,
+        RIDE_TYPE_OBSERVATION_TOWER,
+        RIDE_TYPE_CAR_RIDE,
+        RIDE_TYPE_MONSTER_TRUCKS,
+        RIDE_TYPE_MINI_HELICOPTERS,
+        RIDE_TYPE_SPIRAL_SLIDE,
+        RIDE_TYPE_DODGEMS,
+        RIDE_TYPE_SPACE_RINGS,
+        RIDE_TYPE_CIRCUS,
+        RIDE_TYPE_GHOST_TRAIN,
+        RIDE_TYPE_FLYING_SAUCERS,
 
-    // Thrill rides
-    RIDE_TYPE_TWIST,
-    RIDE_TYPE_MAGIC_CARPET,
-    RIDE_TYPE_LAUNCHED_FREEFALL,
-    RIDE_TYPE_SWINGING_SHIP,
-    RIDE_TYPE_GO_KARTS,
-    RIDE_TYPE_SWINGING_INVERTER_SHIP,
-    RIDE_TYPE_MOTION_SIMULATOR,
-    RIDE_TYPE_3D_CINEMA,
-    RIDE_TYPE_TOP_SPIN,
-    RIDE_TYPE_ROTO_DROP,
-    RIDE_TYPE_ENTERPRISE,
+        // Thrill rides
+        RIDE_TYPE_TWIST,
+        RIDE_TYPE_MAGIC_CARPET,
+        RIDE_TYPE_LAUNCHED_FREEFALL,
+        RIDE_TYPE_SWINGING_SHIP,
+        RIDE_TYPE_GO_KARTS,
+        RIDE_TYPE_SWINGING_INVERTER_SHIP,
+        RIDE_TYPE_MOTION_SIMULATOR,
+        RIDE_TYPE_3D_CINEMA,
+        RIDE_TYPE_TOP_SPIN,
+        RIDE_TYPE_ROTO_DROP,
+        RIDE_TYPE_ENTERPRISE,
 
-    // Water rides
-    RIDE_TYPE_DINGHY_SLIDE,
-    RIDE_TYPE_LOG_FLUME,
-    RIDE_TYPE_RIVER_RAPIDS,
-    RIDE_TYPE_SPLASH_BOATS,
-    RIDE_TYPE_SUBMARINE_RIDE,
-    RIDE_TYPE_BOAT_HIRE,
-    RIDE_TYPE_RIVER_RAFTS,
-    RIDE_TYPE_WATER_COASTER,
+        // Water rides
+        RIDE_TYPE_DINGHY_SLIDE,
+        RIDE_TYPE_LOG_FLUME,
+        RIDE_TYPE_RIVER_RAPIDS,
+        RIDE_TYPE_SPLASH_BOATS,
+        RIDE_TYPE_SUBMARINE_RIDE,
+        RIDE_TYPE_BOAT_HIRE,
+        RIDE_TYPE_RIVER_RAFTS,
+        RIDE_TYPE_WATER_COASTER,
 
-    // Shops / stalls
-    RIDE_TYPE_FOOD_STALL,
-    RIDE_TYPE_1D,
-    RIDE_TYPE_DRINK_STALL,
-    RIDE_TYPE_1F,
-    RIDE_TYPE_SHOP,
-    RIDE_TYPE_22,
-    RIDE_TYPE_INFORMATION_KIOSK,
-    RIDE_TYPE_FIRST_AID,
-    RIDE_TYPE_CASH_MACHINE,
-    RIDE_TYPE_TOILETS,
-};
+        // Shops / stalls
+        RIDE_TYPE_FOOD_STALL,
+        RIDE_TYPE_1D,
+        RIDE_TYPE_DRINK_STALL,
+        RIDE_TYPE_1F,
+        RIDE_TYPE_SHOP,
+        RIDE_TYPE_22,
+        RIDE_TYPE_INFORMATION_KIOSK,
+        RIDE_TYPE_FIRST_AID,
+        RIDE_TYPE_CASH_MACHINE,
+        RIDE_TYPE_TOILETS,
+    };
 
 #pragma endregion
 
-enum {
-    WINDOW_NEW_RIDE_PAGE_TRANSPORT,
-    WINDOW_NEW_RIDE_PAGE_GENTLE,
-    WINDOW_NEW_RIDE_PAGE_ROLLER_COASTER,
-    WINDOW_NEW_RIDE_PAGE_THRILL,
-    WINDOW_NEW_RIDE_PAGE_WATER,
-    WINDOW_NEW_RIDE_PAGE_SHOP,
-    WINDOW_NEW_RIDE_PAGE_RESEARCH,
-    WINDOW_NEW_RIDE_PAGE_COUNT,
-};
+    enum NewRideTabId
+    {
+        TRANSPORT_TAB,
+        GENTLE_TAB,
+        ROLLER_COASTER_TAB,
+        THRILL_TAB,
+        WATER_TAB,
+        SHOP_TAB,
+        RESEARCH_TAB,
+        TAB_COUNT,
+    };
 
 #pragma region Widgets
 
-enum {
-    WIDX_BACKGROUND,
-    WIDX_TITLE,
-    WIDX_CLOSE,
-    WIDX_PAGE_BACKGROUND,
-    WIDX_TAB_1,
-    WIDX_TAB_2,
-    WIDX_TAB_3,
-    WIDX_TAB_4,
-    WIDX_TAB_5,
-    WIDX_TAB_6,
-    WIDX_TAB_7,
-    WIDX_RIDE_LIST,
-
-    WIDX_CURRENTLY_IN_DEVELOPMENT_GROUP,
-    WIDX_LAST_DEVELOPMENT_GROUP,
-    WIDX_LAST_DEVELOPMENT_BUTTON,
-    WIDX_RESEARCH_FUNDING_BUTTON
-};
-
-static rct_widget window_new_ride_widgets[] = {
-    WINDOW_SHIM(WINDOW_TITLE, WW, WH),
-    MakeWidget({  0,  43}, {601, 339}, WindowWidgetType::Resize,   WindowColour::Secondary                                                                ),
-    MakeTab   ({  3,  17},                                                                                  STR_TRANSPORT_RIDES_TIP         ),
-    MakeTab   ({ 34,  17},                                                                                  STR_GENTLE_RIDES_TIP            ),
-    MakeTab   ({ 65,  17},                                                                                  STR_ROLLER_COASTERS_TIP         ),
-    MakeTab   ({ 96,  17},                                                                                  STR_THRILL_RIDES_TIP            ),
-    MakeTab   ({127,  17},                                                                                  STR_WATER_RIDES_TIP             ),
-    MakeTab   ({158,  17},                                                                                  STR_SHOPS_STALLS_TIP            ),
-    MakeTab   ({189,  17},                                                                                  STR_RESEARCH_AND_DEVELOPMENT_TIP),
-    MakeWidget({  3,  46}, {595, 272}, WindowWidgetType::Scroll,   WindowColour::Secondary, SCROLL_VERTICAL                                               ),
-    MakeWidget({  3,  47}, {290,  70}, WindowWidgetType::Groupbox, WindowColour::Tertiary , STR_CURRENTLY_IN_DEVELOPMENT                                  ),
-    MakeWidget({  3, 124}, {290,  65}, WindowWidgetType::Groupbox, WindowColour::Tertiary , STR_LAST_DEVELOPMENT                                          ),
-    MakeWidget({265, 161}, { 24,  24}, WindowWidgetType::FlatBtn,  WindowColour::Tertiary , 0xFFFFFFFF,                   STR_RESEARCH_SHOW_DETAILS_TIP   ),
-    MakeWidget({265,  68}, { 24,  24}, WindowWidgetType::FlatBtn,  WindowColour::Tertiary , SPR_FINANCE,                  STR_FINANCES_RESEARCH_TIP       ),
-    WIDGETS_END,
-};
-
-#pragma endregion
-
-#pragma region Events
-
-static void WindowNewRideMouseup(rct_window *w, rct_widgetindex widgetIndex);
-static void WindowNewRideMousedown(rct_window *w, rct_widgetindex widgetIndex, rct_widget *widget);
-static void WindowNewRideUpdate(rct_window *w);
-static void WindowNewRideScrollgetsize(rct_window *w, int32_t scrollIndex, int32_t *width, int32_t *height);
-static void WindowNewRideScrollmousedown(rct_window *w, int32_t scrollIndex, const ScreenCoordsXY& screenCoords);
-static void WindowNewRideScrollmouseover(rct_window *w, int32_t scrollIndex, const ScreenCoordsXY& screenCoords);
-static void WindowNewRideInvalidate(rct_window *w);
-static void WindowNewRidePaint(rct_window *w, rct_drawpixelinfo *dpi);
-static void WindowNewRideScrollpaint(rct_window *w, rct_drawpixelinfo *dpi, int32_t scrollIndex);
-static void WindowNewRideListVehiclesFor(uint8_t rideType, const rct_ride_entry* rideEntry, char* buffer, size_t bufferLen);
-
-// 0x0098E354
-static rct_window_event_list window_new_ride_events([](auto& events)
-{
-    events.mouse_up = &WindowNewRideMouseup;
-    events.mouse_down = &WindowNewRideMousedown;
-    events.update = &WindowNewRideUpdate;
-    events.get_scroll_size = &WindowNewRideScrollgetsize;
-    events.scroll_mousedown = &WindowNewRideScrollmousedown;
-    events.scroll_mouseover = &WindowNewRideScrollmouseover;
-    events.invalidate = &WindowNewRideInvalidate;
-    events.paint = &WindowNewRidePaint;
-    events.scroll_paint = &WindowNewRideScrollpaint;
-});
-
-#pragma endregion
-
-static constexpr const rct_string_id window_new_ride_titles[WINDOW_NEW_RIDE_PAGE_COUNT] = {
-    STR_NEW_TRANSPORT_RIDES,
-    STR_NEW_GENTLE_RIDES,
-    STR_NEW_ROLLER_COASTERS,
-    STR_NEW_THRILL_RIDES,
-    STR_NEW_WATER_RIDES,
-    STR_NEW_SHOPS_STALLS,
-    STR_RESEARCH_AND_DEVELOPMENT,
-};
-// clang-format on
-
-static constexpr const int32_t window_new_ride_tab_animation_loops[] = {
-    20, 32, 10, 72, 24, 28, 16,
-};
-static constexpr const int32_t window_new_ride_tab_animation_divisor[] = {
-    4, 8, 2, 4, 4, 4, 2,
-};
-
-static void WindowNewRideSetPage(rct_window* w, int32_t page);
-static void WindowNewRideRefreshWidgetSizing(rct_window* w);
-static RideSelection WindowNewRideScrollGetRideListItemAt(rct_window* w, const ScreenCoordsXY& screenCoords);
-static void WindowNewRidePaintRideInformation(
-    rct_window* w, rct_drawpixelinfo* dpi, RideSelection item, const ScreenCoordsXY& screenPos, int32_t width);
-static void WindowNewRideSelect(rct_window* w);
-static RideSelection* WindowNewRideIterateOverRideType(uint8_t rideType, RideSelection* nextListItem);
-
-static RideSelection _lastTrackDesignCountRideType;
-static int32_t _lastTrackDesignCount;
-
-/**
- *
- *  rct2: 0x006ACA58
- */
-void WindowNewRideInitVars()
-{
-    // If we are in the track designer, default to the Roller Coaster tab
-    if (gScreenFlags & SCREEN_FLAGS_TRACK_DESIGNER)
+    enum
     {
-        _windowNewRideCurrentTab = WINDOW_NEW_RIDE_PAGE_ROLLER_COASTER;
-    }
-    else
-    {
-        _windowNewRideCurrentTab = WINDOW_NEW_RIDE_PAGE_TRANSPORT;
-    }
+        WIDX_BACKGROUND,
+        WIDX_TITLE,
+        WIDX_CLOSE,
+        WIDX_PAGE_BACKGROUND,
+        WIDX_TAB_1,
+        WIDX_TAB_2,
+        WIDX_TAB_3,
+        WIDX_TAB_4,
+        WIDX_TAB_5,
+        WIDX_TAB_6,
+        WIDX_TAB_7,
+        WIDX_RIDE_LIST,
 
-    for (int16_t i = 0; i < 6; i++)
-    {
-        /*
-        Reset what is highlighted in each tab.
-        Each 16bit number represents the item in its respective tab.
-        */
-        _windowNewRideHighlightedItem[i] = { 255, 255 };
-    }
-}
+        WIDX_CURRENTLY_IN_DEVELOPMENT_GROUP,
+        WIDX_LAST_DEVELOPMENT_GROUP,
+        WIDX_LAST_DEVELOPMENT_BUTTON,
+        WIDX_RESEARCH_FUNDING_BUTTON,
 
-/**
- *  rct2: 0x006B6F3E
- *
- * Note: When the user has selection by track type enabled, the categories are determined by the track type, not those in the
- * rct_ride_entry.
- */
-static void WindowNewRidePopulateList()
-{
-    uint8_t currentCategory = _windowNewRideCurrentTab;
-    RideSelection* nextListItem = _windowNewRideListItems;
-
-    // For each ride type in the view order list
-    for (int32_t i = 0; i < static_cast<int32_t>(std::size(RideTypeViewOrder)); i++)
-    {
-        uint8_t rideType = RideTypeViewOrder[i];
-        if (rideType == RIDE_TYPE_NULL)
-            continue;
-
-        if (GetRideTypeDescriptor(rideType).Category != currentCategory)
-            continue;
-
-        nextListItem = WindowNewRideIterateOverRideType(rideType, nextListItem);
-    }
-
-    nextListItem->Type = RIDE_TYPE_NULL;
-    nextListItem->EntryIndex = OBJECT_ENTRY_INDEX_NULL;
-}
-
-static RideSelection* WindowNewRideIterateOverRideType(uint8_t rideType, RideSelection* nextListItem)
-{
-    bool buttonForRideTypeCreated = false;
-    bool allowDrawingOverLastButton = false;
-
-    uint8_t highestVehiclePriority = 0;
-
-    // For each ride entry for this ride type
-    auto& objManager = OpenRCT2::GetContext()->GetObjectManager();
-    auto& rideEntries = objManager.GetAllRideEntries(rideType);
-    for (auto rideEntryIndex : rideEntries)
-    {
-        // Skip if vehicle type is not invented yet
-        if (!ride_entry_is_invented(rideEntryIndex) && !gCheatsIgnoreResearchStatus)
-            continue;
-
-        // Ride entries
-        rct_ride_entry* rideEntry = get_ride_entry(rideEntryIndex);
-
-        // Skip if the vehicle isn't the preferred vehicle for this generic track type
-        if (!GetRideTypeDescriptor(rideType).HasFlag(RIDE_TYPE_FLAG_LIST_VEHICLES_SEPARATELY)
-            && highestVehiclePriority > rideEntry->BuildMenuPriority)
-        {
-            continue;
-        }
-        highestVehiclePriority = rideEntry->BuildMenuPriority;
-
-        // Determines how and where to draw a button for this ride type/vehicle.
-        if (GetRideTypeDescriptor(rideType).HasFlag(RIDE_TYPE_FLAG_LIST_VEHICLES_SEPARATELY))
-        {
-            // Separate, draw apart
-            allowDrawingOverLastButton = false;
-            nextListItem->Type = rideType;
-            nextListItem->EntryIndex = rideEntryIndex;
-            nextListItem++;
-        }
-        else if (!buttonForRideTypeCreated)
-        {
-            // Non-separate, draw-apart
-            buttonForRideTypeCreated = true;
-            allowDrawingOverLastButton = true;
-            nextListItem->Type = rideType;
-            nextListItem->EntryIndex = rideEntryIndex;
-            nextListItem++;
-        }
-        else if (allowDrawingOverLastButton)
-        {
-            // Non-separate, draw over previous
-            if (rideType == rideEntry->ride_type[0])
-            {
-                nextListItem--;
-                nextListItem->Type = rideType;
-                nextListItem->EntryIndex = rideEntryIndex;
-                nextListItem++;
-            }
-        }
-    }
-
-    return nextListItem;
-}
-
-/**
- *
- *  rct2: 0x006B7220
- */
-static void WindowNewRideScrollToFocusedRide(rct_window* w)
-{
-    int32_t scrollWidth = 0;
-    int32_t scrollHeight = 0;
-    window_get_scroll_size(w, 0, &scrollWidth, &scrollHeight);
-
-    // Find row index of the focused ride type
-    rct_widget* listWidget = &window_new_ride_widgets[WIDX_RIDE_LIST];
-    assert(_windowNewRideCurrentTab < std::size(_windowNewRideHighlightedItem));
-    auto focusRideType = _windowNewRideHighlightedItem[_windowNewRideCurrentTab];
-    int32_t count = 0, row = 0;
-    RideSelection* listItem = _windowNewRideListItems;
-    while (listItem->Type != RIDE_TYPE_NULL || listItem->EntryIndex != OBJECT_ENTRY_INDEX_NULL)
-    {
-        if (listItem->Type == focusRideType.Type)
-        {
-            row = count / 5;
-            break;
-        }
-
-        count++;
-        listItem++;
+        WIDX_FILTER_TEXT_BOX,
+        WIDX_FILTER_CLEAR_BUTTON,
+        WIDX_GROUP_BY_TRACK_TYPE,
     };
 
-    // Update the Y scroll position
-    int32_t listWidgetHeight = listWidget->bottom - listWidget->top - 1;
-    scrollHeight = std::max(0, scrollHeight - listWidgetHeight);
-    w->scrolls[0].v_top = std::min(row * 116, scrollHeight);
-    WidgetScrollUpdateThumbs(w, WIDX_RIDE_LIST);
-}
+    static constexpr ScreenCoordsXY GroupByTrackTypeOrigin{ WindowWidth - 8 - GroupByTrackTypeWidth, 47 };
+    static constexpr ScreenSize GroupTrackTypeSize{ GroupByTrackTypeWidth, 14 };
 
-/**
- *
- *  rct2: 0x006B3CFF
- */
-rct_window* WindowNewRideOpen()
-{
-    rct_window* w;
+    // clang-format off
+    static constexpr Widget window_new_ride_widgets[] = {
+        WINDOW_SHIM(WindowTitle, WindowWidth, WindowHeight),
+        MakeWidget({  0,  43},             {601, 339},         WindowWidgetType::Resize,   WindowColour::Secondary                                                                ),
+        MakeTab   ({  3,  17},                                                                                      STR_TRANSPORT_RIDES_TIP                                       ),
+        MakeTab   ({ 34,  17},                                                                                      STR_GENTLE_RIDES_TIP                                          ),
+        MakeTab   ({ 65,  17},                                                                                      STR_ROLLER_COASTERS_TIP                                       ),
+        MakeTab   ({ 96,  17},                                                                                      STR_THRILL_RIDES_TIP                                          ),
+        MakeTab   ({127,  17},                                                                                      STR_WATER_RIDES_TIP                                           ),
+        MakeTab   ({158,  17},                                                                                      STR_SHOPS_STALLS_TIP                                          ),
+        MakeTab   ({189,  17},                                                                                      STR_RESEARCH_AND_DEVELOPMENT_TIP                              ),
+        MakeWidget({  3,  62},             {595, 256},         WindowWidgetType::Scroll,   WindowColour::Secondary, SCROLL_VERTICAL                                               ),
+        MakeWidget({  3,  47},             {290,  70},         WindowWidgetType::Groupbox, WindowColour::Tertiary,  STR_CURRENTLY_IN_DEVELOPMENT                                  ),
+        MakeWidget({  3, 124},             {290,  65},         WindowWidgetType::Groupbox, WindowColour::Tertiary,  STR_LAST_DEVELOPMENT                                          ),
+        MakeWidget({265, 161},             { 24,  24},         WindowWidgetType::FlatBtn,  WindowColour::Tertiary,  0xFFFFFFFF,                      STR_RESEARCH_SHOW_DETAILS_TIP),
+        MakeWidget({265,  68},             { 24,  24},         WindowWidgetType::FlatBtn,  WindowColour::Tertiary,  ImageId(SPR_FINANCE),                     STR_FINANCES_RESEARCH_TIP    ),
+        MakeWidget({  4,  46},             {211, 14},          WindowWidgetType::TextBox,  WindowColour::Secondary                          ),
+        MakeWidget({218,  46},             { 70, 14},          WindowWidgetType::Button,   WindowColour::Secondary, STR_OBJECT_SEARCH_CLEAR ),
+        MakeWidget(GroupByTrackTypeOrigin, GroupTrackTypeSize, WindowWidgetType::Checkbox, WindowColour::Secondary, STR_GROUP_BY_TRACK_TYPE,         STR_GROUP_BY_TRACK_TYPE_TIP  ),
+    };
+    // clang-format on
 
-    w = window_bring_to_front_by_class(WC_CONSTRUCT_RIDE);
-    if (w != nullptr)
-        return w;
+#pragma endregion
 
-    // Not sure what these windows are
-    window_close_by_class(WC_TRACK_DESIGN_LIST);
-    window_close_by_class(WC_TRACK_DESIGN_PLACE);
+    static constexpr StringId RideTitles[] = {
+        STR_NEW_TRANSPORT_RIDES,      // TRANSPORT_TAB
+        STR_NEW_GENTLE_RIDES,         // GENTLE_TAB
+        STR_NEW_ROLLER_COASTERS,      // ROLLER_COASTER_TAB
+        STR_NEW_THRILL_RIDES,         // THRILL_TAB
+        STR_NEW_WATER_RIDES,          // WATER_TAB
+        STR_NEW_SHOPS_STALLS,         // SHOP_TAB
+        STR_RESEARCH_AND_DEVELOPMENT, // RESEARCH_TAB
+    };
+    static_assert(std::size(RideTitles) == TAB_COUNT);
 
-    w = WindowCreateAutoPos(WW, WH, &window_new_ride_events, WC_CONSTRUCT_RIDE, WF_10);
-    w->widgets = window_new_ride_widgets;
-    w->enabled_widgets = (1ULL << WIDX_CLOSE) | (1ULL << WIDX_TAB_1) | (1ULL << WIDX_TAB_2) | (1ULL << WIDX_TAB_3)
-        | (1ULL << WIDX_TAB_4) | (1ULL << WIDX_TAB_5) | (1ULL << WIDX_TAB_6) | (1ULL << WIDX_TAB_7)
-        | (1ULL << WIDX_LAST_DEVELOPMENT_BUTTON) | (1ULL << WIDX_RESEARCH_FUNDING_BUTTON);
-    WindowNewRidePopulateList();
-    WindowInitScrollWidgets(w);
+    static constexpr int32_t TabAnimationLoops[] = {
+        20, // TRANSPORT_TAB
+        32, // GENTLE_TAB
+        10, // ROLLER_COASTER_TAB
+        72, // THRILL_TAB
+        24, // WATER_TAB
+        28, // SHOP_TAB
+        16, // RESEARCH_TAB
+    };
+    static_assert(std::size(TabAnimationLoops) == TAB_COUNT);
 
-    w->frame_no = 0;
-    w->new_ride.SelectedRide = { RIDE_TYPE_NULL, OBJECT_ENTRY_INDEX_NULL };
-    _lastTrackDesignCountRideType.Type = RIDE_TYPE_NULL;
-    _lastTrackDesignCountRideType.EntryIndex = OBJECT_ENTRY_INDEX_NULL;
-    w->new_ride.HighlightedRide = _windowNewRideHighlightedItem[_windowNewRideCurrentTab];
-    if (w->new_ride.HighlightedRide.Type == RIDE_TYPE_NULL)
-        w->new_ride.HighlightedRide = _windowNewRideListItems[0];
+    static constexpr int32_t TabAnimationDivisor[] = {
+        4, // TRANSPORT_TAB
+        8, // GENTLE_TAB
+        2, // ROLLER_COASTER_TAB
+        4, // THRILL_TAB
+        4, // WATER_TAB
+        4, // SHOP_TAB
+        2, // RESEARCH_TAB
+    };
+    static_assert(std::size(TabAnimationDivisor) == TAB_COUNT);
 
-    w->width = 1;
-    WindowNewRideRefreshWidgetSizing(w);
+    static constexpr int32_t ThrillRidesTabAnimationSequence[] = {
+        5, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0,
+    };
 
-    if (_windowNewRideCurrentTab != WINDOW_NEW_RIDE_PAGE_RESEARCH)
+    class NewRideWindow final : public Window
     {
-        WindowNewRideScrollToFocusedRide(w);
-    }
-
-    return w;
-}
-
-rct_window* WindowNewRideOpenResearch()
-{
-    rct_window* w;
-
-    w = WindowNewRideOpen();
-    WindowNewRideSetPage(w, WINDOW_NEW_RIDE_PAGE_RESEARCH);
-    return w;
-}
-
-/**
- *
- *  rct2: 0x006B3EBA
- */
-void WindowNewRideFocus(RideSelection rideItem)
-{
-    rct_window* w;
-    rct_ride_entry* rideEntry;
-    bool entryFound = false;
-    // Find the first non-null ride type index.
-
-    w = window_find_by_class(WC_CONSTRUCT_RIDE);
-    if (w == nullptr)
-        return;
-
-    rideEntry = get_ride_entry(rideItem.EntryIndex);
-    uint8_t rideTypeIndex = ride_entry_get_first_non_null_ride_type(rideEntry);
-
-    WindowNewRideSetPage(w, GetRideTypeDescriptor(rideTypeIndex).Category);
-
-    for (RideSelection* listItem = _windowNewRideListItems; listItem->Type != RIDE_TYPE_NULL; listItem++)
-    {
-        if (listItem->Type == rideItem.Type && listItem->EntryIndex == rideItem.EntryIndex)
+    private:
+        static NewRideTabId _currentTab;
+        static uint_fast16_t _windowNewRideTabScroll[RideTabCount];
+        u8string _filter;
+        u8string _vehicleAvailability{};
+        RideSelection _lastTrackDesignCountRideType{};
+        int32_t _lastTrackDesignCount{};
+        RideSelection _windowNewRideListItems[RideListItemsMax]{};
+        struct NewRideVariables
         {
-            _windowNewRideHighlightedItem[0] = rideItem;
-            w->new_ride.HighlightedRide = rideItem;
-            WindowNewRideScrollToFocusedRide(w);
-            entryFound = true;
-            break;
+            RideSelection SelectedRide;
+            RideSelection HighlightedRide;
+            uint16_t SelectedRideCountdown;
+        } _newRideVars{};
+
+    public:
+        static void SetOpeningPage(NewRideTabId tab)
+        {
+            _currentTab = tab;
         }
-    }
 
-    // If this entry was not found it was most likely hidden due to it not being the preferential type.
-    // In this case, select the first entry that belongs to the same ride group.
-    if (!entryFound)
-    {
-        for (RideSelection* listItem = _windowNewRideListItems; listItem->Type != RIDE_TYPE_NULL; listItem++)
+        static void ResetTabScrolls()
         {
-            if (listItem->Type == rideItem.Type)
+            std::fill_n(NewRideWindow::_windowNewRideTabScroll, RideTabCount, 0);
+        }
+
+        void OnOpen() override
+        {
+            SetWidgets(window_new_ride_widgets);
+            PopulateRideList();
+            InitScrollWidgets();
+            _filter.clear();
+
+            frame_no = 0;
+            _newRideVars.SelectedRide = { kRideTypeNull, kObjectEntryIndexNull };
+            _lastTrackDesignCountRideType.Type = kRideTypeNull;
+            _lastTrackDesignCountRideType.EntryIndex = kObjectEntryIndexNull;
+
+            width = 1;
+            RefreshWidgetSizing();
+
+            if (_currentTab < RESEARCH_TAB)
             {
-                _windowNewRideHighlightedItem[0] = rideItem;
-                w->new_ride.HighlightedRide = rideItem;
-                WindowNewRideScrollToFocusedRide(w);
-                break;
+                SetPage(_currentTab);
+                RestoreScrollPositionForCurrentTab();
             }
         }
-    }
-}
 
-static void WindowNewRideSetPage(rct_window* w, int32_t page)
-{
-    _windowNewRideCurrentTab = page;
-    w->frame_no = 0;
-    w->new_ride.HighlightedRide = { RIDE_TYPE_NULL, OBJECT_ENTRY_INDEX_NULL };
-    w->new_ride.selected_ride_countdown = std::numeric_limits<uint16_t>::max();
-    WindowNewRidePopulateList();
-    if (page < WINDOW_NEW_RIDE_PAGE_RESEARCH)
-    {
-        w->new_ride.HighlightedRide = _windowNewRideHighlightedItem[page];
-        if (w->new_ride.HighlightedRide.Type == RIDE_TYPE_NULL)
-            w->new_ride.HighlightedRide = _windowNewRideListItems[0];
-    }
-
-    WindowNewRideRefreshWidgetSizing(w);
-    w->Invalidate();
-
-    if (page < WINDOW_NEW_RIDE_PAGE_RESEARCH)
-    {
-        WindowNewRideScrollToFocusedRide(w);
-    }
-}
-
-/**
- *
- *  rct2: 0x006B3DF1
- */
-static void WindowNewRideRefreshWidgetSizing(rct_window* w)
-{
-    int32_t width, height;
-
-    // Show or hide unrelated widgets
-    if (_windowNewRideCurrentTab != WINDOW_NEW_RIDE_PAGE_RESEARCH)
-    {
-        window_new_ride_widgets[WIDX_RIDE_LIST].type = WindowWidgetType::Scroll;
-        window_new_ride_widgets[WIDX_CURRENTLY_IN_DEVELOPMENT_GROUP].type = WindowWidgetType::Empty;
-        window_new_ride_widgets[WIDX_LAST_DEVELOPMENT_GROUP].type = WindowWidgetType::Empty;
-        window_new_ride_widgets[WIDX_LAST_DEVELOPMENT_BUTTON].type = WindowWidgetType::Empty;
-        window_new_ride_widgets[WIDX_RESEARCH_FUNDING_BUTTON].type = WindowWidgetType::Empty;
-
-        width = 601;
-        height = WH;
-    }
-    else
-    {
-        window_new_ride_widgets[WIDX_RIDE_LIST].type = WindowWidgetType::Empty;
-        window_new_ride_widgets[WIDX_CURRENTLY_IN_DEVELOPMENT_GROUP].type = WindowWidgetType::Groupbox;
-        window_new_ride_widgets[WIDX_LAST_DEVELOPMENT_GROUP].type = WindowWidgetType::Groupbox;
-        window_new_ride_widgets[WIDX_LAST_DEVELOPMENT_BUTTON].type = WindowWidgetType::FlatBtn;
-        if (!(gParkFlags & PARK_FLAGS_NO_MONEY))
-            window_new_ride_widgets[WIDX_RESEARCH_FUNDING_BUTTON].type = WindowWidgetType::FlatBtn;
-
-        width = 300;
-        height = 196;
-    }
-
-    // Handle new window size
-    if (w->width != width || w->height != height)
-    {
-        w->Invalidate();
-
-        // Resize widgets to new window size
-        window_new_ride_widgets[WIDX_BACKGROUND].right = width - 1;
-        window_new_ride_widgets[WIDX_BACKGROUND].bottom = height - 1;
-        window_new_ride_widgets[WIDX_PAGE_BACKGROUND].right = width - 1;
-        window_new_ride_widgets[WIDX_PAGE_BACKGROUND].bottom = height - 1;
-        window_new_ride_widgets[WIDX_TITLE].right = width - 2;
-        window_new_ride_widgets[WIDX_CLOSE].left = width - 13;
-        window_new_ride_widgets[WIDX_CLOSE].right = width - 3;
-
-        w->width = width;
-        w->height = height;
-        w->Invalidate();
-    }
-
-    WindowInitScrollWidgets(w);
-}
-
-static void WindowNewRideSetPressedTab(rct_window* w)
-{
-    int32_t i;
-    for (i = 0; i < WINDOW_NEW_RIDE_PAGE_COUNT; i++)
-        w->pressed_widgets &= ~(1 << (WIDX_TAB_1 + i));
-    w->pressed_widgets |= 1LL << (WIDX_TAB_1 + _windowNewRideCurrentTab);
-}
-
-static constexpr const int32_t ThrillRidesTabAnimationSequence[] = {
-    5, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0,
-};
-
-static void WindowNewRideDrawTabImage(rct_drawpixelinfo* dpi, rct_window* w, int32_t page, int32_t spriteIndex)
-{
-    rct_widgetindex widgetIndex = WIDX_TAB_1 + page;
-
-    if (w->widgets[widgetIndex].type != WindowWidgetType::Empty && !(w->disabled_widgets & (1LL << widgetIndex)))
-    {
-        int32_t frame = 0;
-        if (_windowNewRideCurrentTab == page)
-            frame = w->frame_no / window_new_ride_tab_animation_divisor[page];
-
-        spriteIndex += page == WINDOW_NEW_RIDE_PAGE_THRILL ? ThrillRidesTabAnimationSequence[frame] : frame;
-
-        gfx_draw_sprite(
-            dpi, ImageId(spriteIndex, w->colours[1]),
-            w->windowPos + ScreenCoordsXY{ w->widgets[widgetIndex].left, w->widgets[widgetIndex].top });
-    }
-}
-
-static void WindowNewRideDrawTabImages(rct_drawpixelinfo* dpi, rct_window* w)
-{
-    WindowNewRideDrawTabImage(dpi, w, WINDOW_NEW_RIDE_PAGE_TRANSPORT, SPR_TAB_RIDES_TRANSPORT_0);
-    WindowNewRideDrawTabImage(dpi, w, WINDOW_NEW_RIDE_PAGE_GENTLE, SPR_TAB_RIDES_GENTLE_0);
-    WindowNewRideDrawTabImage(dpi, w, WINDOW_NEW_RIDE_PAGE_ROLLER_COASTER, SPR_TAB_RIDES_ROLLER_COASTERS_0);
-    WindowNewRideDrawTabImage(dpi, w, WINDOW_NEW_RIDE_PAGE_THRILL, SPR_TAB_RIDES_THRILL_0);
-    WindowNewRideDrawTabImage(dpi, w, WINDOW_NEW_RIDE_PAGE_WATER, SPR_TAB_RIDES_WATER_0);
-    WindowNewRideDrawTabImage(dpi, w, WINDOW_NEW_RIDE_PAGE_SHOP, SPR_TAB_RIDES_SHOP_0);
-    WindowNewRideDrawTabImage(dpi, w, WINDOW_NEW_RIDE_PAGE_RESEARCH, SPR_TAB_FINANCES_RESEARCH_0);
-}
-
-/**
- *
- *  rct2: 0x006B6B38
- */
-static void WindowNewRideMouseup(rct_window* w, rct_widgetindex widgetIndex)
-{
-    switch (widgetIndex)
-    {
-        case WIDX_CLOSE:
-            window_close(w);
-            break;
-        case WIDX_LAST_DEVELOPMENT_BUTTON:
-            News::OpenSubject(News::ItemType::Research, gResearchLastItem->rawValue);
-            break;
-        case WIDX_RESEARCH_FUNDING_BUTTON:
-            context_open_window_view(WV_FINANCES_RESEARCH);
-            break;
-    }
-}
-
-/**
- *
- *  rct2: 0x006B6B4F
- */
-static void WindowNewRideMousedown(rct_window* w, rct_widgetindex widgetIndex, rct_widget* widget)
-{
-    if (widgetIndex >= WIDX_TAB_1 && widgetIndex <= WIDX_TAB_7)
-        WindowNewRideSetPage(w, widgetIndex - WIDX_TAB_1);
-}
-
-/**
- *
- *  rct2: 0x006B6CE7
- */
-static void WindowNewRideUpdate(rct_window* w)
-{
-    w->frame_no++;
-    if (w->frame_no >= window_new_ride_tab_animation_loops[_windowNewRideCurrentTab])
-        w->frame_no = 0;
-
-    widget_invalidate(w, WIDX_TAB_1 + _windowNewRideCurrentTab);
-
-    if (w->new_ride.SelectedRide.Type != RIDE_TYPE_NULL && w->new_ride.selected_ride_countdown-- == 0)
-        WindowNewRideSelect(w);
-
-    WindowNewRidePopulateList();
-    // widget_invalidate(w, WIDX_RIDE_LIST);
-}
-
-/**
- *
- *  rct2: 0x006B6BC9
- */
-static void WindowNewRideScrollgetsize(rct_window* w, int32_t scrollIndex, int32_t* width, int32_t* height)
-{
-    RideSelection* listItem = _windowNewRideListItems;
-
-    int32_t count = 0;
-    while (listItem->Type != RIDE_TYPE_NULL || listItem->EntryIndex != OBJECT_ENTRY_INDEX_NULL)
-    {
-        count++;
-        listItem++;
-    }
-    *height = ((count + 4) / 5) * 116;
-}
-
-/**
- *
- *  rct2: 0x006B6C89
- */
-static void WindowNewRideScrollmousedown(rct_window* w, int32_t scrollIndex, const ScreenCoordsXY& screenCoords)
-{
-    RideSelection item;
-
-    item = WindowNewRideScrollGetRideListItemAt(w, screenCoords);
-    if (item.Type == RIDE_TYPE_NULL && item.EntryIndex == OBJECT_ENTRY_INDEX_NULL)
-        return;
-
-    _windowNewRideHighlightedItem[_windowNewRideCurrentTab] = item;
-    w->new_ride.SelectedRide = item;
-
-    OpenRCT2::Audio::Play(OpenRCT2::Audio::SoundId::Click1, 0, w->windowPos.x + (w->width / 2));
-    w->new_ride.selected_ride_countdown = 8;
-    w->Invalidate();
-}
-
-/**
- *
- *  rct2: 0x006B6C51
- */
-static void WindowNewRideScrollmouseover(rct_window* w, int32_t scrollIndex, const ScreenCoordsXY& screenCoords)
-{
-    RideSelection item;
-
-    if (w->new_ride.SelectedRide.Type != RIDE_TYPE_NULL)
-        return;
-
-    item = WindowNewRideScrollGetRideListItemAt(w, screenCoords);
-
-    if (w->new_ride.HighlightedRide == item)
-        return;
-
-    w->new_ride.HighlightedRide = item;
-    _windowNewRideHighlightedItem[_windowNewRideCurrentTab] = item;
-    w->Invalidate();
-}
-
-/**
- *
- *  rct2: 0x006B6819
- */
-static void WindowNewRideInvalidate(rct_window* w)
-{
-    WindowNewRideSetPressedTab(w);
-
-    window_new_ride_widgets[WIDX_TITLE].text = window_new_ride_titles[_windowNewRideCurrentTab];
-    window_new_ride_widgets[WIDX_TAB_7].type = WindowWidgetType::Tab;
-    if (gScreenFlags & SCREEN_FLAGS_TRACK_DESIGNER)
-        window_new_ride_widgets[WIDX_TAB_7].type = WindowWidgetType::Empty;
-
-    if (_windowNewRideCurrentTab == WINDOW_NEW_RIDE_PAGE_RESEARCH)
-    {
-        window_new_ride_widgets[WIDX_LAST_DEVELOPMENT_BUTTON].type = WindowWidgetType::Empty;
-        if (gResearchLastItem.has_value())
+        void OnUpdate() override
         {
-            auto type = gResearchLastItem->type;
-            window_new_ride_widgets[WIDX_LAST_DEVELOPMENT_BUTTON].type = WindowWidgetType::FlatBtn;
-            window_new_ride_widgets[WIDX_LAST_DEVELOPMENT_BUTTON].image = (type == Research::EntryType::Ride) ? SPR_NEW_RIDE
-                                                                                                              : SPR_NEW_SCENERY;
-        }
-    }
-}
+            frame_no++;
+            if (frame_no >= TabAnimationLoops[_currentTab])
+                frame_no = 0;
 
-/**
- *
- *  rct2: 0x006B689B
- */
-static void WindowNewRidePaint(rct_window* w, rct_drawpixelinfo* dpi)
-{
-    WindowDrawWidgets(w, dpi);
-    WindowNewRideDrawTabImages(dpi, w);
+            InvalidateWidget(WIDX_TAB_1 + static_cast<int32_t>(_currentTab));
 
-    if (_windowNewRideCurrentTab != WINDOW_NEW_RIDE_PAGE_RESEARCH)
-    {
-        RideSelection item;
-        item = w->new_ride.HighlightedRide;
-        if (item.Type != RIDE_TYPE_NULL || item.EntryIndex != OBJECT_ENTRY_INDEX_NULL)
-            WindowNewRidePaintRideInformation(w, dpi, item, w->windowPos + ScreenCoordsXY{ 3, w->height - 64 }, w->width - 6);
-    }
-    else
-    {
-        WindowResearchDevelopmentPagePaint(w, dpi, WIDX_CURRENTLY_IN_DEVELOPMENT_GROUP);
-    }
-}
+            if (GetCurrentTextBox().window.classification == classification && GetCurrentTextBox().window.number == number)
+            {
+                WindowUpdateTextboxCaret();
+                InvalidateWidget(WIDX_FILTER_TEXT_BOX);
+            }
 
-static ImageIndex GetRideImage(RideSelection rideSelection)
-{
-    auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
-    auto obj = static_cast<RideObject*>(objMgr.GetLoadedObject(ObjectType::Ride, rideSelection.EntryIndex));
-    return obj == nullptr ? ImageIndexUndefined : obj->GetPreviewImage(rideSelection.Type);
-}
+            if (_newRideVars.SelectedRide.Type != kRideTypeNull && _newRideVars.SelectedRideCountdown-- == 0)
+            {
+                RideSelect();
+            }
 
-/**
- *
- *  rct2: 0x006B6ABF
- */
-static void WindowNewRideScrollpaint(rct_window* w, rct_drawpixelinfo* dpi, int32_t scrollIndex)
-{
-    if (_windowNewRideCurrentTab == WINDOW_NEW_RIDE_PAGE_RESEARCH)
-        return;
+            PopulateRideList();
 
-    gfx_clear(dpi, ColourMapA[w->colours[1]].mid_light);
+            if (_currentTab < RESEARCH_TAB)
+            {
+                _windowNewRideTabScroll[_currentTab] = scrolls[0].contentOffsetY;
 
-    ScreenCoordsXY coords{ 1, 1 };
-    RideSelection* listItem = _windowNewRideListItems;
-    while (listItem->Type != RIDE_TYPE_NULL || listItem->EntryIndex != OBJECT_ENTRY_INDEX_NULL)
-    {
-        // Draw flat button rectangle
-        int32_t flags = 0;
-        if (w->new_ride.SelectedRide == *listItem)
-            flags |= INSET_RECT_FLAG_BORDER_INSET;
-        if (w->new_ride.HighlightedRide == *listItem || flags != 0)
-            gfx_fill_rect_inset(
-                dpi, { coords, coords + ScreenCoordsXY{ 115, 115 } }, w->colours[1], INSET_RECT_FLAG_FILL_MID_LIGHT | flags);
-
-        // Draw ride image with feathered border
-        auto mask = ImageId(SPR_NEW_RIDE_MASK);
-        auto rideImage = ImageId(GetRideImage(*listItem));
-        gfx_draw_sprite_raw_masked(dpi, coords + ScreenCoordsXY{ 2, 2 }, mask, rideImage);
-
-        // Next position
-        coords.x += 116;
-        if (coords.x >= 116 * 5 + 1)
-        {
-            coords.x = 1;
-            coords.y += 116;
+                // Remove highlight when mouse leaves rides list
+                if (!WidgetIsHighlighted(*this, WIDX_RIDE_LIST))
+                {
+                    _newRideVars.HighlightedRide = { kRideTypeNull, kObjectEntryIndexNull };
+                    InvalidateWidget(WIDX_RIDE_LIST);
+                }
+            }
         }
 
-        // Next item
-        listItem++;
-    }
-}
-
-/**
- *
- *  rct2: 0x006B6D3C
- */
-static RideSelection WindowNewRideScrollGetRideListItemAt(rct_window* w, const ScreenCoordsXY& screenCoords)
-{
-    RideSelection result;
-    result.Type = RIDE_TYPE_NULL;
-    result.EntryIndex = OBJECT_ENTRY_INDEX_NULL;
-
-    if (screenCoords.x <= 0 || screenCoords.y <= 0)
-        return result;
-
-    int32_t column = screenCoords.x / 116;
-    int32_t row = screenCoords.y / 116;
-    if (column >= 5)
-        return result;
-
-    int32_t index = column + (row * 5);
-
-    RideSelection* listItem = _windowNewRideListItems;
-    while (listItem->Type != RIDE_TYPE_NULL || listItem->EntryIndex != OBJECT_ENTRY_INDEX_NULL)
-    {
-        if (index-- == 0)
-            return *listItem;
-        listItem++;
-    }
-
-    return result;
-}
-
-static int32_t GetNumTrackDesigns(RideSelection item)
-{
-    std::string entryName;
-
-    if (item.Type < 0x80)
-    {
-        if (GetRideTypeDescriptor(item.Type).HasFlag(RIDE_TYPE_FLAG_LIST_VEHICLES_SEPARATELY))
+        void OnMouseUp(WidgetIndex widgetIndex) override
         {
-            entryName = get_ride_entry_name(item.EntryIndex);
-        }
-    }
-
-    auto repo = OpenRCT2::GetContext()->GetTrackDesignRepository();
-    return static_cast<int32_t>(repo->GetCountForObjectEntry(item.Type, entryName));
-}
-
-/**
- *
- *  rct2: 0x006B701C
- */
-static void WindowNewRidePaintRideInformation(
-    rct_window* w, rct_drawpixelinfo* dpi, RideSelection item, const ScreenCoordsXY& screenPos, int32_t width)
-{
-    rct_ride_entry* rideEntry = get_ride_entry(item.EntryIndex);
-    RideNaming rideNaming;
-
-    // Ride name and description
-    rideNaming = get_ride_naming(item.Type, rideEntry);
-    auto ft = Formatter();
-    ft.Add<rct_string_id>(rideNaming.Name);
-    ft.Add<rct_string_id>(rideNaming.Description);
-    DrawTextWrapped(dpi, screenPos, width, STR_NEW_RIDE_NAME_AND_DESCRIPTION, ft);
-
-    char availabilityString[AVAILABILITY_STRING_SIZE];
-    WindowNewRideListVehiclesFor(item.Type, rideEntry, availabilityString, sizeof(availabilityString));
-
-    if (availabilityString[0] != 0)
-    {
-        const char* drawString = availabilityString;
-        ft = Formatter();
-        ft.Add<const char*>(drawString);
-        DrawTextEllipsised(dpi, screenPos + ScreenCoordsXY{ 0, 39 }, WW - 2, STR_AVAILABLE_VEHICLES, ft);
-    }
-
-    ft = Formatter();
-    if (item.Type != _lastTrackDesignCountRideType.Type || item.EntryIndex != _lastTrackDesignCountRideType.EntryIndex)
-    {
-        _lastTrackDesignCountRideType = item;
-        _lastTrackDesignCount = GetNumTrackDesigns(item);
-    }
-    ft.Add<int32_t>(_lastTrackDesignCount);
-
-    rct_string_id designCountStringId;
-    switch (_lastTrackDesignCount)
-    {
-        case 0:
-            designCountStringId = STR_CUSTOM_DESIGNED_LAYOUT;
-            break;
-        case 1:
-            designCountStringId = STR_1_DESIGN_AVAILABLE;
-            break;
-        default:
-            designCountStringId = STR_X_DESIGNS_AVAILABLE;
-            break;
-    }
-
-    DrawTextBasic(dpi, screenPos + ScreenCoordsXY{ 0, 51 }, designCountStringId, ft);
-
-    // Price
-    if (!(gParkFlags & PARK_FLAGS_NO_MONEY))
-    {
-        // Get price of ride
-        int32_t startPieceId = GetRideTypeDescriptor(item.Type).StartTrackPiece;
-        money64 price = GetRideTypeDescriptor(item.Type).BuildCosts.TrackPrice;
-        const auto& ted = GetTrackElementDescriptor(startPieceId);
-        price *= ted.Price;
-        price = (price >> 17) * 10 * GetRideTypeDescriptor(item.Type).BuildCosts.PriceEstimateMultiplier;
-
-        //
-        rct_string_id stringId = STR_NEW_RIDE_COST;
-        if (!GetRideTypeDescriptor(item.Type).HasFlag(RIDE_TYPE_FLAG_HAS_NO_TRACK))
-            stringId = STR_NEW_RIDE_COST_FROM;
-
-        ft = Formatter();
-        ft.Add<money64>(price);
-        DrawTextBasic(dpi, screenPos + ScreenCoordsXY{ width, 51 }, stringId, ft, { TextAlignment::RIGHT });
-    }
-}
-
-/**
- *
- *  rct2: 0x006B6B78
- */
-static void WindowNewRideSelect(rct_window* w)
-{
-    RideSelection item = w->new_ride.SelectedRide;
-    if (item.Type == RIDE_TYPE_NULL)
-        return;
-
-    window_close(w);
-    window_close_construction_windows();
-
-    if (_lastTrackDesignCount > 0)
-    {
-        auto intent = Intent(WC_TRACK_DESIGN_LIST);
-        intent.putExtra(INTENT_EXTRA_RIDE_TYPE, item.Type);
-        intent.putExtra(INTENT_EXTRA_RIDE_ENTRY_INDEX, item.EntryIndex);
-        context_open_intent(&intent);
-        return;
-    }
-
-    ride_construct_new(item);
-}
-
-static void WindowNewRideListVehiclesFor(uint8_t rideType, const rct_ride_entry* rideEntry, char* buffer, size_t bufferLen)
-{
-    std::fill_n(buffer, bufferLen, 0);
-    if (GetRideTypeDescriptor(rideType).HasFlag(RIDE_TYPE_FLAG_LIST_VEHICLES_SEPARATELY))
-    {
-        return;
-    }
-
-    auto& objManager = OpenRCT2::GetContext()->GetObjectManager();
-    auto& rideEntries = objManager.GetAllRideEntries(rideType);
-    auto isFirst = true;
-    for (auto rideEntryIndex : rideEntries)
-    {
-        auto currentRideEntry = get_ride_entry(rideEntryIndex);
-
-        // Skip if vehicle type is not invented yet
-        if (!ride_entry_is_invented(rideEntryIndex) && !gCheatsIgnoreResearchStatus)
-            continue;
-
-        // Append comma if not the first iteration
-        if (!isFirst)
-        {
-            safe_strcat(buffer, ", ", bufferLen);
+            switch (widgetIndex)
+            {
+                case WIDX_CLOSE:
+                    Close();
+                    break;
+                case WIDX_LAST_DEVELOPMENT_BUTTON:
+                    WindowResearchDevelopmentMouseUp(widgetIndex, WIDX_CURRENTLY_IN_DEVELOPMENT_GROUP);
+                    break;
+                case WIDX_RESEARCH_FUNDING_BUTTON:
+                    ContextOpenWindowView(WV_FINANCES_RESEARCH);
+                    break;
+                case WIDX_GROUP_BY_TRACK_TYPE:
+                    Config::Get().interface.ListRideVehiclesSeparately = !Config::Get().interface.ListRideVehiclesSeparately;
+                    Config::Save();
+                    SetPage(_currentTab);
+                    break;
+                case WIDX_FILTER_TEXT_BOX:
+                    WindowStartTextbox(*this, widgetIndex, _filter, kTextInputSize);
+                    break;
+                case WIDX_FILTER_CLEAR_BUTTON:
+                    _filter.clear();
+                    scrolls->contentOffsetY = 0;
+                    Invalidate();
+                    break;
+            }
         }
 
-        // Append vehicle name
-        auto vehicleName = language_get_string(currentRideEntry->naming.Name);
-        safe_strcat(buffer, vehicleName, bufferLen);
+        void OnMouseDown(WidgetIndex widgetIndex) override
+        {
+            if (widgetIndex >= WIDX_TAB_1 && widgetIndex <= WIDX_TAB_7)
+            {
+                SetPage(widgetIndex - WIDX_TAB_1);
+            }
+        }
 
-        isFirst = false;
+        void OnPrepareDraw() override
+        {
+            SetPressedTab();
+
+            if (!Config::Get().interface.ListRideVehiclesSeparately)
+                pressed_widgets |= (1LL << WIDX_GROUP_BY_TRACK_TYPE);
+            else
+                pressed_widgets &= ~(1LL << WIDX_GROUP_BY_TRACK_TYPE);
+
+            widgets[WIDX_TITLE].text = RideTitles[_currentTab];
+            widgets[WIDX_TAB_7].type = WindowWidgetType::Tab;
+            widgets[WIDX_FILTER_TEXT_BOX].string = _filter.data();
+
+            if (gScreenFlags & SCREEN_FLAGS_TRACK_DESIGNER)
+                widgets[WIDX_TAB_7].type = WindowWidgetType::Empty;
+
+            if (_currentTab == RESEARCH_TAB)
+            {
+                WindowResearchDevelopmentPrepareDraw(this, WIDX_CURRENTLY_IN_DEVELOPMENT_GROUP);
+            }
+
+            const auto& ls = OpenRCT2::GetContext()->GetLocalisationService();
+            auto string = ls.GetString(STR_GROUP_BY_TRACK_TYPE);
+            auto strWidth = GfxGetStringWidth(string, FontStyle::Medium);
+            auto localizedGroupByTrackTypeWidth = strWidth + 14;
+            widgets[WIDX_GROUP_BY_TRACK_TYPE].left = width - 8 - localizedGroupByTrackTypeWidth;
+        }
+
+        void OnDraw(DrawPixelInfo& dpi) override
+        {
+            DrawWidgets(dpi);
+            DrawTabImages(dpi);
+
+            if (_currentTab != RESEARCH_TAB)
+            {
+                RideSelection item = _newRideVars.HighlightedRide;
+                if (item.Type != kRideTypeNull || item.EntryIndex != kObjectEntryIndexNull)
+                    DrawRideInformation(dpi, item, windowPos + ScreenCoordsXY{ 3, height - 64 }, width - 6);
+            }
+            else
+            {
+                WindowResearchDevelopmentDraw(this, dpi, WIDX_CURRENTLY_IN_DEVELOPMENT_GROUP);
+            }
+        }
+
+        ScreenSize OnScrollGetSize(int32_t scrollIndex) override
+        {
+            RideSelection* listItem = _windowNewRideListItems;
+
+            int32_t count = 0;
+            while (listItem->Type != kRideTypeNull || listItem->EntryIndex != kObjectEntryIndexNull)
+            {
+                count++;
+                listItem++;
+            }
+            return { widgets[WIDX_RIDE_LIST].width(), ((count + 4) / 5) * 116 };
+        }
+
+        void OnScrollMouseOver(int32_t scrollIndex, const ScreenCoordsXY& screenCoords) override
+        {
+            RideSelection item = ScrollGetRideListItemAt(screenCoords);
+            if (_newRideVars.HighlightedRide == item)
+            {
+                return;
+            }
+
+            _newRideVars.HighlightedRide = item;
+            Invalidate();
+        }
+
+        void OnScrollMouseDown(int32_t scrollIndex, const ScreenCoordsXY& screenCoords) override
+        {
+            RideSelection item = ScrollGetRideListItemAt(screenCoords);
+            if (item.Type == kRideTypeNull && item.EntryIndex == kObjectEntryIndexNull)
+            {
+                return;
+            }
+
+            _newRideVars.SelectedRide = item;
+
+            OpenRCT2::Audio::Play(OpenRCT2::Audio::SoundId::Click1, 0, windowPos.x + (width / 2));
+            _newRideVars.SelectedRideCountdown = 8;
+            Invalidate();
+        }
+
+        void OnScrollDraw(int32_t scrollIndex, DrawPixelInfo& dpi) override
+        {
+            if (_currentTab == RESEARCH_TAB)
+            {
+                return;
+            }
+
+            GfxClear(dpi, ColourMapA[colours[1].colour].mid_light);
+
+            ScreenCoordsXY coords{ 1, 1 };
+            RideSelection* listItem = _windowNewRideListItems;
+            while (listItem->Type != kRideTypeNull || listItem->EntryIndex != kObjectEntryIndexNull)
+            {
+                // Draw flat button rectangle
+                int32_t buttonFlags = 0;
+                if (_newRideVars.SelectedRide == *listItem)
+                    buttonFlags |= INSET_RECT_FLAG_BORDER_INSET;
+                if (_newRideVars.HighlightedRide == *listItem || buttonFlags != 0)
+                    GfxFillRectInset(
+                        dpi, { coords, coords + ScreenCoordsXY{ 115, 115 } }, colours[1],
+                        INSET_RECT_FLAG_FILL_MID_LIGHT | buttonFlags);
+
+                // Draw ride image with feathered border
+                auto mask = ImageId(SPR_NEW_RIDE_MASK);
+                auto rideImage = ImageId(GetRideImage(*listItem));
+                GfxDrawSpriteRawMasked(dpi, coords + ScreenCoordsXY{ 2, 2 }, mask, rideImage);
+
+                // Next position
+                coords.x += 116;
+                if (coords.x >= 116 * 5 + 1)
+                {
+                    coords.x = 1;
+                    coords.y += 116;
+                }
+
+                // Next item
+                listItem++;
+            }
+        }
+
+        void OnTextInput(WidgetIndex widgetIndex, std::string_view text) override
+        {
+            if (widgetIndex != WIDX_FILTER_TEXT_BOX)
+                return;
+
+            if (text == _filter)
+                return;
+
+            _filter.assign(text);
+
+            scrolls->contentOffsetY = 0;
+            Invalidate();
+        }
+
+        void SetPage(int tab)
+        {
+            if (tab >= TRANSPORT_TAB && tab < TAB_COUNT)
+            {
+                SetPage(static_cast<NewRideTabId>(tab));
+            }
+        }
+
+        void SetPage(NewRideTabId tab)
+        {
+            _currentTab = tab;
+            frame_no = 0;
+            _newRideVars.HighlightedRide = { kRideTypeNull, kObjectEntryIndexNull };
+            _newRideVars.SelectedRideCountdown = std::numeric_limits<uint16_t>::max();
+            PopulateRideList();
+            RefreshWidgetSizing();
+            Invalidate();
+
+            if (tab < RESEARCH_TAB)
+            {
+                RestoreScrollPositionForCurrentTab();
+            }
+        }
+
+    private:
+        void RideSelect()
+        {
+            RideSelection item = _newRideVars.SelectedRide;
+            if (item.Type == kRideTypeNull)
+            {
+                return;
+            }
+
+            Close();
+
+            auto* windowMgr = Ui::GetWindowManager();
+            windowMgr->CloseConstructionWindows();
+
+            auto count = GetNumTrackDesigns(item);
+            if (count > 0)
+            {
+                auto intent = Intent(WindowClass::TrackDesignList);
+                intent.PutExtra(INTENT_EXTRA_RIDE_TYPE, item.Type);
+                intent.PutExtra(INTENT_EXTRA_RIDE_ENTRY_INDEX, item.EntryIndex);
+                ContextOpenIntent(&intent);
+                return;
+            }
+
+            RideConstructNew(item);
+        }
+
+        int32_t GetNumTrackDesigns(RideSelection item)
+        {
+            // Cache the result
+            if (item.Type == _lastTrackDesignCountRideType.Type && item.EntryIndex == _lastTrackDesignCountRideType.EntryIndex)
+            {
+                return _lastTrackDesignCount;
+            }
+
+            std::string entryName;
+
+            if (item.Type < 0x80)
+            {
+                if (GetRideTypeDescriptor(item.Type).HasFlag(RtdFlag::listVehiclesSeparately))
+                {
+                    entryName = GetRideEntryName(item.EntryIndex);
+                }
+            }
+
+            auto repo = OpenRCT2::GetContext()->GetTrackDesignRepository();
+            _lastTrackDesignCount = static_cast<int32_t>(repo->GetCountForObjectEntry(item.Type, entryName));
+            _lastTrackDesignCountRideType = item;
+            return _lastTrackDesignCount;
+        }
+
+        void UpdateVehicleAvailability(ride_type_t rideType)
+        {
+            _vehicleAvailability.clear();
+            if (GetRideTypeDescriptor(rideType).HasFlag(RtdFlag::listVehiclesSeparately))
+            {
+                return;
+            }
+
+            auto& objManager = OpenRCT2::GetContext()->GetObjectManager();
+            auto& rideEntries = objManager.GetAllRideEntries(rideType);
+            auto isFirst = true;
+            for (auto rideEntryIndex : rideEntries)
+            {
+                auto currentRideEntry = GetRideEntryByIndex(rideEntryIndex);
+
+                // Skip if vehicle type is not invented yet
+                if (!RideEntryIsInvented(rideEntryIndex) && !GetGameState().Cheats.ignoreResearchStatus)
+                {
+                    continue;
+                }
+
+                // Append comma if not the first iteration
+                if (!isFirst)
+                {
+                    _vehicleAvailability += u8", ";
+                }
+
+                // Append vehicle name
+                auto vehicleName = LanguageGetString(currentRideEntry->naming.Name);
+                _vehicleAvailability += vehicleName;
+
+                isFirst = false;
+            }
+        }
+
+        ImageIndex GetRideImage(RideSelection rideSelection)
+        {
+            auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
+            auto obj = objMgr.GetLoadedObject<RideObject>(rideSelection.EntryIndex);
+            return obj == nullptr ? kImageIndexUndefined : obj->GetPreviewImage(rideSelection.Type);
+        }
+
+        void PopulateRideList()
+        {
+            uint8_t currentCategory = _currentTab;
+            RideSelection* nextListItem = _windowNewRideListItems;
+            RideSelection* listEnd = _windowNewRideListItems + RideListItemsMax;
+
+            // For each ride type in the view order list
+            for (int32_t i = 0; i < static_cast<int32_t>(std::size(RideTypeViewOrder)); i++)
+            {
+                auto rideType = RideTypeViewOrder[i];
+                if (rideType == kRideTypeNull)
+                    continue;
+
+                if (GetRideTypeDescriptor(rideType).Category != currentCategory)
+                    continue;
+
+                nextListItem = IterateOverRideType(rideType, nextListItem, listEnd);
+            }
+
+            nextListItem->Type = kRideTypeNull;
+            nextListItem->EntryIndex = kObjectEntryIndexNull;
+        }
+
+        RideSelection* IterateOverRideType(ride_type_t rideType, RideSelection* nextListItem, RideSelection* listEnd)
+        {
+            bool buttonForRideTypeCreated = false;
+            bool allowDrawingOverLastButton = false;
+
+            uint8_t highestVehiclePriority = 0;
+
+            // For each ride entry for this ride type
+            auto& objManager = OpenRCT2::GetContext()->GetObjectManager();
+            auto& rideEntries = objManager.GetAllRideEntries(rideType);
+            for (auto rideEntryIndex : rideEntries)
+            {
+                // Skip if vehicle type is not invented yet
+                if (!RideEntryIsInvented(rideEntryIndex) && !GetGameState().Cheats.ignoreResearchStatus)
+                    continue;
+
+                // Ride entries
+                auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
+                auto* rideObj = objMgr.GetLoadedObject<RideObject>(rideEntryIndex);
+
+                // Skip if the vehicle isn't the preferred vehicle for this generic track type
+                if (!Config::Get().interface.ListRideVehiclesSeparately
+                    && !GetRideTypeDescriptor(rideType).HasFlag(RtdFlag::listVehiclesSeparately)
+                    && highestVehiclePriority > rideObj->GetEntry().BuildMenuPriority)
+                {
+                    continue;
+                }
+
+                if (!IsFiltered(*rideObj))
+                {
+                    continue;
+                }
+
+                highestVehiclePriority = rideObj->GetEntry().BuildMenuPriority;
+
+                // Determines how and where to draw a button for this ride type/vehicle.
+                if (Config::Get().interface.ListRideVehiclesSeparately
+                    || GetRideTypeDescriptor(rideType).HasFlag(RtdFlag::listVehiclesSeparately))
+                {
+                    // Separate, draw apart
+                    allowDrawingOverLastButton = false;
+
+                    if (nextListItem >= listEnd)
+                        continue;
+
+                    nextListItem->Type = rideType;
+                    nextListItem->EntryIndex = rideEntryIndex;
+                    nextListItem++;
+                }
+                else if (!buttonForRideTypeCreated)
+                {
+                    // Non-separate, draw-apart
+                    buttonForRideTypeCreated = true;
+                    allowDrawingOverLastButton = true;
+
+                    if (nextListItem >= listEnd)
+                        continue;
+
+                    nextListItem->Type = rideType;
+                    nextListItem->EntryIndex = rideEntryIndex;
+                    nextListItem++;
+                }
+                else if (allowDrawingOverLastButton)
+                {
+                    // Non-separate, draw over previous
+                    if (rideType == rideObj->GetEntry().ride_type[0])
+                    {
+                        nextListItem--;
+                        nextListItem->Type = rideType;
+                        nextListItem->EntryIndex = rideEntryIndex;
+                        nextListItem++;
+                    }
+                }
+            }
+
+            return nextListItem;
+        }
+
+        bool IsFiltered(const RideObject& rideObject)
+        {
+            if (_filter.empty())
+                return true;
+
+            return IsFilterInRideType(rideObject.GetEntry()) || IsFilterInRideName(rideObject.GetEntry())
+                || IsFilterInIdentifier(rideObject) || IsFilterInAuthors(rideObject) || IsFilterInFilename(rideObject);
+        }
+
+        bool IsFilterInRideType(const RideObjectEntry& rideEntry)
+        {
+            auto rideTypeName = GetRideNaming(rideEntry.ride_type[0], rideEntry).Name;
+            return String::contains(u8string_view(LanguageGetString(rideTypeName)), _filter, true);
+        }
+
+        bool IsFilterInRideName(const RideObjectEntry& rideEntry)
+        {
+            auto rideName = rideEntry.naming.Name;
+            return String::contains(u8string_view(LanguageGetString(rideName)), _filter, true);
+        }
+
+        bool IsFilterInAuthors(const RideObject& rideObject)
+        {
+            auto& authors = rideObject.GetAuthors();
+
+            for (auto& author : authors)
+                if (String::contains(author, _filter, true))
+                    return true;
+
+            return false;
+        }
+
+        bool IsFilterInIdentifier(const RideObject& rideObject)
+        {
+            auto objectName = rideObject.GetObjectEntry().GetName();
+
+            return String::contains(objectName, _filter, true);
+        }
+
+        bool IsFilterInFilename(const RideObject& rideObject)
+        {
+            auto repoItem = ObjectRepositoryFindObjectByEntry(&(rideObject.GetObjectEntry()));
+
+            return String::contains(repoItem->Path, _filter, true);
+        }
+
+        void SetPressedTab()
+        {
+            int32_t i{};
+            for (i = 0; i < TAB_COUNT; i++)
+            {
+                pressed_widgets &= ~(1 << (WIDX_TAB_1 + i));
+            }
+            pressed_widgets |= 1LL << (WIDX_TAB_1 + static_cast<int32_t>(_currentTab));
+        }
+
+        void RefreshWidgetSizing()
+        {
+            int32_t newWidth{}, newHeight{};
+
+            if (_currentTab < SHOP_TAB)
+            {
+                disabled_widgets &= ~(1 << WIDX_GROUP_BY_TRACK_TYPE);
+            }
+            else
+            {
+                disabled_widgets |= 1LL << WIDX_GROUP_BY_TRACK_TYPE;
+            }
+
+            // Show or hide unrelated widgets
+
+            if (_currentTab < RESEARCH_TAB)
+            {
+                widgets[WIDX_GROUP_BY_TRACK_TYPE].type = WindowWidgetType::Checkbox;
+            }
+            else
+            {
+                widgets[WIDX_GROUP_BY_TRACK_TYPE].type = WindowWidgetType::Empty;
+            }
+
+            if (_currentTab != RESEARCH_TAB)
+            {
+                widgets[WIDX_RIDE_LIST].type = WindowWidgetType::Scroll;
+                widgets[WIDX_FILTER_TEXT_BOX].type = WindowWidgetType::TextBox;
+                widgets[WIDX_FILTER_CLEAR_BUTTON].type = WindowWidgetType::Button;
+                widgets[WIDX_CURRENTLY_IN_DEVELOPMENT_GROUP].type = WindowWidgetType::Empty;
+                widgets[WIDX_LAST_DEVELOPMENT_GROUP].type = WindowWidgetType::Empty;
+                widgets[WIDX_LAST_DEVELOPMENT_BUTTON].type = WindowWidgetType::Empty;
+                widgets[WIDX_RESEARCH_FUNDING_BUTTON].type = WindowWidgetType::Empty;
+
+                newWidth = WindowWidth;
+                newHeight = WindowHeight;
+            }
+            else
+            {
+                widgets[WIDX_RIDE_LIST].type = WindowWidgetType::Empty;
+                widgets[WIDX_FILTER_TEXT_BOX].type = WindowWidgetType::Empty;
+                widgets[WIDX_FILTER_CLEAR_BUTTON].type = WindowWidgetType::Empty;
+                widgets[WIDX_CURRENTLY_IN_DEVELOPMENT_GROUP].type = WindowWidgetType::Groupbox;
+                widgets[WIDX_LAST_DEVELOPMENT_GROUP].type = WindowWidgetType::Groupbox;
+                widgets[WIDX_LAST_DEVELOPMENT_BUTTON].type = WindowWidgetType::FlatBtn;
+                if (!(GetGameState().Park.Flags & PARK_FLAGS_NO_MONEY))
+                    widgets[WIDX_RESEARCH_FUNDING_BUTTON].type = WindowWidgetType::FlatBtn;
+
+                newWidth = 300;
+                newHeight = 196;
+            }
+
+            // Handle new window size
+            if (width != newWidth || height != newHeight)
+            {
+                Invalidate();
+
+                // Resize widgets to new window size
+                width = newWidth;
+                height = newHeight;
+                ResizeFrameWithPage();
+                widgets[WIDX_GROUP_BY_TRACK_TYPE].left = newWidth - 8 - GroupByTrackTypeWidth;
+                widgets[WIDX_GROUP_BY_TRACK_TYPE].right = newWidth - 8;
+
+                Invalidate();
+            }
+
+            InitScrollWidgets();
+        }
+
+        RideSelection ScrollGetRideListItemAt(const ScreenCoordsXY& screenCoords)
+        {
+            RideSelection result;
+            result.Type = kRideTypeNull;
+            result.EntryIndex = kObjectEntryIndexNull;
+
+            if (screenCoords.x <= 0 || screenCoords.y <= 0)
+                return result;
+
+            int32_t column = screenCoords.x / 116;
+            int32_t row = screenCoords.y / 116;
+            if (column >= 5)
+                return result;
+
+            int32_t index = column + (row * 5);
+
+            RideSelection* listItem = _windowNewRideListItems;
+            while (listItem->Type != kRideTypeNull || listItem->EntryIndex != kObjectEntryIndexNull)
+            {
+                if (index-- == 0)
+                {
+                    return *listItem;
+                }
+                listItem++;
+            }
+
+            return result;
+        }
+
+        void RestoreScrollPositionForCurrentTab()
+        {
+            assert(static_cast<size_t>(_currentTab) < std::size(_windowNewRideTabScroll));
+            auto& currentTabScroll = _windowNewRideTabScroll[_currentTab];
+
+            // Get maximum scroll height
+            ScreenSize scrollSize = OnScrollGetSize(0);
+            const Widget& listWidget = widgets[WIDX_RIDE_LIST];
+            const int32_t listWidgetHeight = listWidget.bottom - listWidget.top - 1;
+
+            // Ensure the current tab scroll is within range
+            currentTabScroll = std::min<uint16_t>(currentTabScroll, std::max(0, scrollSize.height - listWidgetHeight));
+
+            scrolls[0].contentOffsetY = currentTabScroll;
+            WidgetScrollUpdateThumbs(*this, WIDX_RIDE_LIST);
+        }
+
+        void DrawRideInformation(DrawPixelInfo& dpi, RideSelection item, const ScreenCoordsXY& screenPos, int32_t textWidth)
+        {
+            auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
+            const auto* rideObj = objMgr.GetLoadedObject<RideObject>(item.EntryIndex);
+            const auto& rideEntry = rideObj->GetEntry();
+            RideNaming rideNaming = GetRideNaming(item.Type, rideEntry);
+            auto ft = Formatter();
+
+            UpdateVehicleAvailability(item.Type);
+
+            // Ride name and description
+            ft.Add<StringId>(rideNaming.Name);
+            ft.Add<StringId>(rideNaming.Description);
+            DrawTextWrapped(dpi, screenPos, textWidth, STR_NEW_RIDE_NAME_AND_DESCRIPTION, ft);
+
+            if (!_vehicleAvailability.empty())
+            {
+                if (Config::Get().interface.ListRideVehiclesSeparately)
+                {
+                    ft = Formatter();
+                    ft.Add<StringId>(rideEntry.naming.Name);
+                    DrawTextEllipsised(
+                        dpi, screenPos + ScreenCoordsXY{ 0, 39 }, WindowWidth - 2, STR_NEW_RIDE_VEHICLE_NAME, ft);
+                }
+                else
+                {
+                    ft = Formatter();
+                    ft.Add<const utf8*>(_vehicleAvailability.c_str());
+                    DrawTextEllipsised(dpi, screenPos + ScreenCoordsXY{ 0, 39 }, WindowWidth - 2, STR_AVAILABLE_VEHICLES, ft);
+                }
+            }
+
+            auto count = GetNumTrackDesigns(item);
+            auto designCountStringId = GetDesignsAvailableStringId(count);
+            ft = Formatter();
+            ft.Add<int32_t>(count);
+            DrawTextBasic(dpi, screenPos + ScreenCoordsXY{ 0, 51 }, designCountStringId, ft);
+
+            // Price
+            if (!(GetGameState().Park.Flags & PARK_FLAGS_NO_MONEY))
+            {
+                // Get price of ride
+                auto startPieceId = GetRideTypeDescriptor(item.Type).StartTrackPiece;
+                money64 price = GetRideTypeDescriptor(item.Type).BuildCosts.TrackPrice;
+                const auto& ted = GetTrackElementDescriptor(startPieceId);
+                price *= ted.priceModifier;
+                price = (price >> 16) * GetRideTypeDescriptor(item.Type).BuildCosts.PriceEstimateMultiplier;
+
+                //
+                StringId stringId = STR_NEW_RIDE_COST;
+                if (GetRideTypeDescriptor(item.Type).HasFlag(RtdFlag::hasTrack))
+                    stringId = STR_NEW_RIDE_COST_FROM;
+
+                ft = Formatter();
+                ft.Add<money64>(price);
+                DrawTextBasic(dpi, screenPos + ScreenCoordsXY{ textWidth, 51 }, stringId, ft, { TextAlignment::RIGHT });
+            }
+
+            // Draw object author(s) if debugging tools are active
+            if (Config::Get().general.DebuggingTools)
+            {
+                auto repoItem = ObjectRepositoryFindObjectByEntry(&(rideObj->GetObjectEntry()));
+
+                StringId authorStringId = repoItem->Authors.size() > 1 ? STR_AUTHORS_STRING : STR_AUTHOR_STRING;
+
+                std::string authorsString;
+                for (auto& author : repoItem->Authors)
+                {
+                    if (!authorsString.empty())
+                        authorsString.append(", ");
+
+                    authorsString.append(author);
+                }
+
+                ft = Formatter();
+                ft.Add<StringId>(authorStringId);
+                ft.Add<const char*>(authorsString.c_str());
+
+                DrawTextEllipsised(
+                    dpi, screenPos + ScreenCoordsXY{ textWidth, 0 }, WindowWidth - 2, STR_WINDOW_COLOUR_2_STRINGID, ft,
+                    { TextAlignment::RIGHT });
+            }
+        }
+
+        void DrawTabImage(DrawPixelInfo& dpi, NewRideTabId tab, int32_t spriteIndex)
+        {
+            WidgetIndex widgetIndex = WIDX_TAB_1 + static_cast<int32_t>(tab);
+
+            if (widgets[widgetIndex].type != WindowWidgetType::Empty && !WidgetIsDisabled(*this, widgetIndex))
+            {
+                int32_t frame = 0;
+                if (_currentTab == tab)
+                    frame = frame_no / TabAnimationDivisor[_currentTab];
+
+                spriteIndex += tab == THRILL_TAB ? ThrillRidesTabAnimationSequence[frame] : frame;
+
+                GfxDrawSprite(
+                    dpi, ImageId(spriteIndex, colours[1].colour),
+                    windowPos + ScreenCoordsXY{ widgets[widgetIndex].left, widgets[widgetIndex].top });
+            }
+        }
+
+        void DrawTabImages(DrawPixelInfo& dpi)
+        {
+            DrawTabImage(dpi, TRANSPORT_TAB, SPR_TAB_RIDES_TRANSPORT_0);
+            DrawTabImage(dpi, GENTLE_TAB, SPR_TAB_RIDES_GENTLE_0);
+            DrawTabImage(dpi, ROLLER_COASTER_TAB, SPR_TAB_RIDES_ROLLER_COASTERS_0);
+            DrawTabImage(dpi, THRILL_TAB, SPR_TAB_RIDES_THRILL_0);
+            DrawTabImage(dpi, WATER_TAB, SPR_TAB_RIDES_WATER_0);
+            DrawTabImage(dpi, SHOP_TAB, SPR_TAB_RIDES_SHOP_0);
+            DrawTabImage(dpi, RESEARCH_TAB, SPR_TAB_FINANCES_RESEARCH_0);
+        }
+
+        StringId GetDesignsAvailableStringId(int32_t count)
+        {
+            switch (count)
+            {
+                case 0:
+                    return STR_CUSTOM_DESIGNED_LAYOUT;
+                case 1:
+                    return STR_1_DESIGN_AVAILABLE;
+                default:
+                    return STR_X_DESIGNS_AVAILABLE;
+            }
+        }
+    };
+
+    NewRideTabId NewRideWindow::_currentTab{};
+    uint_fast16_t NewRideWindow::_windowNewRideTabScroll[RideTabCount]{};
+
+    /**
+     *
+     *  rct2: 0x006ACA58
+     */
+    void WindowNewRideInitVars()
+    {
+        // If we are in the track designer, default to the Roller Coaster tab
+        if (gScreenFlags & SCREEN_FLAGS_TRACK_DESIGNER)
+        {
+            NewRideWindow::SetOpeningPage(ROLLER_COASTER_TAB);
+        }
+        else
+        {
+            NewRideWindow::SetOpeningPage(TRANSPORT_TAB);
+        }
+        NewRideWindow::ResetTabScrolls();
     }
-}
+
+    /**
+     *
+     *  rct2: 0x006B3CFF
+     */
+    WindowBase* NewRideOpen()
+    {
+        auto* windowMgr = Ui::GetWindowManager();
+        auto* window = windowMgr->BringToFrontByClass(WindowClass::ConstructRide);
+        if (window)
+        {
+            return window;
+        }
+
+        windowMgr->CloseByClass(WindowClass::TrackDesignList);
+        windowMgr->CloseByClass(WindowClass::TrackDesignPlace);
+
+        window = windowMgr->Create<NewRideWindow>(
+            WindowClass::ConstructRide, WindowWidth, WindowHeight, WF_10 | WF_AUTO_POSITION);
+        return window;
+    }
+
+    WindowBase* NewRideOpenResearch()
+    {
+        auto w = static_cast<NewRideWindow*>(NewRideOpen());
+        w->SetPage(RESEARCH_TAB);
+        return w;
+    }
+
+    /**
+     *
+     *  rct2: 0x006B3EBA
+     */
+    void WindowNewRideFocus(RideSelection rideItem)
+    {
+        auto* windowMgr = GetWindowManager();
+        auto w = static_cast<NewRideWindow*>(windowMgr->FindByClass(WindowClass::ConstructRide));
+        if (!w)
+        {
+            return;
+        }
+
+        const auto* rideEntry = GetRideEntryByIndex(rideItem.EntryIndex);
+        if (rideEntry == nullptr)
+            return;
+
+        auto rideTypeIndex = rideEntry->GetFirstNonNullRideType();
+        w->SetPage(GetRideTypeDescriptor(rideTypeIndex).Category);
+    }
+} // namespace OpenRCT2::Ui::Windows

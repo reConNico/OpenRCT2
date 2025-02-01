@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -12,6 +12,7 @@
 #include "../Cheats.h"
 #include "../Context.h"
 #include "../Game.h"
+#include "../GameState.h"
 #include "../OpenRCT2.h"
 #include "../actions/ParkEntranceRemoveAction.h"
 #include "../actions/RideEntranceExitPlaceAction.h"
@@ -22,38 +23,40 @@
 #include "../object/FootpathObject.h"
 #include "../object/FootpathSurfaceObject.h"
 #include "../object/ObjectManager.h"
+#include "../ride/RideConstruction.h"
 #include "../ride/Station.h"
 #include "../ride/Track.h"
 #include "Footpath.h"
 #include "Map.h"
 #include "MapAnimation.h"
 #include "Park.h"
+#include "tile_element/EntranceElement.h"
+#include "tile_element/TrackElement.h"
 
-#include <algorithm>
+using namespace OpenRCT2;
 
 bool gParkEntranceGhostExists = false;
 CoordsXYZD gParkEntranceGhostPosition = { 0, 0, 0, 0 };
-std::vector<CoordsXYZD> gParkEntrances;
 
 CoordsXYZD gRideEntranceExitGhostPosition;
 StationIndex gRideEntranceExitGhostStationIndex;
 
-static money32 RideEntranceExitPlaceGhost(
-    ride_id_t rideIndex, const CoordsXY& entranceExitCoords, Direction direction, uint8_t placeType, StationIndex stationNum)
+static money64 RideEntranceExitPlaceGhost(
+    RideId rideIndex, const CoordsXY& entranceExitCoords, Direction direction, uint8_t placeType, StationIndex stationNum)
 {
     auto rideEntranceExitPlaceAction = RideEntranceExitPlaceAction(
         entranceExitCoords, direction, rideIndex, stationNum, placeType == ENTRANCE_TYPE_RIDE_EXIT);
     rideEntranceExitPlaceAction.SetFlags(GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_GHOST);
     auto res = GameActions::Execute(&rideEntranceExitPlaceAction);
 
-    return res.Error == GameActions::Status::Ok ? res.Cost : MONEY32_UNDEFINED;
+    return res.Error == GameActions::Status::Ok ? res.Cost : kMoney64Undefined;
 }
 
 /**
  *
  *  rct2: 0x00666F9E
  */
-void park_entrance_remove_ghost()
+void ParkEntranceRemoveGhost()
 {
     if (gParkEntranceGhostExists)
     {
@@ -64,10 +67,10 @@ void park_entrance_remove_ghost()
     }
 }
 
-int32_t park_entrance_get_index(const CoordsXYZ& entrancePos)
+int32_t ParkEntranceGetIndex(const CoordsXYZ& entrancePos)
 {
     int32_t i = 0;
-    for (const auto& entrance : gParkEntrances)
+    for (const auto& entrance : GetGameState().Park.Entrances)
     {
         if (entrancePos == entrance)
         {
@@ -78,12 +81,12 @@ int32_t park_entrance_get_index(const CoordsXYZ& entrancePos)
     return -1;
 }
 
-void reset_park_entrance()
+void ParkEntranceReset()
 {
-    gParkEntrances.clear();
+    GetGameState().Park.Entrances.clear();
 }
 
-void ride_entrance_exit_place_provisional_ghost()
+void RideEntranceExitPlaceProvisionalGhost()
 {
     if (_currentTrackSelectionFlags & TRACK_SELECTION_FLAG_ENTRANCE_OR_EXIT)
     {
@@ -93,7 +96,7 @@ void ride_entrance_exit_place_provisional_ghost()
     }
 }
 
-void ride_entrance_exit_remove_ghost()
+void RideEntranceExitRemoveGhost()
 {
     if (_currentTrackSelectionFlags & TRACK_SELECTION_FLAG_ENTRANCE_OR_EXIT)
     {
@@ -110,13 +113,13 @@ void ride_entrance_exit_remove_ghost()
  *
  *  rct2: 0x006CA28C
  */
-money32 ride_entrance_exit_place_ghost(
-    Ride* ride, const CoordsXY& entranceExitCoords, Direction direction, int32_t placeType, StationIndex stationNum)
+money64 RideEntranceExitPlaceGhost(
+    const Ride& ride, const CoordsXY& entranceExitCoords, Direction direction, int32_t placeType, StationIndex stationNum)
 {
-    ride_construction_remove_ghosts();
-    money32 result = RideEntranceExitPlaceGhost(ride->id, entranceExitCoords, direction, placeType, stationNum);
+    RideConstructionRemoveGhosts();
+    money64 result = RideEntranceExitPlaceGhost(ride.id, entranceExitCoords, direction, placeType, stationNum);
 
-    if (result != MONEY32_UNDEFINED)
+    if (result != kMoney64Undefined)
     {
         _currentTrackSelectionFlags |= TRACK_SELECTION_FLAG_ENTRANCE_OR_EXIT;
         gRideEntranceExitGhostPosition.x = entranceExitCoords.x;
@@ -131,14 +134,14 @@ money32 ride_entrance_exit_place_ghost(
  * Replaces the outer hedge walls for an entrance placement removal.
  *  rct2: 0x00666D6F
  */
-void maze_entrance_hedge_replacement(const CoordsXYE& entrance)
+void MazeEntranceHedgeReplacement(const CoordsXYE& entrance)
 {
     int32_t direction = entrance.element->GetDirection();
     auto hedgePos = entrance + CoordsDirectionDelta[direction];
     int32_t z = entrance.element->GetBaseZ();
-    ride_id_t rideIndex = entrance.element->AsEntrance()->GetRideIndex();
+    RideId rideIndex = entrance.element->AsEntrance()->GetRideIndex();
 
-    auto tileElement = map_get_first_element_at(hedgePos);
+    auto tileElement = MapGetFirstElementAt(hedgePos);
     if (tileElement == nullptr)
         return;
     do
@@ -159,7 +162,7 @@ void maze_entrance_hedge_replacement(const CoordsXYE& entrance)
         // Add the bottom outer wall
         tileElement->AsTrack()->MazeEntryAdd(1 << ((mazeSection + 12) & 0x0F));
 
-        map_invalidate_tile({ hedgePos, tileElement->GetBaseZ(), tileElement->GetClearanceZ() });
+        MapInvalidateTile({ hedgePos, tileElement->GetBaseZ(), tileElement->GetClearanceZ() });
         return;
     } while (!(tileElement++)->IsLastForTile());
 }
@@ -168,14 +171,14 @@ void maze_entrance_hedge_replacement(const CoordsXYE& entrance)
  * Removes the hedge walls for an entrance placement.
  *  rct2: 0x00666CBE
  */
-void maze_entrance_hedge_removal(const CoordsXYE& entrance)
+void MazeEntranceHedgeRemoval(const CoordsXYE& entrance)
 {
     int32_t direction = entrance.element->GetDirection();
     auto hedgePos = entrance + CoordsDirectionDelta[direction];
     int32_t z = entrance.element->GetBaseZ();
-    ride_id_t rideIndex = entrance.element->AsEntrance()->GetRideIndex();
+    RideId rideIndex = entrance.element->AsEntrance()->GetRideIndex();
 
-    auto tileElement = map_get_first_element_at(hedgePos);
+    auto tileElement = MapGetFirstElementAt(hedgePos);
     if (tileElement == nullptr)
         return;
     do
@@ -202,138 +205,36 @@ void maze_entrance_hedge_removal(const CoordsXYE& entrance)
         // Remove the bottom hedge section
         tileElement->AsTrack()->MazeEntrySubtract(1 << ((mazeSection + 15) & 0x0F));
 
-        map_invalidate_tile({ hedgePos, tileElement->GetBaseZ(), tileElement->GetClearanceZ() });
+        MapInvalidateTile({ hedgePos, tileElement->GetBaseZ(), tileElement->GetClearanceZ() });
         return;
     } while (!(tileElement++)->IsLastForTile());
 }
 
-void fix_park_entrance_locations(void)
+void ParkEntranceFixLocations(void)
 {
-    // Fix gParkEntrance locations for which the tile_element no longer exists
-    gParkEntrances.erase(
+    auto& gameState = GetGameState();
+    // Fix ParkEntrance locations for which the tile_element no longer exists
+    gameState.Park.Entrances.erase(
         std::remove_if(
-            gParkEntrances.begin(), gParkEntrances.end(),
-            [](const auto& entrance) { return map_get_park_entrance_element_at(entrance, false) == nullptr; }),
-        gParkEntrances.end());
+            gameState.Park.Entrances.begin(), gameState.Park.Entrances.end(),
+            [](const auto& entrance) { return MapGetParkEntranceElementAt(entrance, false) == nullptr; }),
+        gameState.Park.Entrances.end());
 }
 
-void UpdateParkEntranceLocations()
+void ParkEntranceUpdateLocations()
 {
-    gParkEntrances.clear();
-    tile_element_iterator it;
-    tile_element_iterator_begin(&it);
-    while (tile_element_iterator_next(&it))
+    auto& gameState = GetGameState();
+    gameState.Park.Entrances.clear();
+    TileElementIterator it;
+    TileElementIteratorBegin(&it);
+    while (TileElementIteratorNext(&it))
     {
         auto entranceElement = it.element->AsEntrance();
         if (entranceElement != nullptr && entranceElement->GetEntranceType() == ENTRANCE_TYPE_PARK_ENTRANCE
             && entranceElement->GetSequenceIndex() == 0 && !entranceElement->IsGhost())
         {
-            auto entrance = TileCoordsXYZD(it.x, it.y, it.element->base_height, it.element->GetDirection()).ToCoordsXYZD();
-            gParkEntrances.push_back(entrance);
+            auto entrance = TileCoordsXYZD(it.x, it.y, it.element->BaseHeight, it.element->GetDirection()).ToCoordsXYZD();
+            gameState.Park.Entrances.push_back(entrance);
         }
     }
-}
-
-uint8_t EntranceElement::GetStationIndex() const
-{
-    return StationIndex;
-}
-
-void EntranceElement::SetStationIndex(uint8_t newStationIndex)
-{
-    StationIndex = newStationIndex;
-}
-
-uint8_t EntranceElement::GetEntranceType() const
-{
-    return entranceType;
-}
-
-void EntranceElement::SetEntranceType(uint8_t newType)
-{
-    entranceType = newType;
-}
-
-ride_id_t EntranceElement::GetRideIndex() const
-{
-    return rideIndex;
-}
-
-void EntranceElement::SetRideIndex(ride_id_t newRideIndex)
-{
-    rideIndex = newRideIndex;
-}
-
-uint8_t EntranceElement::GetSequenceIndex() const
-{
-    return SequenceIndex & 0xF;
-}
-
-void EntranceElement::SetSequenceIndex(uint8_t newSequenceIndex)
-{
-    SequenceIndex &= ~0xF;
-    SequenceIndex |= (newSequenceIndex & 0xF);
-}
-
-bool EntranceElement::HasLegacyPathEntry() const
-{
-    return (flags2 & ENTRANCE_ELEMENT_FLAGS2_LEGACY_PATH_ENTRY) != 0;
-}
-
-ObjectEntryIndex EntranceElement::GetLegacyPathEntryIndex() const
-{
-    if (HasLegacyPathEntry())
-        return PathType;
-
-    return OBJECT_ENTRY_INDEX_NULL;
-}
-
-const FootpathObject* EntranceElement::GetLegacyPathEntry() const
-{
-    auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
-    return static_cast<FootpathObject*>(objMgr.GetLoadedObject(ObjectType::Paths, GetLegacyPathEntryIndex()));
-}
-
-void EntranceElement::SetLegacyPathEntryIndex(ObjectEntryIndex newPathType)
-{
-    PathType = newPathType;
-    flags2 |= ENTRANCE_ELEMENT_FLAGS2_LEGACY_PATH_ENTRY;
-}
-
-ObjectEntryIndex EntranceElement::GetSurfaceEntryIndex() const
-{
-    if (HasLegacyPathEntry())
-        return OBJECT_ENTRY_INDEX_NULL;
-
-    return PathType;
-}
-
-const FootpathSurfaceObject* EntranceElement::GetSurfaceEntry() const
-{
-    auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
-    return static_cast<FootpathSurfaceObject*>(objMgr.GetLoadedObject(ObjectType::FootpathSurface, GetSurfaceEntryIndex()));
-}
-
-void EntranceElement::SetSurfaceEntryIndex(ObjectEntryIndex newIndex)
-{
-    PathType = newIndex;
-    flags2 &= ~ENTRANCE_ELEMENT_FLAGS2_LEGACY_PATH_ENTRY;
-}
-
-const PathSurfaceDescriptor* EntranceElement::GetPathSurfaceDescriptor() const
-{
-    if (HasLegacyPathEntry())
-    {
-        const auto* legacyPathEntry = GetLegacyPathEntry();
-        if (legacyPathEntry == nullptr)
-            return nullptr;
-
-        return &legacyPathEntry->GetPathSurfaceDescriptor();
-    }
-
-    const auto* surfaceEntry = GetSurfaceEntry();
-    if (surfaceEntry == nullptr)
-        return nullptr;
-
-    return &surfaceEntry->GetDescriptor();
 }

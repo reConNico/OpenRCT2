@@ -96,6 +96,11 @@ STR_0091    :Nekonata Atrakcio (59)
 STR_0092    :Onda Fervojo Lanĉita per Linearaj Induktaj Motoroj
 STR_0093    :Hibrida Onda Fervojo
 STR_0094    :Onda Fervojo kun Unuopa Relo
+STR_0095    :Alpa Onda Fervojo
+STR_0096    :Klasika Ligna Onda Fervojo
+STR_0097    :Klasika Staranta Onda Fervojo
+STR_0098    :Onda Fervojo Lanĉita per Linearaj Sinkronaj Motoroj
+STR_0099    :Klasika Ligna Kurboplena Onda Fervojo
 STR_0512    :Onda fervojo kompakta kun helikforma lifto kaj glataj kurboplenaj malleviĝoj.
 STR_0513    :Onda fervojo kun lopoj, sur kiun la rajdantoj rajdas starante
 STR_0514    :Trajnoj penditaj sub la trako de la onda fervojo svingiĝas flanken ĉe anguloj
@@ -132,7 +137,7 @@ STR_0547    :Budo, kie gastoj povas atingi mapojn de la parko, kaj aĉeti ombrel
 STR_0548    :Necesejo-konstruaĵo
 STR_0549    :Turniĝanta granda rado kun subĉielaj seĝoj
 STR_0550    :Rajdantoj rigardas filmon en la moviĝadosimulilo, kiun hidraŭlika brako tordas kaj movas
-STR_0551    :Kinejo, kiu montras 3D-ajn filmojn en geodezika globoforma konstruaĵo
+STR_0551    :Kinejo, kiu prezentas 3D-ajn filmojn en geodezika globoforma konstruaĵo
 STR_0552    :Pasaĝeroj rajdas en gondolo pendita de grandaj turniĝantaj brakoj, kiuj turniĝas antaŭen kaj malantaŭen renversite
 STR_0553    :Samcentraj pivotantaj ringoj permesas, ke la rajdantoj turniĝas libere ĉiudirekte
 STR_0554    :Linearaj induktaj motoroj plirapidigas la ĉaron el la stacio laŭ longa ebena trako. Poste, la ĉaro supreniras vertikalan pintaĵon, kaj tiam falas libere por reveni al la stacio.
@@ -177,12 +182,17 @@ STR_0600    :Ŝaltitaj mintrajnoj movas rapide laŭ glata kurboplena trakaranĝo
 STR_0602    :Linearaj induktaj motoroj plirapidigas la trajnojn de la onda fervojo, kiuj tiam trapasas kurboplenajn inversigojn
 STR_0603    :Ligna onda fervojo kun ŝtala trako, kiu permesas krutajn malleviĝojn kaj inversigojn.
 STR_0604    :Rajdantoj rajdas anservice sur mallarĝa monorela trako, dum ili vetkuras tra krutaj inversigoj kaj ŝanĝoj de direkto.
+STR_0605    :Rajdantoj toboganas malsupren serpentuman ŝtalan trakon, bremsante por regi ilian rapidecon.
+STR_0606    :Malnova-stila ligna onda fervojo kun rapida kaj malglata rajdo, kun sufiĉe da ‘en-aeraj periodoj’, kelka flanka graviteco, kaj desegnita sentiĝi ‘nedirektebla’
+STR_0607    :Intensa, malnovstila ŝtala onda fervojo kun lopoj, sur kiun la rajdantoj rajdas starante
+STR_0608    :Linearaj sinkronaj motoroj plirapidigas la trajnojn de la onda fervojo, kiuj tiam trapasas krutajn inversigojn kaj kurbiĝojn
+STR_0609    :Malnova-stila ligna onda fervojo kun rapida kaj malglata rajdo havante artikajn trajnojn, sufiĉe da ‘en-aeraj periodoj’ kaj kurboplenajn trakojn
 STR_0767    :Gasto {INT32}
 STR_0768    :Faktoto {INT32}
 STR_0769    :Mekanikisto {INT32}
 STR_0770    :Gardisto {INT32}
 STR_0771    :Amuzisto {INT32}
-STR_0777    :Parko sennoma{POP16}{POP16}
+STR_0777    :Parko sennoma
 STR_0778    :Afiŝo
 STR_0779    :1a
 STR_0780    :2a
@@ -338,7 +348,6 @@ STR_0950    :Ŝargi Ludon
 STR_0951    :Forlasi Ludon
 STR_0952    :Forlasi Ludon
 STR_0953    :Ŝargi Pejzaĝo
-STR_0954    :
 STR_0955    :Elekti direkton de seĝoj ĉe ĉi tiu parto de trako
 STR_0956    :-180°
 STR_0957    :-135°
@@ -386,10 +395,10 @@ STR_0998    :Ne eblas konstrui pli da stacioj por ĉi tiu atrakcio
 STR_0999    :Ĝi bezonas staciplatformon
 STR_1000    :Trako ne estas kompleta cirkvito
 STR_1001    :Trako ne taŭgas kun tia trajno
-STR_1002    :Ne eblas malfermi je {POP16}{POP16}{POP16}{STRINGID}…
-STR_1003    :Ne eblas elprovi je {POP16}{POP16}{POP16}{STRINGID}…
-STR_1004    :Ne eblas fermi je {POP16}{POP16}{POP16}{STRINGID}…
-STR_1005    :Ne eblas ekkonstrui je {POP16}{POP16}{POP16}{STRINGID}…
+STR_1002    :Ne eblas malfermi je {STRINGID}…
+STR_1003    :Ne eblas elprovi je {STRINGID}…
+STR_1004    :Ne eblas fermi je {STRINGID}…
+STR_1005    :Ne eblas ekkonstrui je {STRINGID}…
 STR_1006    :Tio unue devas esti fermita
 STR_1007    :Ne eblas krei sufiĉe da ĉaroj
 STR_1008    :Malfermi, fermi, aŭ elprovi atrakcion
@@ -497,7 +506,7 @@ STR_1109    :Svingiĝas
 STR_1110    :Turniĝas
 STR_1111    :Turniĝas
 STR_1112    :Funkcias
-STR_1113    :Montras filmon
+STR_1113    :Prezentas filmon
 STR_1114    :Turniĝas
 STR_1115    :Funkcias
 STR_1116    :Funkcias
@@ -751,7 +760,7 @@ STR_1363    :Tro alta por apogiloj!
 STR_1364    :Apogiloj de trako supera ne eblas esti etenditaj plu!
 STR_1365    :Ĉirkaŭtraka Ruliĝo (maldesktre)
 STR_1366    :Ĉirkaŭtraka Ruliĝo (dekstre)
-STR_1367    :Duona Lopo
+STR_1367    :Malgranda Duona Lopo
 STR_1368    :Duona Korktirilo (maldekstre)
 STR_1369    :Duona Korktirilo (dekstre)
 STR_1370    :Barelforma Ruliĝo (maldekstre)
@@ -1155,17 +1164,6 @@ STR_1773    :Nur unu sur-atrakcia fotoparto estas permesita po atrakcio
 STR_1774    :Nur unu kablolifta monteto estas permesita po atrakcio
 STR_1777    :Muziko de atrakcio
 STR_1778    :{STRINGID} - - 
-STR_1779    :{INLINE_SPRITE}{254}{19}{00}{00} Pandokostumo
-STR_1780    :{INLINE_SPRITE}{255}{19}{00}{00} Tigrokostumo
-STR_1781    :{INLINE_SPRITE}{00}{20}{00}{00} Elefantokostumo
-STR_1782    :{INLINE_SPRITE}{01}{20}{00}{00} Romianokostumo
-STR_1783    :{INLINE_SPRITE}{02}{20}{00}{00} Gorilokostumo
-STR_1784    :{INLINE_SPRITE}{03}{20}{00}{00} Neĝhomokostumo
-STR_1785    :{INLINE_SPRITE}{04}{20}{00}{00} Kavalirokostumo
-STR_1786    :{INLINE_SPRITE}{05}{20}{00}{00} Astronaŭtokostumo
-STR_1787    :{INLINE_SPRITE}{06}{20}{00}{00} Banditokostumo
-STR_1788    :{INLINE_SPRITE}{07}{20}{00}{00} Ŝerifokostumo
-STR_1789    :{INLINE_SPRITE}{08}{20}{00}{00} Piratokostumo
 STR_1790    :Elekti uniformkoloron de tiaj dungitoj
 STR_1791    :{WINDOW_COLOUR_2}Uniformkoloro:
 STR_1792    :Reagas al paneovoko de {STRINGID}
@@ -1217,8 +1215,8 @@ STR_1838    :Kontento: {COMMA16}%
 STR_1839    :Fidindo: {COMMA16}%
 STR_1840    :Periodo de nefunkciado: {COMMA16}%
 STR_1841    :Profito: po {CURRENCY2DP} por horo
-STR_1842    :Plej ŝatata de: {COMMA16} gasto
-STR_1843    :Plej ŝatata de: {COMMA16} gastoj
+STR_1842    :Plej ŝatata de: {COMMA32} gasto
+STR_1843    :Plej ŝatata de: {COMMA32} gastoj
 STR_1844    :Elekti tipon de informoj por montri en listo de atrakcioj
 STR_1845    :{MONTHYEAR}
 STR_1846    :{COMMA32} gastoj
@@ -1242,7 +1240,7 @@ STR_1863    :Faktoto
 STR_1864    :Mekanikisto
 STR_1865    :Gardisto
 STR_1866    :Amuzisto
-STR_1867    :{BLACK}{COMMA16} {STRINGID}
+STR_1867    :{BLACK}{COMMA32} {STRINGID}
 STR_1868    :Ne eblas ŝanĝi nombron de turnadoj…
 STR_1869    :{WINDOW_COLOUR_2}Nombro de turnadoj:
 STR_1870    :Nombro de plenaj turnadoj
@@ -1672,7 +1670,7 @@ STR_2314    :{WINDOW_COLOUR_2}Longeco de atrakcio: {BLACK}{STRINGID}
 STR_2315    :{WINDOW_COLOUR_2}Kosto: {BLACK}almenaŭ {CURRENCY}
 STR_2316    :{WINDOW_COLOUR_2}Spaco bezonata: {BLACK}{COMMA16} x {COMMA16} blokoj
 STR_2321    :{WINDOW_COLOUR_2}Nombro de atrakcioj: {BLACK}{COMMA16}
-STR_2322    :{WINDOW_COLOUR_2}Dungitaro: {BLACK}{COMMA16}
+STR_2322    :{WINDOW_COLOUR_2}Dungitaro: {BLACK}{COMMA32}
 STR_2323    :{WINDOW_COLOUR_2}Areo de parko: {BLACK}{COMMA32} kvadrataj metroj
 STR_2324    :{WINDOW_COLOUR_2}Areo de parko: {BLACK}{COMMA32} kvadrataj futoj
 STR_2325    :Aĉeti bienon por etendi parkon
@@ -1700,12 +1698,12 @@ STR_2347    :{RED}{STRINGID} dronis!
 STR_2348    :Montri statistikaĵojn de ĉi tiu dungito
 STR_2349    :{WINDOW_COLOUR_2}Salajro: {BLACK}po {CURRENCY} por monato
 STR_2350    :{WINDOW_COLOUR_2}Dungita: {BLACK}{MONTHYEAR}
-STR_2351    :{WINDOW_COLOUR_2}Gazonoj falĉitaj: {BLACK}{COMMA16}
-STR_2352    :{WINDOW_COLOUR_2}Ĝardenoj akvumitaj: {BLACK}{COMMA16}
-STR_2353    :{WINDOW_COLOUR_2}Eroj de rubo balaitaj: {BLACK}{COMMA16}
-STR_2354    :{WINDOW_COLOUR_2}Rubujoj malplenitaj: {BLACK}{COMMA16}
-STR_2355    :{WINDOW_COLOUR_2}Atrakcioj riparitaj: {BLACK}{COMMA16}
-STR_2356    :{WINDOW_COLOUR_2}Atrakcioj inspektitaj: {BLACK}{COMMA16}
+STR_2351    :{WINDOW_COLOUR_2}Gazonoj falĉitaj: {BLACK}{COMMA32}
+STR_2352    :{WINDOW_COLOUR_2}Ĝardenoj akvumitaj: {BLACK}{COMMA32}
+STR_2353    :{WINDOW_COLOUR_2}Eroj de rubo balaitaj: {BLACK}{COMMA32}
+STR_2354    :{WINDOW_COLOUR_2}Rubujoj malplenigitaj: {BLACK}{COMMA32}
+STR_2355    :{WINDOW_COLOUR_2}Atrakcioj riparitaj: {BLACK}{COMMA32}
+STR_2356    :{WINDOW_COLOUR_2}Atrakcioj inspektitaj: {BLACK}{COMMA32}
 STR_2358    :Unuoj
 STR_2359    :Faktaj Nombroj
 STR_2360    :Distingivo de Ekrano:
@@ -1734,12 +1732,12 @@ STR_2382    :Tero
 STR_2383    :Akvo
 STR_2384    :{WINDOW_COLOUR_2}Via celo:
 STR_2385    :{BLACK}Neniu
-STR_2386    :{BLACK}Havi almenaŭ {COMMA16} gastojn en via parko al la fino de {MONTHYEAR}, kun pritakso de parko ne malpli ol 600
+STR_2386    :{BLACK}Havi almenaŭ {COMMA32} gastojn en via parko al la fino de {MONTHYEAR}, kun pritakso de parko ne malpli ol 600
 STR_2387    :{BLACK}Atingi parkvaloron ne malpli ol {POP16}{POP16}{CURRENCY} al la fino de {PUSH16}{PUSH16}{PUSH16}{PUSH16}{PUSH16}{MONTHYEAR}
 STR_2388    :{BLACK}Amuzi Vin!
 STR_2389    :{BLACK}Konstrui je la plej bona {STRINGID}, kiun vi povas konstrui!
 STR_2390    :{BLACK}Havi 10 malsamajn tipojn de ondaj fervojoj funkciantajn en via parko, kiuj havas po pritakson de eksciteco ne malpli ol 6.00
-STR_2391    :{BLACK}Havi almenaŭ {COMMA16} gastojn en via parko. Ankaŭ, necesas ke la pritakso de la parko neniam falu sub 700!
+STR_2391    :{BLACK}Havi almenaŭ {COMMA32} gastojn en via parko. Ankaŭ, necesas ke la pritakso de la parko neniam falu sub 700!
 STR_2392    :{BLACK}Atingi enspezon monatan ne malpli ol {POP16}{POP16}{CURRENCY}, pro la vendado de biletoj de atrakcioj
 STR_2393    :{BLACK}Havi 10 malsamajn tipojn de ondaj fervojoj funkciantajn en via parko, kiuj havas po mimimuman longecon de {LENGTH} kaj pritakson de eksciteco ne malpli ol 7.00
 STR_2394    :{BLACK}Fini la konstruadon de la tutaj 5 ondaj fervojoj konstruitaj parte. Desegni ilin, por atingi po pritakson de eksciteco ne malpli ol {POP16}{POP16}{COMMA2DP32}
@@ -1794,7 +1792,6 @@ STR_2450    :{YELLOW}Via kampanjo de reklamado por la parko finiĝis
 STR_2451    :{YELLOW}Via kampanjo de reklamado por {STRINGID} finiĝis
 STR_2452    :{WINDOW_COLOUR_2}Mono (minus prunto): {BLACK}{CURRENCY2DP}
 STR_2453    :{WINDOW_COLOUR_2}Mono (minus prunto): {RED}{CURRENCY2DP}
-STR_2454    :{BLACK}{CURRENCY2DP} -
 STR_2457    :Montri financajn kontojn
 STR_2458    :Montri diagramon de mono (minus prunto) kontraŭ tempo
 STR_2459    :Montri diagramon de parkvaloro kontraŭ tempo
@@ -1824,10 +1821,10 @@ STR_2482    :Profito: po {CURRENCY} por semajno,  Parkvaloro: {CURRENCY}
 STR_2483    :{WINDOW_COLOUR_2}Profito semajna: {BLACK}+{CURRENCY2DP}
 STR_2484    :{WINDOW_COLOUR_2}Profito semajna: {RED}{CURRENCY2DP}
 STR_2487    :Montri ‘faktajn’ nomojn de gastoj
-STR_2488    :Baskuligi inter montrado de ‘faktaj’ nomoj de gastoj, kaj gastnumeroj
+STR_2488    :Baskuligi inter montrado de ‘faktaj’ gastonomoj kaj gastonumeroj
 STR_2489    :Klavarokomandojn…
 STR_2490    :Klavarokomandojn
-STR_2491    :Restartigi klavojn
+STR_2491    :Restarigi klavojn
 STR_2492    :Remeti ĉiujn klavarokomandojn al iliaj defaŭltaj agordoj
 STR_2493    :Fermi plej supran fenestron
 STR_2494    :Fermi ĉiujn glitajn fenestrojn
@@ -1906,8 +1903,8 @@ STR_2670    :Ruluma baskulo
 STR_2680    :Ĉiom da esplorado estas kompleta
 STR_2684    :Granda amaso da gastoj alvenas
 STR_2685    :Parametroj de simplaĵa bruo
-STR_2686    :Malalta:
-STR_2687    :Alta:
+STR_2686    :Min. alteco de tero:
+STR_2687    :Maks. alteco de tero:
 STR_2688    :Baza Frekvenco:
 STR_2689    :Oktavoj:
 STR_2690    :Generado de Mapo
@@ -1952,8 +1949,6 @@ STR_2738    :Muziko de titola ekrano:
 STR_2739    :Neniu
 STR_2740    :RollerCoaster Tycoon 1
 STR_2741    :RollerCoaster Tycoon 2
-STR_2742    :css50.dat ne troviĝis
-STR_2743    :Kopiu ‘data/css17.dat’ de via RCT1 instalaĵo al ‘data/css50.dat’ en via RCT2 instalaĵo, aŭ kontrolu, ke la dosierindiko al RCT1 en la langeto Altnivela pravas.
 STR_2749    :Mia nova scenaro
 # New strings used in the cheats window previously these were ???
 STR_2750    :Movi ĉiujn aferojn supren
@@ -2010,7 +2005,7 @@ STR_2809    :{RED}Gastoj malsatas, kaj ne eblas trovi ie ajn por aĉeti manĝaĵ
 STR_2810    :{RED}Gastoj soifas, kaj ne eblas trovi ie ajn por aĉeti trinkaĵon
 STR_2811    :{RED}Gastoj plendas, ĉar ili ne eblas trovi la necesejojn en via parko
 STR_2812    :{RED}Gastoj perdiĝas{NEWLINE}Kontrolu ĉu la aranĝo de viaj trotuaroj bezonas plibonigon, por helpi la gastojn tiel, kiel ili ne perdiĝas
-STR_2813    :{RED}Via kosto de parkeniro estas tro alta!{NEWLINE}Malaltigi ĝin, aŭ plibonigi la parkvaloron por allogi pli da gastoj
+STR_2813    :{RED}Via enirpago de parko estas tro alta!{NEWLINE}Malaltigi ĝin, aŭ plibonigi la parkvaloron por allogi pli da gastoj
 STR_2814    :{WINDOW_COLOUR_2}Premio por la plej negliĝa parko
 STR_2815    :{WINDOW_COLOUR_2}Premio por la plej orda parko
 STR_2816    :{WINDOW_COLOUR_2}Premio por la parko kun la plej bonaj ondaj fervojoj
@@ -2096,39 +2091,6 @@ STR_3008    :{PEARLAQUA}ABC
 STR_3009    :{PALESILVER}ABC
 STR_3010    :Ne eblas ŝargi dosieron…
 STR_3011    :Doserio enhavas nevalidajn datumojn
-STR_3012    :Doĝemotakto-stilo
-STR_3013    :Foirejo-orgeno-stilo
-STR_3014    :Roma-fanfaro-stilo
-STR_3015    :Orienta stilo
-STR_3016    :Marsa stilo
-STR_3017    :Ĝangalotamburoj-stilo
-STR_3018    :Egipta stilo
-STR_3019    :Ludilejo-stilo
-STR_3020    :
-STR_3021    :Spaco-stilo
-STR_3022    :Horora stilo
-STR_3023    :Tekno-stilo
-STR_3024    :Milda stilo
-STR_3025    :Somero-stilo
-STR_3026    :Akvo-stilo
-STR_3027    :Sovaĝa-okcidento-stilo
-STR_3028    :Ĵurasa stilo
-STR_3029    :Rokmuziko-stilo
-STR_3030    :Ragtimo-stilo
-STR_3031    :Fantasto-stilo
-STR_3032    :Rokmuziko-stilo 2
-STR_3033    :Glacio-stilo
-STR_3034    :Neĝo-stilo
-STR_3035    :Propra muziko 1
-STR_3036    :Propra muziko 2
-STR_3037    :Mezepoka stilo
-STR_3038    :Urba stilo
-STR_3039    :Orgeno-stilo
-STR_3040    :Mekanika stilo
-STR_3041    :Moderna stilo
-STR_3042    :Piratoj-stilo
-STR_3043    :Rokmuziko-stilo 3
-STR_3044    :Dolĉaĵo-stilo
 STR_3045    :Elekti stilon de muziko por ludi
 STR_3047    :Loka aŭtoritato malpermesas malkonstruon aŭ redaktojn de ĉi tiu atrakcio
 STR_3048    :Loka aŭtoritato malpermesas kampanjojn surmerkatigajn
@@ -2189,8 +2151,8 @@ STR_3118    :{BLACK}{STRINGID} iras al la atrakcio
 STR_3119    :{BLACK}{STRINGID} riparas la atrakcion
 STR_3120    :Trovi plej proksiman disponeblan mekanikiston, aŭ mekanikiston, kiu riparas la atrakcion
 STR_3121    :Ne eblas trovi mekanikiston, aŭ ĉiuj proksimaj mekanikistoj okupiĝas
-STR_3122    :{WINDOW_COLOUR_2}Plej ŝatata atrakcio de: {BLACK}{COMMA16} gasto
-STR_3123    :{WINDOW_COLOUR_2}Plej ŝatata atrakcio de: {BLACK}{COMMA16} gastoj
+STR_3122    :{WINDOW_COLOUR_2}Plej ŝatata atrakcio de: {BLACK}{COMMA32} gasto
+STR_3123    :{WINDOW_COLOUR_2}Plej ŝatata atrakcio de: {BLACK}{COMMA32} gastoj
 STR_3124    :Rompita {STRINGID}
 STR_3125    :{WINDOW_COLOUR_2}Faktoro de Eksciteco: {BLACK}+{COMMA16}%
 STR_3126    :{WINDOW_COLOUR_2}Faktoro de Intenseco: {BLACK}+{COMMA16}%
@@ -2207,7 +2169,6 @@ STR_3136    :Averto: Ĉi tiu desegnaĵo estos konstruita per alternativa tipo de
 STR_3137    :Elekti Proksiman Pejzaĝon
 STR_3138    :Vakigi Elektaĵon
 STR_3139    :Kablolifto ne funkciiĝas kun ĉi tiu reĝimo de funkciado
-STR_3140    :Kablolifto-monteto devas komenci tuj post stacio
 STR_3141    :Reĝimo de multaj cirkvitoj ne eblas kun kablolifto-monteto
 STR_3142    :{WINDOW_COLOUR_2}Kapacito: {BLACK}{STRINGID}
 STR_3143    :Montri homojn sur mapo
@@ -2226,7 +2187,6 @@ STR_3174    :Alia objekto bezonas ĉi tiun objekton
 STR_3175    :Ĉi tiu objekto ĉiam estas bezonata
 STR_3176    :Ne eblas elekti ĉi tiun objekton
 STR_3177    :Ne eblas malelekti ĉi tiun objekton
-STR_3178    :Almenaŭ unu objekto de trotuaro elektendas
 STR_3179    :Almenaŭ unu objekto de atrakcio aŭ atrakcioveturilo elektendas
 STR_3180    :Nevalida elektaĵo de objektoj
 STR_3181    :Elektaro de Objektoj - {STRINGID}
@@ -2240,7 +2200,7 @@ STR_3188    :Trotuaro-Surskribaĵoj
 STR_3189    :Heredaĵaj trotuaroj
 STR_3190    :Trotuaro-Diversaĵoj
 STR_3191    :Pejzaĝo-Grupoj
-STR_3192    :Parkeniro
+STR_3192    :Parkeniroj
 STR_3193    :Akvo
 STR_3195    :Listo da Inventaĵoj
 STR_3196    :{WINDOW_COLOUR_2}Inventaĵo-Kategorio: {BLACK}{STRINGID}
@@ -2259,7 +2219,7 @@ STR_3208    :Administrilo de Trakdesegnaĵoj
 STR_3209    :Reiri al Pasinta Etapo:
 STR_3210    :Iri al Sekva Etapo:
 STR_3211    :Dimensioj de mapo:
-STR_3212    :{POP16}{COMMA16} x {PUSH16}{COMMA16}
+STR_3212    :{POP16}{COMMA16}
 STR_3213    :Ne eblas malpliigi mapodimensiojn plu
 STR_3214    :Ne eblas pliigi mapodimensiojn plu
 STR_3215    :Tro proksime al mapbordo
@@ -2356,7 +2316,7 @@ STR_3305    :{WINDOW_COLOUR_2}Enspezo monata:
 STR_3306    :{WINDOW_COLOUR_2}Profito monata:
 STR_3307    :{WINDOW_COLOUR_2}Minimuma longeco:
 STR_3308    :{WINDOW_COLOUR_2}Pritakso de eksciteco:
-STR_3309    :{WINDOW_COLOUR_2}{COMMA16}
+STR_3309    :{WINDOW_COLOUR_2}{COMMA32}
 STR_3310    :{WINDOW_COLOUR_2}{LENGTH}
 STR_3311    :{WINDOW_COLOUR_2}{COMMA2DP32}
 STR_3312    :{WINDOW_COLOUR_2}Atrakcioj, kiujn oni ne eblas ŝanĝi dum la scenaro:
@@ -2554,8 +2514,6 @@ STR_5250    :Eliri-Butono de Titolozono
 STR_5251    :Agordoj-Butono de Titolozono
 STR_5252    :Scenaro-Elektaro de Titolozono
 STR_5253    :Parkinformoj
-STR_5254    :Krei
-STR_5255    :Krei novan titolosekvencon de nulo
 STR_5256    :Krei novan temon por fari ŝanĝojn
 STR_5257    :Krei novan temon surbaze de la nuna
 STR_5258    :Forigi la nunan temon
@@ -2636,8 +2594,8 @@ STR_5357    :{BLACK}Naŭzotolero:
 STR_5358    :{BLACK}Veziko:
 STR_5359    :Forigi gastojn
 STR_5360    :Forigas ĉiujn gastojn el la mapo
-STR_5361    :Doni al ĉiu gasto:
-STR_5362    :{BLACK}Agordi preferatajn intensojn de atrakcioj por ĉiu gasto al:
+STR_5361    :Aldoni al inventaro de gastoj:
+STR_5362    :{BLACK}Preferataj intensoj de atrakcioj:
 STR_5363    :Pli ol 1
 STR_5364    :Malpli ol 15
 STR_5365    :{BLACK}Rapideco de dungitaro:
@@ -2647,78 +2605,12 @@ STR_5368    :Restarigi staton de akcidentoj
 STR_5371    :Elektado de objektoj
 STR_5372    :Inversigi trenadon per dekstra musobutono
 STR_5373    :Nomo {STRINGID}
-STR_5374    :Dato {STRINGID}
+STR_5374    :Dato modifita {STRINGID}
 STR_5375    :▲
 STR_5376    :▼
-STR_5377    :Konservaĵoj
-STR_5378    :Skripto
-STR_5379    :Preterpasi al sekva haltokomando
-STR_5380    :Komenci ludi titolosekvencon
-STR_5381    :Halti ludi titolosekvencon
-STR_5382    :Rekomenci titolosekvencon
-STR_5383    :Krei novan titolosekvencon surbaze de la nuna
-STR_5384    :Forigi la nunan titolosekvencon
-STR_5385    :Renomi la nunan titolosekvencon
-STR_5386    :Enmeti novan komandon
-STR_5387    :Redakti la elektitan komandon
-STR_5388    :Forigi la elektitan komandon
-STR_5389    :Preterpasi al la elektita komando en la titolosekvenco
-STR_5390    :Movi la elektitan komandon malsupren
-STR_5391    :Movi la elektitan komandon supren
-STR_5392    :Aldoni konservaĵon al la titolosekvenco
-STR_5393    :Forigi la elektitan konservaĵon de la titolosekvenco
-STR_5394    :Renomi la elektitan konservaĵon
-STR_5395    :Ŝargi la elektitan konservaĵon en-lude
-STR_5396    :Reŝargi la titolosekvencon se ĝi ŝanĝas ekster de la ludo
-STR_5397    :Eblas esti uzita nur sur la titolekrano
-STR_5398    :Ne eblas redakti la titolosekvencon dum ĝi ludas
-STR_5399    :Premu la haltobutonon por redakti pli
-STR_5400    :Ne eblas ŝanĝi ĉi tiun titolosekvencon
-STR_5401    :Krei novan titolosekvencon por fari ŝanĝojn
-STR_5402    :Malsukcesis ŝargi titolosekvencon
-STR_5403    :Aŭ ne estas Ŝargi aŭ Atendi komandoj, aŭ konservaĵo estas nevalida
 STR_5404    :Nomo jam ekzistas
-STR_5405    :Entajpu nomon de la konservaĵo
-STR_5406    :Entajpu nomon de la titolosekvenco
-STR_5407    :Aldoni
-STR_5408    :Forigi
-STR_5409    :Enmeti
-STR_5410    :Redakti
-STR_5411    :Reŝargi
-STR_5412    :Preterpasi al
-STR_5413    :Ŝargi
-STR_5415    :Ŝargi{MOVE_X}{87}{STRING}
-STR_5416    :Ŝargi{MOVE_X}{87}Neniu konservaĵo elektita
-STR_5417    :Loko
-STR_5418    :Loko{MOVE_X}{87}{COMMA16}   {COMMA16}
-STR_5419    :Turni
-STR_5420    :Turni{MOVE_X}{87}{COMMA16}
-STR_5421    :Zomi
-STR_5422    :Zomi{MOVE_X}{87}{COMMA16}
-STR_5423    :Atendi
-STR_5424    :Atendi{MOVE_X}{87}{UINT16}
-STR_5425    :Rekomenci
-STR_5426    :Fini
-STR_5427    :Koordinatoj:
-STR_5428    :Maldekstrumaj turnoj:
-STR_5429    :Zomonivelo:
-STR_5430    :Atendi tiom da milisekundoj:
-STR_5431    :Konservi por ŝargi:
-STR_5432    :Komando:
-STR_5433    :Titolosekvencoj
-STR_5434    :Komandoredaktilo
-STR_5435    :Renomi konservaĵon
-STR_5436    :Redakti Titolosekvencojn…
-STR_5437    :Neniu konservaĵo elektita
-STR_5438    :Ne eblas fari ŝanĝojn dum komandoredaktilo estas malfermita
-STR_5439    :Atendi-komando de almenaŭ 4 sekundoj estas bezonata kun Rekomenci-komando
 STR_5440    :Minimumigi plenekranan reĝimon dum defokusigoj
-STR_5441    :Identigas atrakciojn per siaj traktipoj{NEWLINE}do veturiloj fariĝas ŝanĝeblaj{NEWLINE}poste (RCT1-konduto)
 STR_5442    :Devigi pritakson de parko:
-STR_5443    :Rapideco{MOVE_X}{87}{STRINGID}
-STR_5444    :Rapideco:
-STR_5445    :Rapideco
-STR_5446    :Atingi
 STR_5447    :Tipo {STRINGID}
 STR_5448    :Atrakcio / Veturilo {STRINGID}
 STR_5449    :Malpliigi rapidecon de ludo
@@ -2733,7 +2625,7 @@ STR_5457    :Malŝalti limojn de apogiloj
 STR_5458    :Turni dekstrumen
 STR_5459    :Turni maldekstrumen
 STR_5460    :Turni vidon maldekstrumen
-STR_5461    :Agordi parametrojn de gastoj
+STR_5461    :Agordi parametrojn por ĉiuj gastoj
 STR_5462    :{CURRENCY}
 STR_5463    :Celo: Amuzi vin!
 STR_5464    :Ĝenerala
@@ -2777,8 +2669,6 @@ STR_5503    :Entajpu servilonomon aŭ IP-adreson:
 STR_5504    :Montri staton plurludantan
 STR_5505    :Ne eblas aliĝi al servilo.
 STR_5506    :Gastoj malatentas intensecojn
-STR_5508    :Permesi ŝargadon de dosieroj kun nevalidaj kontrolsumoj
-STR_5509    :Permesas ŝargadon de scenaroj kaj konservaĵoj{NEWLINE}kiuj havas nevalidan kontrolsumon,{NEWLINE}kiel la scenaroj de la demonstrado{NEWLINE}aŭ difektitaj konservaĵoj.
 STR_5510    :Defaŭlta sonludilo
 STR_5511    :(NEKONATA)
 STR_5512    :Konservi Ludon Kiel
@@ -2833,8 +2723,6 @@ STR_5560    :Agordas la inspekton al ‘Post ĉiuj 10 minutoj’ por ĉiu atrakc
 STR_5561    :Malsukcesis ŝargi lingvon
 STR_5562    :AVERTO!
 STR_5563    :Ĉi tiu funkcio estas nune nestabila. Estu singarda.
-STR_5564    :Enmeti Difektitan Elementon
-STR_5565    :Enmetas difektitan mapelementon sur supro de bloko. Ĉi tio kaŝos iun ajn elementon super la difektita elemento.
 STR_5566    :Pasvorto:
 STR_5567    :Anonci
 STR_5568    :Pasvorto Bezonata
@@ -2962,8 +2850,6 @@ STR_5723    :Pluvego
 STR_5724    :Fulmotondro
 STR_5725    :{BLACK}Ŝanĝi veteron al:
 STR_5726    :Agordas la nunan veteron en la parko
-STR_5727    :Kvalito de skalado:
-STR_5731    :Lineara
 # tooltip for tab in options window
 STR_5734    :Bildigo
 STR_5735    :Stato de Reto
@@ -2990,7 +2876,7 @@ STR_5755    :Malĝusta Versio de Programo (Servilo uzas je {STRING})
 STR_5756    :Malbona Pasvorto
 STR_5757    :Servilo Plena
 STR_5758    :{OUTLINE}{GREEN}{STRING} aliĝis al la ludo
-STR_5759    :Elŝutas mapon … ({INT32} / {INT32}) KiB
+STR_5759    :Elŝutas mapon …
 STR_5760    :Honkongaj Dolaroj (HK$)
 STR_5761    :Nova Tajvana Dolaro (NT$)
 STR_5762    :Ĉina Juano (CN¥)
@@ -3050,7 +2936,6 @@ STR_5814    :{WINDOW_COLOUR_1}“{STRING}”
 #tooltips
 STR_5815    :Montri kadrojn ĉiusekunde enlude
 STR_5816    :Agordas proporcion por skali la ludon per.{NEWLINE}Plej utila ludante en{NEWLINE}altaj distingivoj
-STR_5817    :Agordas fasado-skalo-tipon. Bezonas aparataran ekranon por uziĝi.{NEWLINE}Lineara skalado estas glata, sed malklara. Glata Plej Proksima Najbara skalo estas akra, sed povas kaŭzi etan redukton de rendimento.
 STR_5819    :[Bezonas aparataran ekranon]{NEWLINE}Paŭzi la ludon se enluda plustavolo{NEWLINE}de Steam estas malfermita
 STR_5820    :Minimumigi la ludon se fokuso{NEWLINE}perdiĝas dum plenekrana reĝimo
 STR_5822    :Cikli inter tago kaj nokto.{NEWLINE}Plena ciklo daŭras unu enludan monaton
@@ -3067,7 +2952,7 @@ STR_5832    :Montri altecon per komunaj unuoj anstataŭ mezurformato agordita su
 STR_5833    :Ŝanĝas kiun datoformaton estas uzata
 STR_5834    :Elekti kiun sonludilon OpenRCT2 uzos
 STR_5835    :Silentigi la ludon se la fenestro perdas fokuson
-STR_5836    :Elekti muzikon por uzi je la ĉefa menuo.{NEWLINE}Elekti RCT1-temon postulas, ke vi kopiu ‘data/css17.dat’ de via RCT1-ludodosierujo al ‘data/css50.dat’ en via RCT2-dosierujo, aŭ agordu la dosierindikon al RCT1 en la Diversaĵo-langeto.
+STR_5836    :Elekti muzikon por uzi je la ĉefa menuo.{NEWLINE}Elekti la RCT1-temon postulas, ke vi agordu la dosierindikon al RCT1 en la Altnivela-langeto.
 STR_5837    :Krei kaj administri proprajn fasado-temojn
 STR_5838    :Montri apartan butonon por la fenestro de financoj en la ilobreto
 STR_5839    :Montri apartan butonon por la fenestro de esplorado kaj disvolvado en la ilobreto
@@ -3079,7 +2964,6 @@ STR_5844    :Resti konektita al plurludanta servilo{NEWLINE}eĉ se desinkronigo 
 STR_5845    :Aldonas butonon por{NEWLINE}sencimigiloj en la ilobreto.{NEWLINE}Ŝaltas klavarokomandon de programisto-konzolo
 STR_5846    :Agordi kiom ofte OpenRCT2 aŭtomate konserviĝas
 STR_5847    :Elekti parksinsekvon uzatan sur la titola ekrano.{NEWLINE}Titolosinsekvoj de RCT1/2 bezonas importitajn scenarojn por funkcii
-STR_5848    :Krei kaj administri proprajn titolosinsekvojn
 STR_5849    :Meti aŭtomate{NEWLINE}novdungitajn dungitojn
 STR_5851    :Agordas la defaŭltan inspekto-intervalon{NEWLINE}de novkonstruitaj atrakcioj
 STR_5853    :Baskuligi sonefektojn
@@ -3273,18 +3157,17 @@ STR_6041    :{BLACK}Neniuj mekanikistoj estas dungitaj!
 STR_6042    :Ŝargi altmapon
 STR_6043    :Elekti altmapon
 STR_6044    :Glatigi altmapon
-STR_6045    :Forteco
+STR_6045    :Forteco:
 STR_6046    :Normigi altmapon
-STR_6047    :Glatigi blokojn
+STR_6047    :Glatigi randojn de blokoj
 STR_6048    :Eraro de altmapo
 STR_6049    :Eraro legante PNG
 STR_6050    :Eraro legante rastrumon
-STR_6051    :La larĝo kaj alto bezonas kongrui
 STR_6052    :La altmapo estas tro granda, kaj estos fortranĉita
 STR_6053    :La altmapo ne eblas esti normaligita
 STR_6054    :Nur 24-bitoj-rastrumoj estas subtenataj
 STR_6055    :Altmapo-Dosiero de OpenRCT2
-STR_6056    :{Silentigi
+STR_6056    :Silentigi
 STR_6057    :Montri apartan butonon por la Silentigo-Opcio en la ilobreto
 STR_6058    :Silentigi
 STR_6059    :»
@@ -3300,10 +3183,10 @@ STR_6068    :Servilo malŝaltis.
 STR_6069    :{STRING} estis forpelita de la servilo de {STRING}.
 STR_6070    :{STRING} estis aldonita al grupo ‘{STRING}’ de {STRING}.
 STR_6071    :{STRING} kreis je nova ludantogrupo ‘{STRING}’.
-STR_6072    :{STRING} forigis je ludantogrupo ‘{String}’.
-STR_6073    :{STRING} redaktis permesojn por ludantogrupo ‘{String}’.
-STR_6074    :{STRING} ŝanĝis nomon de ludantogrupo de ‘{String}’ al ‘{String}’.
-STR_6075    :{STRING} ŝanĝis la defaŭltan ludantogrupon al ‘{String}’.
+STR_6072    :{STRING} forigis je ludantogrupo ‘{STRING}’.
+STR_6073    :{STRING} redaktis permesojn por ludantogrupo ‘{STRING}’.
+STR_6074    :{STRING} ŝanĝis nomon de ludantogrupo de ‘{STRING}’ al ‘{STRING}’.
+STR_6075    :{STRING} ŝanĝis la defaŭltan ludantogrupon al ‘{STRING}’.
 STR_6076    :{STRING} uzis/baskuligis trompon de ‘{STRING}’.
 STR_6077    :Aldoni Monon
 STR_6078    :{STRING} kreis je atrakcio ‘{STRING}’.
@@ -3357,8 +3240,8 @@ STR_6133    :Atingi atrakciojn kaj pejzaĝon, kiuj ne estis jam inventitaj
 STR_6134    :Vakigi Pejzaĝon
 STR_6135    :Kliento sendis nevalidan peton
 STR_6136    :Servilo sendis nevalidan peton
-STR_6137    :OpenRCT2 estas libera kaj malfermitkoda klono de Roller Coaster Tycoon 2.
-STR_6138    :OpenRCT2 estas la verko de multaj aŭtoroj, kompleta listo troviĝas al “contributors.md”. Por pli da informaĵoj, vizitu http://github.com/OpenRCT2/OpenRCT2
+STR_6137    :OpenRCT2 estas libera kaj malfermitkoda aliformigo kaj kompletigo de Roller Coaster Tycoon 2.
+STR_6138    :OpenRCT2 estas la verko de multaj aŭtoroj, kompleta listo troviĝas ene de la “Kontribuantoj” butono. Por pli da informaĵoj, vizitu http://github.com/OpenRCT2/OpenRCT2
 STR_6139    :Ĉiuj produktonomoj kaj firmnomoj apartenas al siaj respektivaj posedantoj. Uzo de ili ne signifas iun ajn filion kun aŭ endosaĵon de ili.
 STR_6140    :Ŝanĝoprotokolo…
 STR_6141    :RCT1 Malsupra Ilobreto
@@ -3378,8 +3261,6 @@ STR_6154    :Pro kialoj sekurigaj, ne estas rekomendita por lanĉi OpenRCT2 kun 
 STR_6155    :Nek KDialog nek Zenity estas instalita. Bonvolu instali unu, aŭ agordu per la komanda linio.
 STR_6156    :Nomo estas reservita
 STR_6157    :Konzolo
-STR_6158    :Ne eblas ŝargi ĉi tiun dosieron…{NEWLINE}Malkongrua RCTC versio: {COMMA16}
-STR_6159    :Glata Plej Proksima Najbaro
 STR_6160    :{WINDOW_COLOUR_2}Veturiloj disponeblaj: {BLACK}{STRING}
 STR_6161    :Baskulilo por montri kradliniojn
 STR_6162    :Turniĝanta Sovaĝa Muso
@@ -3394,23 +3275,8 @@ STR_6170    :Optimumigoj de Interfacoj
 STR_6171    :Serĉi
 STR_6172    :Serĉi
 STR_6173    :Bonvolu entajpi la nomon por serĉi:
-STR_6174    :Ŝargi Konservaĵon
-STR_6175    :Ŝargi Scenaron
-STR_6176    :Scenaro por ŝargi:
-STR_6177    :Ŝargi{MOVE_X}{87}Neniu scenaro elektita
-STR_6178    :Ŝargi{MOVE_X}{87}{RED}Scenaro mankanta
-STR_6179    :Elekti
-STR_6180    :Neniu scenaro elektita
-STR_6181    :{RED}Mankanta scenaro
-STR_6182    :Sekvi{MOVE_X}{87}{STRING}
-STR_6183    :Sekvi{MOVE_X}{87}Neniu rastrumeto elektita
-STR_6184    :Sekvi Rastrumeton
-STR_6185    :Elekti Rastrumeton
-STR_6186    :Neniu rastrumeto elektita
-STR_6187    :{OUTLINE}{WINDOW_COLOUR_2}{STRING}
 STR_6188    :Vomaĵo
 STR_6189    :Anaso
-STR_6190    :Vi ne eblas elekti rastrumeton dum la ĉefa titolekrano estas aktiva.
 STR_6191    :Surfaco
 STR_6192    :Muro
 STR_6193    :{COMMA16} gasto
@@ -3519,11 +3385,11 @@ STR_6318    :Dissinkronigo de reto detektita.{NEWLINE}Protokolo-dosiero: {STRING
 STR_6319    :Bremso de Blokparto Fermita
 STR_6320    :Nemalkonstruebla
 STR_6321    :Aldonaĵo difektas
-STR_6322    :{WINDOW_COLOUR_2}Identigilo de rastrumeto: {BLACK}{INT32}
+STR_6322    :{WINDOW_COLOUR_2}Identigilo de ento: {BLACK}{INT32}
 STR_6323    :Simulas
 STR_6324    :Simuli
 STR_6325    :Simuli atrakcion
-STR_6326    :Ne eblas simuli je {POP16}{POP16}{POP16}{STRINGID}…
+STR_6326    :Ne eblas simuli je {STRINGID}…
 STR_6327    :Transvidebla fono por gigantaj ekranokopioj
 STR_6328    :Kun ĉi tiu opcio ŝaltita, gigantaj ekranokopioj havos transvideblan fonon anstataŭ la defaŭlta nigra koloro.
 STR_6329    :{STRING}{STRINGID}
@@ -3532,7 +3398,6 @@ STR_6331    :Krei anasojn
 STR_6332    :Forigi anasojn
 STR_6333    :Pliigi skalfaktoron
 STR_6334    :Malpliigi skalfaktoron
-STR_6335    :Inspektilo de Bloko: Enmeti eron koruptitan
 STR_6336    :Inspektilo de Bloko: Kopii eron
 STR_6337    :Inspektilo de Bloko: Alglui eron
 STR_6338    :Inspektilo de Bloko: Forigi eron
@@ -3557,7 +3422,6 @@ STR_6356    :Generas anasojn se parko enhavas akvon
 STR_6357    :Forigas ĉiujn anasojn de la mapo
 STR_6358    :Paĝo {UINT16}
 STR_6359    :{POP16}{POP16}Paĝo {UINT16}
-STR_6360    :{BLACK}{COMMA32}
 STR_6361    :Ŝalti lumefektojn sur atrakcioj (eksperimenta)
 STR_6362    :Se ŝaltita, veturiloj de atrakcioj kun trakoj lumos nokte.
 STR_6363    :Teksto kopiita al tondujo
@@ -3568,14 +3432,14 @@ STR_6367    :Kadro de animacio:
 STR_6368    :Por kialoj de kongruo, ne estas rekomendita por lanĉi OpenRCT2 per Wine. OpenRCT2 funkciigas indiĝene sur macOS, Linukso, FreeBSD kaj OpenBSD.
 STR_6369    :Permesi konstruadon de trako al nevalidaj altecoj
 STR_6370    :Permesas metadon de trakpartoj al iu ajn intervalo de altecoj
-STR_6371    :La dosierindiko enhavas instalaĵon de RollerCoaster Tycoon 1, sed la dosiero “csg1i.dat” mankas. Kopiu tiun dosieron de la kompaktdisko de RollerCoaster Tycoon 1 al la “Data” dosierujo de la instalaĵo de RollerCoaster Tycoon 1 je via fiksita disko.
-STR_6372    :La dosierindiko enhavas instalaĵon de RollerCoaster Tycoon 1, sed ĉi tiu versio ne taŭgas. OpenRCT2 bezonas instalaĵon de Loopy Landscapes aŭ RCT Deluxe por uzi la erojn de RollerCoaster Tycoon 1.
+STR_6371    :La dosierindiko enhavas instalaĵon de RollerCoaster Tycoon 1, sed la dosiero “csg1i.dat” mankas. Kopiu tiun dosieron de la kompaktdisko de Loopy Landscapes aŭ RCT Deluxe al la “Data” dosierujo de la instalaĵo de RollerCoaster Tycoon 1 je via fiksita disko.
+STR_6372    :La dosierindiko enhavas instalaĵon de RollerCoaster Tycoon 1, sed ĉi tiu versio ne taŭgas. OpenRCT2 bezonas instalaĵon de Loopy Landscapes aŭ RCT Deluxe por uzi la havaĵojn de RollerCoaster Tycoon 1.
 STR_6373    :Baskuli kontroladon de interspaco
 STR_6374    :I
 STR_6375    :Nekonata Atrakcio
 STR_6376    :{WINDOW_COLOUR_2}Atrakcioveturilo:{NEWLINE}{BLACK}{STRINGID} por {STRINGID}
 STR_6377    :{WINDOW_COLOUR_2}Tipo: {BLACK}{STRINGID} por {STRINGID}
-STR_6378    :Ricevas liston de objektoj: {INT32} / {INT32}
+STR_6378    :Ricevas liston de objektoj:
 STR_6379    :Ricevis nevalidan datumon
 STR_6380    :Ĝisdatigo disponeblas!
 STR_6381    :Aliĝi al la Diskordo de OpenRCT2!
@@ -3632,10 +3496,10 @@ STR_6431    :Deks. Musbutono
 STR_6432    :Muso {INT32}
 STR_6433    :Forigi
 STR_6434    :Forigi ĉiujn bindaĵojn por ĉi tiu klavarokomando.
-STR_6435    :{WINDOW_COLOUR_2}Vandaloj haltigitaj: {BLACK}{COMMA16}
+STR_6435    :{WINDOW_COLOUR_2}Vandaloj haltigitaj: {BLACK}{COMMA32}
 STR_6436    :Baskuligi nevideblecon
-STR_6437    :Nevidebla
-STR_6438    :N
+STR_6437    :Videbla
+STR_6438    :{MOVE_X}{2}👁
 STR_6439    :Inspektilo de Bloko: Baskuligi nevideblecon
 STR_6440    :Travidebla akvo
 STR_6441    :Almenaŭ unu surfacobjekto de ne-atendovico-trotuaro elektendas.
@@ -3658,812 +3522,271 @@ STR_6457    :Raporti cimon sur GitHub
 STR_6458    :Sekvi ĉi tion en Ĉefa Vido
 STR_6460    :D
 STR_6461    :Direkto
-
-#############
-# Scenarios #
-################
-# RCT Original #
-################
-<Forest Frontiers>
-STR_SCNR    :Arbaro-Limoj
-STR_PARK    :Arbaro-Limoj
-STR_DTLS    :En profunda arbaro, konstruu prosperan amuzparkon en granda vakigita areo
-
-<Dynamite Dunes>
-STR_SCNR    :Dinamito-Dunoj
-STR_PARK    :Dinamito-Dunoj
-STR_DTLS    :Konstruita en la mezo de la dezerto, ĉi tiu amuzparko enhavas nur unu ondan fervojon, sed ankaŭ enhavas spacon por kreski
-
-<Leafy Lake>
-STR_SCNR    :Folia Lago
-STR_PARK    :Folia Lago
-STR_DTLS    :Komencante de nulo, konstruu amuzparkon ĉirkaŭ granda lago
-
-<Diamond Heights>
-STR_SCNR    :Diamanto-Altaĵoj
-STR_PARK    :Diamanto-Altaĵoj
-STR_DTLS    :Diamanto-Altaĵoj jam estas sukcesa amuzparko kun bonegaj atrakcioj - ellaboru la parkon por duobligi sian valoron
-
-<Evergreen Gardens>
-STR_SCNR    :Ĉiamverdaj Ĝardenoj
-STR_PARK    :Ĉiamverdaj Ĝardenoj
-STR_DTLS    :Konvertu la belajn Ĉiamverdajn Ĝardenojn en prosperan amuzparkon
-
-<Bumbly Beach>
-STR_SCNR    :Burda Plaĝo
-STR_PARK    :Burda Plaĝo
-STR_DTLS    :Ellaboru la malgrandan amuzparkon de Burda Plaĝo en prosperan amuzparkon
-
-<Trinity Islands>
-STR_SCNR    :Triunuaj Insuloj
-STR_PARK    :Triunuaj Insuloj
-STR_DTLS    :Multaj insuloj formas la bazon de ĉi tiu nova parko
-
-<Katie's Dreamland>
-STR_SCNR    :La Revolando de Kejta
-STR_PARK    :La Revolando de Kejta
-STR_DTLS    :Malgranda amuzparko kun kelkaj atrakcioj kaj spaco por kreski. Via celo estas duobligi la parkvaloron.
-
-<Pokey Park>
-STR_SCNR    :Poki-Parko
-STR_PARK    :Poki-Parko
-STR_DTLS    :Malgranda kaj malvasta amuzparko, kiu bezonas grandan kreskadon
-
-<White Water Park>
-STR_SCNR    :Rapidfluo-Parko
-STR_PARK    :Rapidfluo-Parko
-STR_DTLS    :Ĉi tiu parko, kun kelkaj bonegaj akvo-atrakcioj, bezonas kreskadon
-
-<Millennium Mines>
-STR_SCNR    :Miljaraj Minoj
-STR_PARK    :Miljaraj Minoj
-STR_DTLS    :Konvertu grandan forlasitan minon de vidindaĵo en amuzparkon
-
-<Karts & Coasters>
-STR_SCNR    :Gokartoj k Ondaj Fervojoj
-STR_PARK    :Gokartoj k Ondaj Fervojoj
-STR_DTLS    :Granda parko kaŝita en la arbaro, kiu enhavas nur trakojn de gokartoj kaj lignajn ondajn fervojojn
-
-<Mel's World>
-STR_SCNR    :Melmondo
-STR_PARK    :Melmondo
-STR_DTLS    :Ĉi tiu amuzparko enhavas kelkajn bone-desegnitajn modernajn atrakciojn, sed ankaŭ multe da spaco por kreski
-
-<Mystic Mountain>
-STR_SCNR    :Mistika Monto
-STR_PARK    :Mistika Monto
-STR_DTLS    :En la ondaj arbaroj de Mistika Monto, konstruu amuzparkon komencante de nulo
-
-<Pacific Pyramids>
-STR_SCNR    :Pacifikaj Piramidoj
-STR_PARK    :Pacifikaj Piramidoj
-STR_DTLS    :Konvertu la vidindaĵon de Egiptaj Restaĵoj en prosperan amuzparkon
-
-<Crumbly Woods>
-STR_SCNR    :Ĉifaj Arbaroj
-STR_PARK    :Ĉifaj Arbaroj
-STR_DTLS    :Granda parko kun bone-desegnitaj sed iomete malnovaj atrakcioj. Anstataŭigu la malnovajn atrakciojn aŭ alkonstruu novajn atrakciojn, por farigi la parkon pli populara.
-
-<Paradise Pier>
-STR_SCNR    :Paradizo-Enŝipigejo
-STR_PARK    :Paradizo-Enŝipigejo
-STR_DTLS    :Konvertu la enŝipigejon de ĉi tiu dormema urbeto en prosperan atrakcion
-
-<Lightning Peaks>
-STR_SCNR    :Fulmo-Montopintoj
-STR_PARK    :Fulmo-Montopintoj
-STR_DTLS    :La belaj montoj de Fulmo-Montopintoj estas populara por marŝantoj kaj rigardantoj. Uzu la disponeblan teron por allogi novan klientaron, kiu volas ekscitaĵojn.
-
-<Ivory Towers>
-STR_SCNR    :Eburo-Turoj
-STR_PARK    :Eburo-Turoj
-STR_DTLS    :Bone-establita parko, kiu havas kelkajn problemojn
-
-<Rainbow Valley>
-STR_SCNR    :Ĉielarko-Valo
-STR_PARK    :Ĉielarko-Valo
-STR_DTLS    :La loka aŭtoritato de Ĉielarko-Valo ne permesos iun ajn ŝanĝadon de tero aŭ forigadon de grandaj arboj, sed vi devas ellabori la areon en grandan amuzparkon
-
-<Thunder Rock>
-STR_SCNR    :Tondro-Ŝtonego
-STR_PARK    :Tondro-Ŝtonego
-STR_DTLS    :Tondro-Ŝtonego troviĝas en la mezo de dezerto, kaj allogas multajn turistojn. Uzu la spacon disponeblan por konstrui atrakciojn por allogi pli da homoj.
-
-<Mega Park>
-STR_SCNR    :Mega-Parko
-STR_PARK    :Mega-Parko
-STR_DTLS    :Nur por amuziĝi!
-
-## Added Attractions
-<Whispering Cliffs>
-STR_SCNR    :Flustrantaj Klifoj
-STR_PARK    :Flustrantaj Klifoj
-STR_DTLS    :Ellaboru la apudmarajn klifojn en prosperan amuzparkon
-
-<Three Monkeys Park>
-STR_SCNR    :Tri-Simioj-Parko
-STR_PARK    :Tri-Simioj-Parko
-STR_DTLS    :La ĉefa atrakcio de ĉi tiu granda ellaborata parko estas giganta triopa-traka vetkuranta ŝtala onda fervojo
-
-<Canary Mines>
-STR_SCNR    :Kanario-Minoj
-STR_PARK    :Kanario-Minoj
-STR_DTLS    :Ĉi tiu forlasita mino jam havas la potencialon de vidindaĵo, kun ĝia miniatura fervojo kaj paro da ondaj fervojoj kun vertikalaj malleviĝoj
-
-<Barony Bridge>
-STR_SCNR    :Baronlando-Ponto
-STR_PARK    :Baronlando-Ponto
-STR_DTLS    :Malnova senutila ponto estas via por ellabori en amuzparkon
-
-<Funtopia>
-STR_SCNR    :Amuzutopio
-STR_PARK    :Amuzutopio
-STR_DTLS    :Sur bieno ambaŭflanke de aŭtovojo, ĉi tiu parko jam havas plurajn funkciantajn atrakciojn
-
-<Haunted Harbour>
-STR_SCNR    :Fantoma Haveno
-STR_PARK    :Fantoma Haveno
-STR_DTLS    :La loka aŭtoritato permesis la malmultekostan vendadon de proksima bieno al ĉi tiu malgranda apudmara parko, sed certaj atrakcioj devas esti konservataj
-
-<Fun Fortress>
-STR_SCNR    :Amuza Fortreso
-STR_PARK    :Amuza Fortreso
-STR_DTLS    :Ĉi tiu fortreso estas tute via por ŝanĝiĝi al amuzparko
-
-<Future World>
-STR_SCNR    :Estonto-Mondo
-STR_PARK    :Estonto-Mondo
-STR_DTLS    :Ĉi tiu estonteca parko havas multe da spaco por novaj atrakcioj sur ĝia ekstertera pejzaĝo
-
-<Gentle Glen>
-STR_SCNR    :Milda Valeto
-STR_PARK    :Milda Valeto
-STR_DTLS    :La lokaj homoj preferas mildajn atrakciojn, do via celo estas ellabori ĉi tiun parkon por plaĉi ilin
-
-<Jolly Jungle>
-STR_SCNR    :Gajega Ĝangalo
-STR_PARK    :Gajega Ĝangalo
-STR_DTLS    :Profunde en la ĝangalo estas granda areo de tero preta por esti transformita en amuzparkon
-
-<Hydro Hills>
-STR_SCNR    :Akvo-Montetoj
-STR_PARK    :Akvo-Montetoj
-STR_DTLS    :Serio de lagoj fariĝas la bazo de ĉi tiu nova parko
-
-<Sprightly Park>
-STR_SCNR    :Vigla Parko
-STR_PARK    :Vigla Parko
-STR_DTLS    :Ĉi tiu malnova parko havas multajn historiajn atrakciojn, sed ankaŭ dronas en ŝuldoj
-
-<Magic Quarters>
-STR_SCNR    :Magiaj Kvartaloj
-STR_PARK    :Magiaj Kvartaloj
-STR_DTLS    :Granda areo de tero vakigita kaj parte temita estas preta, por ke vi ellaboru ĝin en belan amuzparkon
-
-<Fruit Farm>
-STR_SCNR    :Frukto-Farmo
-STR_PARK    :Frukto-Farmo
-STR_DTLS    :Prospera fruktofarmo konstruis fervojon por gajni pli da enspezo. Via celo estas ellabori ĝin en kompletan amuzparkon.
-
-<Butterfly Dam>
-STR_SCNR    :Papilio-Akvobaraĵo
-STR_PARK    :Papilio-Akvobaraĵo
-STR_DTLS    :La areo ĉirkaŭ akvobaraĵo estas disponebla, por ke vi ellaboru ĝin en amuzparkon
-
-<Coaster Canyon>
-STR_SCNR    :Onda-Fervojo-Kanjono
-STR_PARK    :Onda-Fervojo-Kanjono
-STR_DTLS    :Vasta kanjono estas via por ŝanĝiĝi al amuzparko
-
-<Thunderstorm Park>
-STR_SCNR    :Fulmotondro-Parko
-STR_PARK    :Fulmotondro-Parko
-STR_DTLS    :La vetero estas tiel malseka ĉi tie, ke giganta piramido estis konstruita por permesi kelkajn atrakciojn konstruatajn subtere
-
-<Harmonic Hills>
-STR_SCNR    :Harmonaj Montetoj
-STR_PARK    :Harmonaj Montetoj
-STR_DTLS    :La loka aŭtoritato ne permesos la konstruadon super la arbalteco en ĉi tiu parko
-
-<Roman Village>
-STR_SCNR    :Romana Vilaĝo
-STR_PARK    :Romana Vilaĝo
-STR_DTLS    :Ellaboru ĉi tiun parkon kun romana temo, per aldoni atrakciojn kaj ondajn fervojojn
-
-<Swamp Cove>
-STR_SCNR    :Marĉejo-Golfeto
-STR_PARK    :Marĉejo-Golfeto
-STR_DTLS    :Konstruita parte sur serio de malgrandaj insuloj, ĉi tiu parko jam havas paron da grandaj ondaj fervojoj kiel ĝiaj ĉefaĵo
-
-<Adrenaline Heights>
-STR_SCNR    :Adrenalino-Altaĵoj
-STR_PARK    :Adrenalino-Altaĵoj
-STR_DTLS    :Konstruu parkon por allogi lokajn homojn, kiuj volas altajn-intensajn ekscitaĵojn
-
-<Utopia Park>
-STR_SCNR    :Utopio-Parko
-STR_PARK    :Utopio
-STR_DTLS    :Oazo en la mezo de la dezerto provizas nekutiman okazon por konstrui amuzparkon
-
-<Rotting Heights>
-STR_SCNR    :Putradaj Altaĵoj
-STR_PARK    :Putradaj Altaĵoj
-STR_DTLS    :Surkreskata kaj kaduka, ĉu vi povas relevigi ĉi tiun bonintan amuzparkon?
-
-<Fiasco Forest>
-STR_SCNR    :Fiasko-Arbaro
-STR_PARK    :Fiasko-Arbaro
-STR_DTLS    :Plene je malbone-desegnitaj kaj danĝeraj atrakcioj, vi havas tre limigitan buĝeton kaj tempon por ripari la problemojn kaj rebonigi la parkon
-
-<Pickle Park>
-STR_SCNR    :Peklaĵo-Parko
-STR_PARK    :Peklaĵo-Parko
-STR_DTLS    :La loka aŭtoritato ne permesos ian ajn reklamadon aŭ kampanjojn de vendado, do ĉi tiu parko devas sukcesi nur per reputacio.
-
-<Giggle Downs>
-STR_SCNR    :Subrido-Malaltaĵoj
-STR_PARK    :Subrido-Malaltaĵoj
-STR_DTLS    :Kvaropa-traka stipoĉejso estas la ĉefaĵo de ĉi tiu ellaborata parko
-
-<Mineral Park>
-STR_SCNR    :Minerala Parko
-STR_PARK    :Minerala Parko
-STR_DTLS    :Ŝanĝu ĉi tiun forlasitan ŝtonejon al loko por allogi ekscitovolajn turistojn
-
-<Coaster Crazy>
-STR_SCNR    :Onda-Fervojo-Frenezo
-STR_PARK    :Onda-Fervojo-Frenezo
-STR_DTLS    :Vi havas limigitan monon, sed senliman tempon, por ellabori ĉi tiun montoflankan areon en gigantan parkon de ondaj fervojoj
-
-<Urban Park>
-STR_SCNR    :Urba Parko
-STR_PARK    :Urba Parko
-STR_DTLS    :Eta parko negocis kun la proksima urbeto, por permesi ellaboradon tra la urbeto sin mem
-
-<Geoffrey Gardens>
-STR_SCNR    :Geoffrey-Ĝardenoj
-STR_PARK    :Geoffrey-Ĝardenoj
-STR_DTLS    :Vi devas ŝanĝi grandan ĝardenoparkon al prospera amuzparko
-
-
-## Loopy Landscapes
-<Iceberg Islands>
-STR_SCNR    :Glacimonto-Insuloj
-STR_PARK    :Glacimonto-Insuloj
-STR_DTLS    :Aro da glacimontoj fariĝas malvarma okazejo por ĉi tiu ambicia amuzparko
-
-<Volcania>
-STR_SCNR    :Vulkanlando
-STR_PARK    :Vulkanlando
-STR_DTLS    :Dormanta vulkano estas la okazejo de ĉi tiu defio de la konstruado de ondaj fervojoj
-
-<Arid Heights>
-STR_SCNR    :Aridaj Altaĵoj
-STR_PARK    :Aridaj Altaĵoj
-STR_DTLS    :Sen financaj limigoj, via defio estas ellabori ĉi tiun dezertparkon, kaj samtempe restigi la gastojn feliĉaj
-
-<Razor Rocks>
-STR_SCNR    :Razilecaj Rokoj
-STR_PARK    :Razilecaj Rokoj
-STR_DTLS    :Via celo estas konstrui grandegan parkon da ondaj fervojoj ĉe Razilecaj Rokoj
-
-<Crater Lake>
-STR_SCNR    :Kratero-Lago
-STR_PARK    :Kratero-Lago
-STR_DTLS    :Granda lago en praa kratero estas la okazejo de ĉi tiu parko
-
-<Vertigo Views>
-STR_SCNR    :Kapturnigaj Vidoj
-STR_PARK    :Kapturnigaj Vidoj
-STR_DTLS    :Ĉi tiu granda parko jam havas bonegan hiperan ondan fervojon, sed via celo estas pliigi ĝian profiton
-
-<Paradise Pier 2>
-STR_SCNR    :Paradizo-Enŝipigejo 2
-STR_PARK    :Paradizo-Enŝipigejo 2
-STR_DTLS    :Paradizo-Enŝipigejo etendis sian reton de troturaroj super la maro, kaj via celo estas ellabori la parkon por uzi la ekstran spacon
-
-<Dragon's Cove>
-STR_SCNR    :Golfeto de Drako
-STR_PARK    :Golfeto de Drako
-STR_DTLS    :Apudmara golfeto estas la okazejo de ĉi tiu defio de la konstruado de ondaj fervojoj
-
-<Good Knight Park>
-STR_SCNR    :Bona-Kavaliro-Parko
-STR_PARK    :Bona-Kavaliro-Parko
-STR_DTLS    :Vi devas ellabori kastelon, kun paro da ondaj fervojoj, en pli grandan amuzparkon
-
-<Wacky Warren>
-STR_SCNR    :Komika Kuniklejo
-STR_PARK    :Komika Kuniklejo
-STR_DTLS    :Parko, kiu havas plejparton da siaj trotuaroj kaj ondaj fervojoj subtere
-
-<Grand Glacier>
-STR_SCNR    :Granda Glaĉero
-STR_PARK    :Granda Glaĉero
-STR_DTLS    :Valo kun glaĉero estas via por ellabori en amuzparkon
-
-<Crazy Craters>
-STR_SCNR    :Frenezaj Krateroj
-STR_PARK    :Frenezaj Krateroj
-STR_DTLS    :En mondo for, kie mono ne necesas, vi devas konstrui centron de amuzaĵo por teni la homojn feliĉaj
-
-<Dusty Desert>
-STR_SCNR    :Polva Dezerto
-STR_PARK    :Polva Dezerto
-STR_DTLS    :Kvin ondaj fervojoj bezonas kompletadon en ĉi tiu dezertparko
-
-<Woodworm Park>
-STR_SCNR    :Anobio-Parko
-STR_PARK    :Anobio-Parko
-STR_DTLS    :Eblas konstrui nur malmodernajn atrakciojn en ĉi tiu historia parko
-
-<Icarus Park>
-STR_SCNR    :Ikaro-Parko
-STR_PARK    :Ikaro-Parko
-STR_DTLS    :Ellaboru ĉi tiun eksterteran parkon por maksimumigi sian profiton
-
-<Sunny Swamps>
-STR_SCNR    :Sunplenaj Marĉejoj
-STR_PARK    :Sunplenaj Marĉejoj
-STR_DTLS    :Ĉi tiu bone-temita amuzparko jam havas multajn atrakciojn, sed ankoraŭ havas multe da spaco por ellabori
-
-<Frightmare Hills>
-STR_SCNR    :Inkubo-Montetoj
-STR_PARK    :Inkubo-Montetoj
-STR_DTLS    :Timiga parko, kun giganta ĉefa onda fervojo
-
-<Thunder Rocks>
-STR_SCNR    :Tondro-Rokoj
-STR_PARK    :Tondro-Rokoj
-STR_DTLS    :La komenco de ĉi tiu amuzparko estas sur du grandaj eroj da ŝtonego, kiuj elstaras el la sablo
-
-<Octagon Park>
-STR_SCNR    :Okangulo-Parko
-STR_PARK    :Okangulo-Parko
-STR_DTLS    :En ĉi tiu granda parko, vi devas desegni kaj konstrui dek grandajn ondajn fervojojn
-
-<Pleasure Island>
-STR_SCNR    :Plezuro-Insulo
-STR_PARK    :Plezuro-Insulo
-STR_DTLS    :Longa mallarĝa insulo fariĝas defia okazejo por konstrui elektaron da ondaj fervojoj
-
-<Icicle Worlds>
-STR_SCNR    :Glacikonuso-Mondoj
-STR_PARK    :Glacikonuso-Mondoj
-STR_DTLS    :Vi devas ŝanĝi glacian pejzaĝon al prospera amuzparko
-
-<Southern Sands>
-STR_SCNR    :Sudaj Sablaĵoj
-STR_PARK    :Sudaj Sablaĵoj
-STR_DTLS    :Dezertparko, kun iuj ondaj fervojoj lerte desegnitaj, estas via por ellabori
-
-<Tiny Towers>
-STR_SCNR    :Etaj Turoj
-STR_PARK    :Etaj Turoj
-STR_DTLS    :En ĉi tiu eta parko, vi devas fini la konstruadon de la kvin ekzistantaj ondaj fervojoj
-
-<Nevermore Park>
-STR_SCNR    :Neniam-Parko
-STR_PARK    :Neniam-Parko
-STR_DTLS    :Granda parko, kun nova sistemo de transportado ĉirkaŭ ĝia rando
-
-<Pacifica>
-STR_SCNR    :Pacifiko
-STR_PARK    :Pacifiko
-STR_DTLS    :Ĉi tiu granda insulo estas tute via por ellabori en amuzparkon
-
-<Urban Jungle>
-STR_SCNR    :Urba Ĝangalo
-STR_PARK    :Urba Ĝangalo
-STR_DTLS    :Giganta forlasita ĉielskrapanto estas unika okazo por amuzparko-ellaboranto
-
-<Terror Town>
-STR_SCNR    :Teruro-Urbo
-STR_PARK    :Teruro-Urbo
-STR_DTLS    :Ĉi tiu urba areo estas tute via por ellabori en amuzparkon
-
-<Megaworld Park>
-STR_SCNR    :Mondego-Parko
-STR_PARK    :Mondego-Parko
-STR_DTLS    :Ĉi tiu giganta parko, kiu jam estas plena je atrakcioj, bezonas plibonigon
-
-<Venus Ponds>
-STR_SCNR    :Venuso-Lagetoj
-STR_PARK    :Venuso-Lagetoj
-STR_DTLS    :Sur malproksima planedo, vi bezonas ŝanĝi ĉi tiun bienoareon al amuzparko
-
-<Micro Park>
-STR_SCNR    :Mikro-Parko
-STR_PARK    :Mikro-Parko
-STR_DTLS    :Provu krei la plej malgrandan profiteblan parkon de la mondo
-
-## Real Parks from RCT1
-# None of them had details
-<Alton Towers>
-STR_SCNR    :Alton Towers
-STR_PARK    :Alton Towers
-STR_DTLS    :
-
-<Heide-Park>
-STR_SCNR    :Heide-Park
-STR_PARK    :Heide-Park
-STR_DTLS    :
-
-<Blackpool Pleasure Beach>
-STR_SCNR    :Blackpool Pleasure Beach
-STR_PARK    :Blackpool Pleasure Beach
-STR_DTLS    :
-
-## Misc parks from RCT1
-# Had no details
-<Fort Anachronism>
-STR_SCNR    :Fuort-Anakronismo
-STR_PARK    :Fuort-Anakronismo
-STR_DTLS    :
-
-###########
-# Scenery #
-###########
-
-## Start OpenRCT2 Official
-
-[TTPIRF02]
-STR_NAME    :Tegmento
-
-[TTPIRF03]
-STR_NAME    :Tegmento
-
-[TTPIRF04]
-STR_NAME    :Tegmento
-
-[TTPIRF05]
-STR_NAME    :Tegmento
-
-[TTPIRF07]
-STR_NAME    :Tegmento
-
-[TTPIRF08]
-STR_NAME    :Tegmento
-
-[TTRFWD01]
-STR_NAME    :Tegmento
-
-[TTRFWD02]
-STR_NAME    :Tegmento
-
-[TTRFWD03]
-STR_NAME    :Tegmento
-
-[TTRFWD04]
-STR_NAME    :Tegmento
-
-[TTRFWD05]
-STR_NAME    :Tegmento
-
-[TTRFWD06]
-STR_NAME    :Tegmento
-
-[TTRFWD07]
-STR_NAME    :Tegmento
-
-[TTRFWD08]
-STR_NAME    :Tegmento
-
-[TTRFGL01]
-STR_NAME    :Vitra Tegmento
-
-[TTRFGL02]
-STR_NAME    :Vitra Tegmento
-
-[TTRFGL03]
-STR_NAME    :Vitra Tegmento
-
-[ACWW33]
-STR_NAME    :Muro el Lignaj Fostoj
-
-[ACWWF32]
-STR_NAME    :Muro el Lignaj Fostoj
-
-## End OpenRCT2 Official
-
-###############################################################################
-## RCT2 Scenarios
-###############################################################################
-<Alpine Adventures>
-STR_SCNR    :Alpaj Aventuroj
-STR_PARK    :Alpaj Aventuroj
-STR_DTLS    :Konvertu skiejon ĉe malgranda monto en neĝo-temitan amuzparkon
-
-<Amity Airfield>
-STR_SCNR    :Amikeco-Aerodromo
-STR_PARK    :Amikeco-Aerodromo
-STR_DTLS    :Konstruu amuzparkon kun flugado-temo en ĉi tiu forlasita flughaveno
-
-<Botany Breakers>
-STR_SCNR    :Botaniko-Rompiloj
-STR_PARK    :Botaniko-Rompiloj
-STR_DTLS    :Via defio estas konstrui tre profitan parkon sur ĉi tiu paradiza insulo
-
-<Build your own Six Flags Belgium>
-STR_SCNR    :Konstrui je via propra Six Flags Belgium
-STR_PARK    :Six Flags Belgium
-STR_DTLS    :Konstruu vian propran version de ĉi tiu Eŭropa parko de Six Flags
-
-<Build your own Six Flags Great Adventure>
-STR_SCNR    :Konstrui je via propra Six Flags Great Adventure
-STR_PARK    :Six Flags Great Adventure
-STR_DTLS    :Uzu viajn kapablojn de desegnado por rekrei ĉi tiun parkon de Six Flags
-
-<Build your own Six Flags Holland>
-STR_SCNR    :Konstrui je via propra Six Flags Holland
-STR_PARK    :Six Flags Holland
-STR_DTLS    :Konstruu ĉi tiun Eŭropan parkon de Six Flags kiel vi volas
-
-<Build your own Six Flags Magic Mountain>
-STR_SCNR    :Konstrui je via propra Six Flags Magic Mountain
-STR_PARK    :Six Flags Magic Mountain
-STR_DTLS    :Kreu vian propran version de ĉi tiu grandega parko de Six Flags
-
-<Build your own Six Flags over Texas>
-STR_SCNR    :Konstrui je via propra Six Flags over Texas
-STR_PARK    :Six Flags over Texas
-STR_DTLS    :Komencante de nulo, konstruu la atrakciojn en ĉi tiu parko de Six Flags
-
-<Build your own Six Flags Park>
-STR_SCNR    :Konstrui vian propran parkon de Six Flags
-STR_PARK    :Six Flags
-STR_DTLS    :Konstruu vian propran desegnaĵon de parko de Six Flags - aŭ konstruu atrakciojn de aliaj parkoj de Six Flags, aŭ desegnu kaj konstruu viajn proprajn atrakciojn
-
-<Bumbly Bazaar>
-STR_SCNR    :Burda Bazaro
-STR_PARK    :Burda Bazaro
-STR_DTLS    :Komencante kun malgranda bazaro, via defio estas pliigi la profitan de vendejoj kaj budoj per konstrui atrakciojn kaj ondajn fervojojn por allogi pli da klientoj
-
-<Crazy Castle>
-STR_SCNR    :Freneza Kastelo
-STR_PARK    :Freneza Kastelo
-STR_DTLS    :Vi heredis grandan kastelon. Via celo estas konverti ĝin en malgrandan amuzparkon.
-
-<Dusty Greens>
-STR_SCNR    :Polvaj Verdejoj
-STR_PARK    :Polvaj Verdejoj
-STR_DTLS    :Troviĝas proksime de aŭtovojo en dezerto, Polvaj Verdejoj estas okazo por ellabori malgrandan golfejon en prosperan amuzparkon
-
-<Electric Fields>
-STR_SCNR    :Elektraj Kampoj
-STR_PARK    :Elektraj Kampoj
-STR_DTLS    :Vi heredis malgrandan farmon, kaj via defio estas konstrui malgrandan amuzparkon inter la kampoj kaj aliaj farmokonstruaĵoj
-
-<Extreme Heights>
-STR_SCNR    :Ekstremaj Altaĵoj
-STR_PARK    :Ekstremaj Altaĵoj
-STR_DTLS    :Sen financaj limigoj, via defio estas ellabori ĉi tiun dezertparkon por allogi homojn, kiuj volas la plejajn ekscitaĵojn
-
-<Factory Capers>
-STR_SCNR    :Fabriko-Kaprioloj
-STR_PARK    :Fabriko-Kaprioloj
-STR_DTLS    :Ĉi tiu forlasita fabriko-konstruaĵaro estas okazo por konstrui amuzparkon kun mekanika temo
-
-<Fungus Woods>
-STR_SCNR    :Fungo-Arbaro
-STR_PARK    :Fungo-Arbaro
-STR_DTLS    :Via defio estas konstrui prosperan amuzparkon en Fungo-Arbaro, sed vi povas konstrui nur malnovecajn lignajn atrakciojn
-
-<Ghost Town>
-STR_SCNR    :Fantoma Urbeto
-STR_PARK    :Fantoma Urbeto
-STR_DTLS    :Dungita de granda amuzparkofirmo, via celo estas konstrui por ĝi gigantan amuzparkon de ondaj fervojoj ĉe forlasita minurbeto
-
-<Gravity Gardens>
-STR_SCNR    :Gravito-Ĝardenoj
-STR_PARK    :Gravito-Ĝardenoj
-STR_DTLS    :Via celo estas konstrui amuzparkon de ondaj fervojoj en la belaj Gravito-Ĝardenoj. Neniuj aliaj atrakciotipoj, nur ondaj fervojoj!
-
-<Infernal Views>
-STR_SCNR    :Inferaj Vidoj
-STR_PARK    :Inferaj Vidoj
-STR_DTLS    :Parko troviĝanta malfirme sur lafoŝtonego kun riveroj de magmo
-
-<Lucky Lake>
-STR_SCNR    :Bonŝanca Lago
-STR_PARK    :Bonŝanca Lago
-STR_DTLS    :Kun senlima mono, sed malfacila lagoloko, ĉi tiu parko estos defio por ellabori kaj administri
-
-<Rainbow Summit>
-STR_SCNR    :Ĉielarko-Supraĵo
-STR_PARK    :Ĉielarko-Supraĵo
-STR_DTLS    :Konstruita ĉe montetoflanko, la aŭtoritato malpermesas altajn konstruaĵojn. Ĉu vi povas ellabori la parkon kaj farigi ĝin sukcesa?
-
-<Six Flags Belgium>
-STR_SCNR    :Six Flags Belgium
-STR_PARK    :Six Flags Belgium
-STR_DTLS    :Provu administri kaj plibonigi ĉi tiun parkon de Six Flags
-
-<Six Flags Great Adventure>
-STR_SCNR    :Six Flags Great Adventure
-STR_PARK    :Six Flags Great Adventure
-STR_DTLS    :Konstruu la mankantajn atrakciojn de Six Flags, aŭ kreu viajn proprajn desegnaĵojn por plibonigi la parkon! Sed ne forgesu vian ĉefan celon: por allogi pli da gastoj al la parko!
-
-<Six Flags Holland>
-STR_SCNR    :Six Flags Holland
-STR_PARK    :Six Flags Holland
-STR_DTLS    :Provu administri kaj plibonigi ĉi tiun parkon de Six Flags
-
-<Six Flags Magic Mountain>
-STR_SCNR    :Six Flags Magic Mountain
-STR_PARK    :Six Flags Magic Mountain
-STR_DTLS    :Konstruu la mankantajn atrakciojn de Six Flags, aŭ kreu viajn proprajn desegnaĵojn por plibonigi la parkon! Sed ne forgesu vian ĉefan celon: por repagi vian prunton, konservante la parkvaloron!
-
-<Six Flags over Texas>
-STR_SCNR    :Six Flags over Texas
-STR_PARK    :Six Flags over Texas
-STR_DTLS    :Konstruu la mankantajn atrakciojn de Six Flags, aŭ kreu viajn proprajn desegnaĵojn por plibonigi la parkon! Sed ne forgesu vian ĉefan celon: por allogi pli da gastoj al la parko!
-
-###############################################################################
-## Wacky Worlds Scenarios
-###############################################################################
-<Africa - African Diamond Mine>
-STR_SCNR    :Afriko - Afrika Diamanto-Mino
-STR_PARK    :Minoj de Afriko
-STR_DTLS    :Vi heredis ne plu uzitan diamanto-minejon, kaj trovis valoran diamanton. Vi decidas investi tiun monon por konstrui mondfaman amuzparkon.
-
-<Africa - Oasis>
-STR_SCNR    :Afriko - Oazo
-STR_PARK    :Miraĝo-Frenezo
-STR_DTLS    :Dezerta oazo estis malkovrita kaj provizus belan lokon por parko. Transporto al la oazo estis provizita.
-
-<Africa - Victoria Falls>
-STR_SCNR    :Afriko - Akvofaloj de Viktoria
-STR_PARK    :Super La Rando
-STR_DTLS    :Digo konstruita oferas abundan malmultekostan hidroelektran potencon por administri parkon. Vi devas atingi altan parkvaloron por helpi repagi la prunton de la digo.
-
-<Antarctic - Ecological Salvage>
-STR_SCNR    :Antarkto - Ekologia Savo
-STR_PARK    :Glaciaj Aventuroj
-STR_DTLS    :La biomedia agentejo komisiis vin por transformi malnovan nafto-rafinejon, ekologian malbelaĵon, en supran turismo-vidindaĵon. Tereno estas malmultekosta sed pruntinterezo estas alta. Vi povas vendi la malnovajn konstruaĵojn por savado.
-
-<Asia - Great Wall of China Tourism Enhancement>
-STR_SCNR    :Azio - Plibonigo de Turismo de la Granda Ĉina Muro
-STR_PARK    :La Granda Ĉina Muro
-STR_DTLS    :La aŭtoritatoj decidis plibonigi turismon ĉirkaŭ la Granda Muro per konstrui amuzparkon sur la apuda tereno. Mono estas neniu problemo!
-
-<Asia - Japanese Coastal Reclaim>
-STR_SCNR    :Azio - Japana Marborda Reakiro
-STR_PARK    :Okinavo-Marbordo
-STR_DTLS    :Ekzistanta parko elĉerpiĝis de spaco. Via sola eblo estas konstrui sur la maron, kaj tial vi elprenis prunton. Alteco-limigoj de viaj konstruaĵoj estas observigitaj pro fondaĵoj kaj tertremo-risko.
-
-<Asia - Maharaja Palace>
-STR_SCNR    :Azio - Maharaĝo-Palaco
-STR_PARK    :Parko-Maharaĝo
-STR_DTLS    :Vi estis komisiita de la Maharaĝo por alporti amuzadon al la granda loka loĝantaro. Konstruu parkon inspiritan de la palaco de Maharaĝo.
-
-<Australasia - Ayers Rock>
-STR_SCNR    :Aŭstralazio - Uluruo
-STR_PARK    :Uluru-Aventuro
-STR_DTLS    :Vi helpas aborigenojn per konstrui parkon kiel parto de programo de kultura konscio. Vi bezonas akiri multajn gastojn por eduki ilin pri la unika heredaĵo de la aborigenoj.
-
-<Australasia - Fun at the Beach>
-STR_SCNR    :Aŭstralazio - Amuzo ĉe la Plaĝo
-STR_PARK    :Kradostado-Festo ĉe la Plaĝo
-STR_DTLS    :La marvivo-parko de loka entreprenisto eksenmoniĝis. Vi jam funkciigas malgrandan parkon, kaj aĉetas la alian parkon de la konstruo-kompanio. Ellaboru grandan kombinitan parkon.
-
-<Europe - European Cultural Festival>
-STR_SCNR    :Eŭropo - Eŭropa Kultura Festivalo
-STR_PARK    :Eŭropa Ekstravagancaĵo
-STR_DTLS    :Vi estis alportita por transpreni Eŭropan Kulturan Vizitanto-Vidindaĵon kaj devas pliigi la nombron de gastoj por repagi la EU-subvencion antaŭ la fino de la aktuala Eŭropa parlamento-oficdaŭro.
-
-<Europe - Renovation>
-STR_SCNR    :Eŭropo - Renovigo
-STR_PARK    :El La Cindroj
-STR_DTLS    :Malnova parko falis je kadukiĝo. Vi akiras subvencion de Eŭropa Unio por redoni ĉi tiun senigitan areon al sia iama gloro! Vi bezonas renovigi la parkon kaj repagi la subvencion.
-
-<N. America - Extreme Hawaiian Island>
-STR_SCNR    :Nordameriko - Ekstrema Havaja Insulo
-STR_PARK    :Komika Waikiki
-STR_DTLS    :La homoj de Havajo estas enuigitaj de surfado kaj serĉas ion pli intensan. Vi devas konstrui parkon ĉi-rilate por subteni la vidindaĵo-valoron de la areo alta.
-
-<North America - Grand Canyon>
-STR_SCNR    :Nordameriko - Granda Kanjono
-STR_PARK    :Kanjono-Katastrofoj
-STR_DTLS    :Vi devas konstrui parkon sur limigita tereno ambaŭflanke de ĉi tiu natura trezoro - vi havas la oportunecon por aĉeti najbaran terenon de la Indiĝenaj Amerikanoj. Vi devas kompletigi la celon por daŭrigi la loĝantaron de la loka vilaĝo.
-
-<North America - Rollercoaster Heaven>
-STR_SCNR    :Nordameriko - Paradizo de Ondaj Fervojoj
-STR_PARK    :Paradizo de Ondaj Fervojoj
-STR_DTLS    :Vi estas sukcesa komerca magnato prenanta longan libertempon, kiu deziras uzi ĉi tiun tempon per transformi la urban parkon en Onda-Fervojo-Paradizon. Mono estas neniu problemo!
-
-<South America - Inca Lost City>
-STR_SCNR    :Sudameriko - La Perdita Inkaa Urbo
-STR_PARK    :Fondinto de la Perdita Urbo
-STR_DTLS    :Por plue akceli lokan turismon, vi devas konstrui parkon, kiu kaj akordas kun sia ĉirkaŭaĵo, kaj observas limigojn de alteco.
-
-<South America - Rain Forest Plateau>
-STR_SCNR    :Sudameriko - Pluvarbaro-Altebenaĵo
-STR_PARK    :Pluvarbaro-Kapriolo
-STR_DTLS    :Spaco estas limigita en la altvalora pluvarbaro - vi devas plenegigi kiel eble plej multe en la ekzistantan senarbejon, por havigi vivipovan alternativon je la loka ligno-industrio.
-
-<South America - Rio Carnival>
-STR_SCNR    :Sudameriko - La Karnavalo de Rio
-STR_PARK    :Sukerpano-Marbordoj
-STR_DTLS    :Vi administras malgrandan parkon proksime de Rio-de-Ĵanejro, sed la banko alvokis vian prunton. Vi devas rapide pliigi vian enspezado-kapablon por repagi ĉi tiun neatenditan ŝuldon.
-
-###############################################################################
-## Time Twister Scenarios
-###############################################################################
-<Dark Age - Castle>
-STR_SCNR    :Malluma Epoko - Kastelo
-STR_PARK    :Klifoflanko-Kastelo
-STR_DTLS    :Lokaj anoj de la socio de batalo-rekonstruoj estas sufiĉe seriozaj pri ilia ŝatokupo. Ili konfidis al vi la laboron de konstrui amuzparkon kun temo de Malluma Epoko sur la tereno de Klifoflanko-Kastelo.
-
-<Dark Age - Robin Hood>
-STR_SCNR    :Malluma Epoko - Robin Hood
-STR_PARK    :Arbaro Sherwood
-STR_DTLS    :Por liberigi la riĉaĵon de riĉuloj kaj disdoni ĝin al senhavuloj, vi kaj viaj Gajaj Viroj decidis konstrui amuzparkon en Arbaro Sherwood.
-
-<Future - First Encounters>
-STR_SCNR    :Estonto - Unuaj Renkontoj
-STR_PARK    :Ekstertera Ekstravagancaĵo
-STR_DTLS    :Vivo estis malkovrita ĉe malproksima planedo. Konstruu eksterteran parkon por profiti de la senprecedenca ondo de intereso.
-
-<Future - Future World>
-STR_SCNR    :Estonto - Estonta Mondo
-STR_PARK    :Ĝemeloj-Urbo
-STR_DTLS    :Montru vian inventeman, utopian konceptadon de la estonteco - kreu futurisman parko-dezegnaĵon, kiu enkorpigas la plej modernajn atrakciojn.
-
-<Mythological - Animatronic Film Set>
-STR_SCNR    :Mitologia - Animatronika Filmado-Loko
-STR_PARK    :Animatronikaj Burleskaĵoj
-STR_DTLS    :Vi ricevis la taskon de funkciigi kaj plibonigi ekzistantan amuzparkon, kiu estis konstruita ĉe malnova filmado-loko. Konstruu tributon al la pioniraj haltmovado-animistoj, kiuj unue vivigis mitajn kreitojn sur la film-ekranon.
-
-<Mythological - Cradle of Civilisation>
-STR_SCNR    :Mitologia - Naskiĝejo de Civilizo
-STR_PARK    :Mitologia Frenezo
-STR_DTLS    :Vi posedas insulon de aparta arkeologia valoro. Vi decidis financi ĝian konservadon per konstrui amuzparkon surbaze de la riĉa Mitologia heredaĵo de la areo.
-
-<Prehistoric - After the Asteroid>
-STR_SCNR    :Prahistoria - Post la Asteroido
-STR_PARK    :Kratero-Buĉado
-STR_DTLS    :Vi posedas polvan malnovan meteor-krateron. Per vera entreprenema vigleco, vi decidis konstrui asteroidan amuzparkon kaj konverti vian ŝajne senvaloran bienon en konsiderindan riĉaĵon.
-
-<Prehistoric - Jurassic Safari>
-STR_SCNR    :Prahistoria - Ĵurasa Safario
-STR_PARK    :Onda-Fervojo-Dinosaŭro
-STR_DTLS    :Vi ricevis la taskon de konstrui Ĵurasa-epokan amuzparkon. Por optimumigi la aliron de viaj vizitantoj al la ekzotikaj ekspoziciaĵoj da kreskaĵoj kaj bestoj, vi bezonos konstrui atrakciojn irantajn super kaj en la valon.
-
-<Prehistoric - Stone Age>
-STR_SCNR    :Prahistoria - Ŝtonepoko
-STR_PARK    :Rokaj Vagaĵoj
-STR_DTLS    :Por malhelpi la ŝoseo-ellaborantojn kaj konservi la misterajn antikvajn ŝtono-rondojn, vi bezonos konstrui Ŝtonepokan amuzparkon kaj gajni profiton. Tamen, eble estos defio por allogi vizitantojn, ĉar la tereno estas iom negastema.
-
-<Roaring Twenties - Prison Island>
-STR_SCNR    :Muĝadaj Dudekaj - Prizono-Insulo
-STR_PARK    :Alkatrazo
-STR_DTLS    :La fifama Mallibereja Insulo - kies loĝantaro iam ŝveliĝis per piratistoj kaj eldevigantoj - nun estas aĉetebla. Vi decidis transformi ĝin en supran turisman vidindaĵon, kaj mono estas neniu problemo.
-
-<Roaring Twenties - Schneider Cup>
-STR_SCNR    :Muĝadaj Dudekaj - Schneider-Trofeo
-STR_PARK    :Schneider-Marbordoj
-STR_DTLS    :La 75-a datreveno de la Schneider-Trofeo-venko de via avo venas en kelkaj jaroj. Vi honoros lian atingon per konstrui amuzparkon surbaze de la fama hidroplano-vetkuro.
-
-<Roaring Twenties - Skyscrapers>
-STR_SCNR    :Muĝadaj Dudekaj - Ĉielskrapantoj
-STR_PARK    :Metropolo
-STR_DTLS    :Vi posedas malplenan teron proksime de la malaltaĵo-parto de la urbo. Por akiri la plej grandan parton de via urba propraĵo, konstruu ĉielskrapanto-temitan amuzparkon inspiritan de la altegiĝia artodekora arkitekturo de la dudekaj.
-
-<Rock 'n' Roll - Flower Power>
-STR_SCNR    :Rokenrolo - La Potenco de Floroj
-STR_PARK    :Woodstock-Festivalo
-STR_DTLS    :Granda jara muzikfestivalo okazas sur via tereno. Konstruu mojosan amuzparkon por teni la liberaniman spektantaron amuzita.
-
-<Rock 'n' Roll - Rock 'n' Roll>
-STR_SCNR    :Rokenrolo - Rokenrolo
-STR_PARK    :La Revivigo de Rokenrolo
-STR_DTLS    :Ĉi tiu maljuniĝa amuzparko vidis pli bonajn tagojn. Helpu la posedanton doni al ĝi eksmodan rokenrolan renovigon, kaj transformi la lokon en sukcesan ejon.
-
-###############################################################################
-## Official Custom Content Scenarios
-###############################################################################
-<Panda World>
-STR_SCNR    :Pando-Mondo
-STR_PARK    :Pando-Mondo
-STR_DTLS    :Aldonu pli da atrakcioj kaj allogu pli da homoj al ĉi tiu pando-temita amuzparko
+STR_6462    :Eksciteco
+STR_6463    :Eksciteco: {COMMA2DP32}
+STR_6464    :Intenseco
+STR_6465    :Intenseco: {COMMA2DP32}
+STR_6466    :Naŭzo
+STR_6467    :Naŭzo: {COMMA2DP32}
+STR_6468    :Ne Ankoraŭ Konita
+STR_6469    :Agordi pli malgrandan areon da patrolzono
+STR_6470    :Agordi pli grandan areon da patrolzono
+STR_6471    :Travidebla Vegetaĵaro
+STR_6472    :Travideblaj Veturiloj
+STR_6473    :Travideblaj Apogiloj
+STR_6474    :Nevideblaj Gastoj
+STR_6475    :Nevidebla Dungitaro
+STR_6476    :Nevideba Vegetaĵaro
+STR_6477    :Nevideba Pejzaĝo
+STR_6478    :Nevidebaj Trotuaroj
+STR_6479    :Nevidebaj Atrakcioj
+STR_6480    :Nevidebaj Veturiloj
+STR_6481    :Agordoj de Travidebleco
+STR_6482    :Agordoj de Travidebleco
+STR_6483    :Malfermi agordojn de travidebleco
+STR_6484    :Baskuligi travideblan vegetaĵaron
+STR_6485    :Baskuligi travideblajn veturilojn
+STR_6486    :Baskuligi nevideblajn gastojn
+STR_6487    :Baskuligi nevideblan dungitaron
+STR_6488    :{RED}Gastoj plendas pri la longeco de la atendovicoj en via parko.{NEWLINE}Konsideru mallongigi problemajn atendovicojn, aŭ pliigi la flukvanton de la atrakcioj.
+STR_6489    :Eraro: Malkongrua Versio de Parko
+STR_6490    :Averto: Parte Kongrua Versio de Parko
+STR_6491    :Ĉi tiu parko estis konservita en pli nova versio de OpenRCT2. La parko estis konservita en v{INT32} kaj bezonas almenaŭ v{INT32}. Vi nune estas en v{INT32}.
+STR_6492    :Ĉi tiu parko estis konservita en malnova versio de OpenRCT2, kaj ne povas esti malfermita per ĉi tiu versio de OpenRCT2. Parko estas v{INT32}.
+STR_6493    :Ĉi tiu parko estis konservita en pli nova versio de OpenRCT2, kelkaj datumoj eble estas perditaj. La parko estis konservita en v{INT32}. Vi nune estas en v{INT32}.
+STR_6494    :Grupigi laŭ atrakciotipo
+STR_6495    :Grupigi atrakciojn laŭ akrakciotipoj anstataŭ montri ĉiun veturilon aparte.
+STR_6496    :{WINDOW_COLOUR_2}{STRINGID}
+STR_6497    :Alklaku blokon por montri ĝiajn blokelementojn.{NEWLINE}Ctrl + alklaku blokelementon por elekti ĝin rekte.
+STR_6498    :Ŝalti por konservi kvadratan formon de mapo.
+STR_6499    :Veturilo-tipo ne estas subtenata de trakdesegnaĵo-formo
+STR_6500    :Trakelementoj ne estas subtenataj de trakdesegnaĵo-formo
+STR_6501    :Hazarda koloro
+STR_6502    :Entajpu valoron inter {COMMA16} kaj {COMMA16}
+STR_6503    :Almenaŭ unu staciobjekto elektendas
+STR_6504    :Almenaŭ unu tereno-surfaco elektendas
+STR_6505    :Almenaŭ unu tereno-flanko elektendas
+STR_6506    :Granda Duona Korktirilo (maldekstre)
+STR_6507    :Granda Duona Korktirilo (dekstre)
+STR_6508    :Meza Duona Lopo (maldekstre)
+STR_6509    :Meza Duona Lopo (dekstre)
+STR_6510    :Sengravida Ruliĝo (maldekstre)
+STR_6511    :Sengravida Ruliĝo (dekstre)
+STR_6512    :Granda Sengravida Ruliĝo (maldekstre)
+STR_6513    :Granda Sengravida Ruliĝo (dekstre)
+STR_6514    :Nevalida alteco!
+STR_6515    :{BLACK}RollerCoaster Tycoon 1 ne estas ligita - retropaŝaj bildoj estos uzitaj.
+STR_6516    :Unu aŭ pli objektoj aldonitaj bezonas je RollerCoaster Tycoon 1 ligita por ĝusta montrado. Retropaŝaj bildoj estos uzitaj.
+STR_6517    :Unu aŭ pli objektoj en ĉi tiu parko bezonas je RollerCoaster Tycoon 1 ligita por ĝusta montrado. Retropaŝaj bildoj estos uzitaj.
+STR_6518    :{BLACK}Musumu super scenaro por vidi ĝian priskribon kaj celon. Alklaku ĝin por ekludi.
+STR_6519    :Ekstraĵoj
+STR_6520    :Havaĵo-Pakoj
+STR_6521    :Malalta Prioritato
+STR_6522    :Alta Prioritato
+STR_6523    :Malkreskigi la prioritaton de la elektita havaĵo-pako.
+STR_6524    :Kreskigi ka prioritaton de la elektita havaĵo-pako.
+STR_6525    :Reŝargi ĉiujn havaĵojn en la ludo kontraŭ la ŝaltitaj havaĵo-pakoj.
+STR_6526    :(bazaj grafikoj, muziko kaj sonefikoj)
+STR_6527    :Konkursoj
+STR_6528    :Nevalidaj parametroj de trako!
+STR_6529    :Nevalida parametro de kolorskemo!
+STR_6530    :Uzantkreita Kompletiga Aro
+STR_6531    :La Tempomaŝino
+STR_6532    :La Revomondo de Katia
+STR_6533    :{WINDOW_COLOUR_2}Faktoro de Eksciteco: {BLACK}-{COMMA16}%
+STR_6534    :{WINDOW_COLOUR_2}Faktoro de Intenseco: {BLACK}-{COMMA16}%
+STR_6535    :{WINDOW_COLOUR_2}Faktoro de Naŭzo: {BLACK}-{COMMA16}%
+STR_6536    :Ĉi tiu parko estis konservita en pli nova versio de OpenRCT2. La parko estis konservita en v{INT32}, vi nune estas en v{INT32}.
+STR_6537    :Permesi uzante regulajn trotuarojn kiel atendovico
+STR_6538    :Montras regulajn trotuarojn en la atendovicoj-fallisto de la Trotuaroj-fenestro.
+STR_6539    :Bremso Fermita
+STR_6540    :{WINDOW_COLOUR_2}Specialan dankon al la sekvantaj firmaoj por permesi ilian similecon:
+STR_6541    :{WINDOW_COLOUR_2}Rocky Mountain Construction Group, Josef Wiegand GmbH & Co. KG, Intamin Amusement Rides Int. Corp. Est.
+STR_6542    :Kontribuantoj
+STR_6543    :Kontribuantoj…
+STR_6544    :Prunto ne povas esti negativa!
+STR_6545    :Uzi interezan kalkulon de RCT1
+STR_6546    :Uzi la interezan kalkulan algoritmon de RollerCoaster Tycoon 1, kiu uzis fiksitan procenton de proksimume 1.33%.
+STR_6547    :Ĉiuj Pejzaĝoj
+STR_6548    :Montri balustradojn ĉe kuniĝo
+STR_6549    :Kongruaj objektoj ne povas esti elektitaj!
+STR_6550    :Ĉi tiu elemento estas inkluzivita por retrokongruo kun malnovaj aŭ difektitaj objektoj. Ĝi ne povas esti elektita, nur malelektita.
+STR_6551    :Armea verdo
+STR_6552    :Mielroso-koloro
+STR_6553    :Flavecbruno
+STR_6554    :Grenata koloro
+STR_6555    :Korala rozkoloro
+STR_6556    :Arbara verdo
+STR_6557    :Kartuzio
+STR_6558    :Ĉasista verdo
+STR_6559    :Celadono
+STR_6560    :Limea verdo
+STR_6561    :Sepio
+STR_6562    :Persiko-koloro
+STR_6563    :Vinko
+STR_6564    :Viridiano
+STR_6565    :Marŝaŭma verdo
+STR_6566    :Violo
+STR_6567    :Lavendo
+STR_6568    :Paŝtela oranĝkoloro
+STR_6569    :Profunda akvo
+STR_6570    :Paŝtela rozkoloro
+STR_6571    :Umbro
+STR_6572    :Flavgrizo
+STR_6573    :Nevidebla
+STR_6574    :Vaka
+STR_6575    :Permesi specialajn kolorskemojn
+STR_6576    :Aldonas specialajn kolorojn al koloro-fallisto
+STR_6577    :Rapideco de blokparto-bremso
+STR_6578    :Agordi rapidlimon de blokparto-bremsoj. En blokpartoj-reĝimo, apudaj bremsoj kun pli malrapida rapideco estas ligitaj al la blokparto-bremso.
+STR_6579    :Blokparto-bremsoj estos agorditaj al defaŭlta rapideco, kiam konservite kiel trakdesegnaĵo
+STR_6580    :Restarigi
+STR_6581    :Ĉu vi certas, ke vi volas restarigi ĉiujn klavarokomandojn sur ĉi tiu langeto?
+STR_6582    :Malfermi klavarokomandoj-fenestron
+STR_6583    :{WINDOW_COLOUR_2}Inversaj Trajnoj
+STR_6584    :Elektu por funkciigi trajnojn inverse
+STR_6585    :Ne eblas ŝanĝi tion…
+STR_6586    :OpenRCT2
+STR_6587    :La Titolomuziko de OpenRCT2 estas verko de Allister Brimble,{NEWLINE}rajtigita CC BY-SA 4.0.
+STR_6588    :Dank' al Herman Riddering pro permesi al ni registri la 35er Voigt.
+STR_6589    :Montri fenestro-butonojn maldekstre
+STR_6590    :Montri la fenestro-butonojn (ekz. fermi la fenestron) maldekstre de la titola breto anstataŭ dekstre.
+STR_6591    :Dungito nune estas riparanta atrakcion kaj ne povas esti maldungita.
+STR_6592    :Dungito nune estas inspektanta atrakcion kaj ne povas esti maldungita.
+STR_6593    :Forigi parkobarilojn
+STR_6594    :Inspektilo de Bloko: Baskuligi deklivecon de muro
+STR_6595    :{WINDOW_COLOUR_2}Aŭtoro: {BLACK}{STRING}
+STR_6596    :{WINDOW_COLOUR_2}Aŭtoroj: {BLACK}{STRING}
+STR_6597    :Nevalida parametro
+STR_6598    :Valoro estas ekstervarieja
+STR_6599    :Fantomo-elemento ne troviĝis
+STR_6600    :Balono ne troviĝis
+STR_6601    :Dungitaro ne troviĝis
+STR_6602    :Atrakcio ne troviĝis
+STR_6603    :Enigo de atrakcio-objekto ne troviĝis
+STR_6604    :Ludanto ne troviĝis
+STR_6605    :Enirejo-elemento ne troviĝis
+STR_6606    :Surfaco-elemento ne troviĝis
+STR_6607    :Blokelemento ne troviĝis
+STR_6608    :Trakelemento ne troviĝis
+STR_6609    :Blokparto de trako ne troviĝis
+STR_6610    :Trotuaro-elemento ne troviĝis
+STR_6611    :Muro-elemento ne troviĝis
+STR_6612    :Rubando-elemento ne troviĝis
+STR_6613    :Reŝargi objekton
+STR_6614    :Ne povas ŝanĝi enirpagon de parko
+STR_6615    :Trako sur ĉi tiu bloko bezonas akvon
+STR_6616    :Ago estas nevalida por tiu dungitotipo
+STR_6617    :Ne povas permuti blokelementon kun si mem
+STR_6618    :Ne povas limigi aŭ mallimigi objekton…
+STR_6619    :Objekotipo ne povas esti limigita!
+STR_6620    :Objekto ne troviĝis!
+STR_6621    :Limigi
+STR_6622    :Limigi objekton al la Scenaroredaktilo kaj Provejo-reĝimo.
+STR_6623    :Tajpu la komandon ‘help’ por montri liston de disponeblaj komandoj. Tajpu la komandon ‘hide’ por kaŝi la konsolon.
+STR_6624    :Inspektilo de Bloko: Ordigi elementojn
+STR_6625    :Nevalida koloro
+STR_6626    :Animacio movas malantaŭen
+STR_6627    :Rapideco de trako estas tro alta!
+STR_6628    :Nur meteblas sur bordoj de trotuaroj!
+STR_6629    :Ĝisrandigi butonojn de ilobreto horizontale centren
+STR_6630    :Ĉi tiu agordo ĝisrandigos la butonojn de ilobreto horizontale centren de la ekrano. La tradicia maniero ĝisrandigi ilin estas al la dekstre kaj maldeksre anguloj.
+STR_6631    :Ŝargado…
+STR_6632    :Kontrolas dosierojn de objektoj…
+STR_6633    :Kontrolas dosierojn de scenaroj…
+STR_6634    :Kontrolas dosierojn de trakdesegnaĵoj…
+STR_6635    :Kontrolas havaĵo-pakojn…
+STR_6636    :Kontrolas titolosekvencojn…
+STR_6637    :Ŝargas titolosekvencon…
+STR_6638    :Pligrandigita fasado
+STR_6639    :Modifas la fasadon por esti pli taŭga por tuŝekranoj
+STR_6640    :Redakti havaĵo-pakojn…
+STR_6641    :Ŝargado/progreso-fenestro
+STR_6642    :{STRING} ({COMMA32} / {COMMA32})
+STR_6643    :{STRING} ({COMMA32} / {COMMA32} KiB)
+STR_6644    :Tuŝekranaj plibonigoj
+STR_6645    :Pligrandigas kelkajn elementojn de la fasado, por ke ili estas pli facile klakeblaj aŭ tuŝeblaj.
+STR_6646    :Aŭtoro: {STRING}
+STR_6647    :Aŭtoroj: {STRING}
+STR_6648    :Ŝargas kromprograman motoron…
+STR_6649    :Ŝargas scenaron…
+STR_6650    :Ŝargas konservitan ludon…
+STR_6651    :{STRING} ({COMMA32}%)
+STR_6652    :Erarfenestro
+STR_6653    :Ĉiuj fontoj montritaj
+STR_6654    :Montras {POP16}{UINT16} fontojn
+STR_6655    :Nur ‘{POP16}{STRINGID}’
+STR_6656    :Forigi ĉiujn barilojn de la parko
+STR_6657    :Bieno Ne Posedata
+STR_6658    :Agordi bienon ne posedatan de la parko, nek aĉeteblan
+STR_6659    :Gastoj ignoras prezojn
+STR_6660    :Gastoj ignoros la prezojn de atrakcioj kaj budoj.
+STR_6661    :Hazardigi ĉiujn
+STR_6662    :Hazardigi kolorojn por ĉiu trajno aŭ veturilo.
+STR_6663    :Trompoj de dato
+STR_6664    :Montri trompojn de dato
+STR_6665    :Trompoj de naturo/vetero
+STR_6666    :Montri trompojn de naturo/vetero
+STR_6667    :Faŭno
+STR_6668    :Trompoj de dungitaro
+STR_6669    :Montri trompojn de dungitaro
+STR_6670    :Konduto de gastoj
+STR_6671    :Montri ‘faktajn’ nomojn de dungitaro
+STR_6672    :Baskuligi inter montrado de ‘faktaj’ dungitonomoj kaj dungitonumeroj
+STR_6673    :Travidebla
+STR_6674    :{MONTH}, Jaro {COMMA16}
+STR_6675    :Nomoj de Hometoj
+STR_6676    :Almenaŭ unu objecto de hometonomo elektendas
+STR_6677    :Aldoni strandojn ĉirkaŭ amasoj de akvo
+STR_6678    :Fonto de altmapo:
+STR_6679    :Ebenaĵo
+STR_6680    :Simplaĵa bruo
+STR_6681    :Dosiero de altmapo
+STR_6682    :Mapogenerilo - Generilo
+STR_6683    :Mapogenerilo - Tereno
+STR_6684    :Mapogenerilo - Akvo
+STR_6685    :Mapogenerilo - Arbaroj
+STR_6686    :Proporcio de arbo al tero:
+STR_6687    :Min. alteco de arboj:
+STR_6688    :Maks. alteco de arboj:
+STR_6689    :{UINT16}%
+STR_6690    :Minimuma alteco de tero
+STR_6691    :Entajpu minimuman altecon de tero inter {COMMA16} kaj {COMMA16}
+STR_6692    :Maksimuma alteco de tero
+STR_6693    :Entajpu maksimuman altecon de tero inter {COMMA16} kaj {COMMA16}
+STR_6694    :Minimuma alteco de arboj
+STR_6695    :Entajpu minimuman altecon de arboj inter {COMMA16} kaj {COMMA16}
+STR_6696    :Maksimuma alteco de arboj
+STR_6697    :Entajpu maksimuman altecon de arboj inter {COMMA16} kaj {COMMA16}
+STR_6698    :Proporcio de arbo al tero
+STR_6699    :Entajpu proporcion de arbo al tero inter {COMMA16} kaj {COMMA16}
+STR_6700    :Baza frekvenco de simplaĵo
+STR_6701    :Entajpu bazan frekvencon inter {COMMA2DP32} kaj {COMMA2DP32}
+STR_6702    :Oktavoj de simplaĵo
+STR_6703    :Entajpu oktavojn inter {COMMA16} kaj {COMMA16}
+STR_6704    :{COMMA2DP32}
+STR_6705    :Foliumi...
+STR_6706    :{WINDOW_COLOUR_2}Nuna bildodosiero: {BLACK}{STRING}
+STR_6707    :(neniu elektita)
+STR_6708    :Glata forteco
+STR_6709    :Entajpu glatan fortecon inter {COMMA16} kaj {COMMA16}
+STR_6710    :Stabila ordigo
+STR_6711    :Dosiernomo:
+STR_6712    :Konservi
+STR_6713    :{COMMA32} {STRINGID}
+STR_6714    :Dosiernomo
+STR_6715    :Dato modifita
+STR_6716    :Dosiergrando
+STR_6717    :Dosiergrando {STRINGID}
+STR_6718    :Animacioj de Hometoj
+STR_6719    :Almenaŭ unu animacio-objekto de gasto elektendas
+STR_6720    :Almenaŭ unu animacio-objekto de faktoto elektendas
+STR_6721    :Almenaŭ unu animacio-objekto de mekanikisto elektendas
+STR_6722    :Almenaŭ unu animacio-objekto de gardisto elektendas
+STR_6723    :Almenaŭ unu animacio-objekto de amuzisto elektendas
+STR_6724    :Scenaro-Tekstoj
+STR_6725    :X:
+STR_6726    :Y:
+STR_6727    :Plonĝlopo (maldekstre)
+STR_6728    :Plonĝlopo (dekstre)
+STR_6729    :Kablolifto-monteto devas komenci tuj post stacio aŭ bremso de blokparto

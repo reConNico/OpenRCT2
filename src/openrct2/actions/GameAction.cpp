@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,29 +10,30 @@
 #include "GameAction.h"
 
 #include "../Context.h"
+#include "../Diagnostic.h"
+#include "../GameState.h"
 #include "../ReplayManager.h"
 #include "../core/Guard.hpp"
 #include "../core/Memory.hpp"
 #include "../core/MemoryStream.h"
 #include "../entity/MoneyEffect.h"
-#include "../localisation/Localisation.h"
+#include "../localisation/Formatter.h"
 #include "../network/network.h"
-#include "../platform/platform.h"
+#include "../platform/Platform.h"
+#include "../profiling/Profiling.h"
 #include "../scenario/Scenario.h"
 #include "../scripting/Duktape.hpp"
 #include "../scripting/HookEngine.h"
 #include "../scripting/ScriptEngine.h"
-#include "../ui/UiContext.h"
 #include "../ui/WindowManager.h"
 #include "../world/Park.h"
 #include "../world/Scenery.h"
 
-#include <algorithm>
 #include <iterator>
 
 using namespace OpenRCT2;
 
-namespace GameActions
+namespace OpenRCT2::GameActions
 {
     struct QueuedGameAction
     {
@@ -82,11 +83,11 @@ namespace GameActions
 
     void Enqueue(GameAction::Ptr&& ga, uint32_t tick)
     {
-        if (ga->GetPlayer() == -1 && network_get_mode() != NETWORK_MODE_NONE)
+        if (ga->GetPlayer() == -1 && NetworkGetMode() != NETWORK_MODE_NONE)
         {
             // Server can directly invoke actions and will have no player id assigned
             // as that normally happens when receiving them over network.
-            ga->SetPlayer(network_get_current_player_id());
+            ga->SetPlayer(NetworkGetCurrentPlayerId());
         }
         _actionQueue.emplace(tick, std::move(ga), _nextUniqueId++);
     }
@@ -99,14 +100,14 @@ namespace GameActions
             return;
         }
 
-        const uint32_t currentTick = gCurrentTicks;
+        const uint32_t currentTick = GetGameState().CurrentTicks;
 
         while (_actionQueue.begin() != _actionQueue.end())
         {
             // run all the game commands at the current tick
             const QueuedGameAction& queued = *_actionQueue.begin();
 
-            if (network_get_mode() == NETWORK_MODE_CLIENT)
+            if (NetworkGetMode() == NETWORK_MODE_CLIENT)
             {
                 if (queued.tick < currentTick)
                 {
@@ -131,7 +132,7 @@ namespace GameActions
                 case GameCommand::PlaceLargeScenery:
                 case GameCommand::PlaceBanner:
                 case GameCommand::PlaceScenery:
-                    scenery_remove_ghost_tool_placement();
+                    SceneryRemoveGhostToolPlacement();
                     break;
                 default:
                     break;
@@ -143,10 +144,10 @@ namespace GameActions
             Guard::Assert(action != nullptr);
 
             GameActions::Result result = Execute(action);
-            if (result.Error == GameActions::Status::Ok && network_get_mode() == NETWORK_MODE_SERVER)
+            if (result.Error == GameActions::Status::Ok && NetworkGetMode() == NETWORK_MODE_SERVER)
             {
                 // Relay this action to all other clients.
-                network_send_game_action(action);
+                NetworkSendGameAction(action);
             }
 
             _actionQueue.erase(_actionQueue.begin());
@@ -181,7 +182,7 @@ namespace GameActions
     {
         if (gGamePaused == 0)
             return true;
-        if (gCheatsBuildInPauseMode)
+        if (GetGameState().Cheats.buildInPauseMode)
             return true;
         if (actionFlags & GameActions::Flags::AllowWhilePaused)
             return true;
@@ -208,7 +209,7 @@ namespace GameActions
 
         if (result.Error == GameActions::Status::Ok)
         {
-            if (!finance_check_affordability(result.Cost, action->GetFlags()))
+            if (!FinanceCheckAffordability(result.Cost, action->GetFlags()))
             {
                 result.Error = GameActions::Status::InsufficientFunds;
                 result.ErrorTitle = STR_CANT_DO_THIS;
@@ -231,25 +232,25 @@ namespace GameActions
 
     static const char* GetRealm()
     {
-        if (network_get_mode() == NETWORK_MODE_CLIENT)
+        if (NetworkGetMode() == NETWORK_MODE_CLIENT)
             return "cl";
-        if (network_get_mode() == NETWORK_MODE_SERVER)
+        if (NetworkGetMode() == NETWORK_MODE_SERVER)
             return "sv";
         return "sp";
     }
 
-    struct ActionLogContext_t
+    struct ActionLogContext
     {
         MemoryStream output;
     };
 
-    static void LogActionBegin(ActionLogContext_t& ctx, const GameAction* action)
+    static void LogActionBegin(ActionLogContext& ctx, const GameAction* action)
     {
         MemoryStream& output = ctx.output;
 
         char temp[128] = {};
         snprintf(
-            temp, sizeof(temp), "[%s] Tick: %u, GA: %s (%08X) (", GetRealm(), gCurrentTicks, action->GetName(),
+            temp, sizeof(temp), "[%s] Tick: %u, GA: %s (%08X) (", GetRealm(), GetGameState().CurrentTicks, action->GetName(),
             EnumValue(action->GetType()));
 
         output.Write(temp, strlen(temp));
@@ -260,7 +261,7 @@ namespace GameActions
         action->Serialise(ds);
     }
 
-    static void LogActionFinish(ActionLogContext_t& ctx, const GameAction* action, const GameActions::Result& result)
+    static void LogActionFinish(ActionLogContext& ctx, const GameAction* action, const GameActions::Result& result)
     {
         MemoryStream& output = ctx.output;
 
@@ -278,9 +279,9 @@ namespace GameActions
         output.Write(temp, strlen(temp) + 1);
 
         const char* text = static_cast<const char*>(output.GetData());
-        log_verbose("%s", text);
+        LOG_VERBOSE("%s", text);
 
-        network_append_server_log(text);
+        NetworkAppendServerLog(text);
     }
 
     static GameActions::Result ExecuteInternal(const GameAction* action, bool topLevel)
@@ -290,11 +291,14 @@ namespace GameActions
         uint16_t actionFlags = action->GetActionFlags();
         uint32_t flags = action->GetFlags();
 
+        // Some actions are not recorded in the replay.
+        const auto ignoreForReplays = (actionFlags & GameActions::Flags::IgnoreForReplays) != 0;
+
         auto* replayManager = OpenRCT2::GetContext()->GetReplayManager();
         if (replayManager != nullptr && (replayManager->IsReplaying() || replayManager->IsNormalising()))
         {
             // We only accept replay commands as long the replay is active.
-            if ((flags & GAME_COMMAND_FLAG_REPLAY) == 0)
+            if ((flags & GAME_COMMAND_FLAG_REPLAY) == 0 && !ignoreForReplays)
             {
                 // TODO: Introduce proper error.
                 auto result = GameActions::Result();
@@ -309,7 +313,7 @@ namespace GameActions
         GameActions::Result result = QueryInternal(action, topLevel);
 #ifdef ENABLE_SCRIPTING
         if (result.Error == GameActions::Status::Ok
-            && ((network_get_mode() == NETWORK_MODE_NONE) || (flags & GAME_COMMAND_FLAG_NETWORKED)))
+            && ((NetworkGetMode() == NETWORK_MODE_NONE) || (flags & GAME_COMMAND_FLAG_NETWORKED)))
         {
             auto& scriptEngine = GetContext()->GetScriptEngine();
             scriptEngine.RunGameActionHooks(*action, result, false);
@@ -321,32 +325,33 @@ namespace GameActions
             if (topLevel)
             {
                 // Networked games send actions to the server to be run
-                if (network_get_mode() == NETWORK_MODE_CLIENT)
+                if (NetworkGetMode() == NETWORK_MODE_CLIENT)
                 {
                     // As a client we have to wait or send it first.
                     if (!(actionFlags & GameActions::Flags::ClientOnly) && !(flags & GAME_COMMAND_FLAG_NETWORKED))
                     {
-                        log_verbose("[%s] GameAction::Execute %s (Out)", GetRealm(), action->GetName());
-                        network_send_game_action(action);
+                        LOG_VERBOSE("[%s] GameAction::Execute %s (Out)", GetRealm(), action->GetName());
+                        NetworkSendGameAction(action);
 
                         return result;
                     }
                 }
-                else if (network_get_mode() == NETWORK_MODE_SERVER)
+                else if (NetworkGetMode() == NETWORK_MODE_SERVER || !gInUpdateCode)
                 {
                     // If player is the server it would execute right away as where clients execute the commands
                     // at the beginning of the frame, so we have to put them into the queue.
+                    // This is also the case when its executed from the UI update.
                     if (!(actionFlags & GameActions::Flags::ClientOnly) && !(flags & GAME_COMMAND_FLAG_NETWORKED))
                     {
-                        log_verbose("[%s] GameAction::Execute %s (Queue)", GetRealm(), action->GetName());
-                        Enqueue(action, gCurrentTicks);
+                        LOG_VERBOSE("[%s] GameAction::Execute %s (Queue)", GetRealm(), action->GetName());
+                        Enqueue(action, GetGameState().CurrentTicks);
 
                         return result;
                     }
                 }
             }
 
-            ActionLogContext_t logContext;
+            ActionLogContext logContext;
             LogActionBegin(logContext, action);
 
             // Execute the action, changing the game state
@@ -367,31 +372,32 @@ namespace GameActions
                 return result;
 
             // Update money balance
-            if (result.Error == GameActions::Status::Ok && finance_check_money_required(flags) && result.Cost != 0)
+            if (result.Error == GameActions::Status::Ok && FinanceCheckMoneyRequired(flags) && result.Cost != 0)
             {
-                finance_payment(result.Cost, result.Expenditure);
+                FinancePayment(result.Cost, result.Expenditure);
                 MoneyEffect::Create(result.Cost, result.Position);
             }
 
             if (!(actionFlags & GameActions::Flags::ClientOnly) && result.Error == GameActions::Status::Ok)
             {
-                if (network_get_mode() != NETWORK_MODE_NONE)
+                if (NetworkGetMode() != NETWORK_MODE_NONE)
                 {
                     NetworkPlayerId_t playerId = action->GetPlayer();
 
-                    int32_t playerIndex = network_get_player_index(playerId.id);
+                    int32_t playerIndex = NetworkGetPlayerIndex(playerId.id);
                     Guard::Assert(
                         playerIndex != -1, "Unable to find player %u for game action %u", playerId, action->GetType());
 
-                    network_set_player_last_action(playerIndex, action->GetType());
-                    if (result.Cost != 0)
+                    NetworkSetPlayerLastAction(playerIndex, action->GetType());
+                    NetworkIncrementPlayerNumCommands(playerIndex);
+                    if (result.Cost > 0)
                     {
-                        network_add_player_money_spent(playerIndex, result.Cost);
+                        NetworkAddPlayerMoneySpent(playerIndex, result.Cost);
                     }
 
                     if (!result.Position.IsNull())
                     {
-                        network_set_player_last_action_coord(playerIndex, result.Position);
+                        NetworkSetPlayerLastActionCoord(playerIndex, result.Position);
                     }
                 }
                 else
@@ -399,7 +405,7 @@ namespace GameActions
                     bool commandExecutes = (flags & GAME_COMMAND_FLAG_GHOST) == 0 && (flags & GAME_COMMAND_FLAG_NO_SPEND) == 0;
 
                     bool recordAction = false;
-                    if (replayManager != nullptr)
+                    if (replayManager != nullptr && !ignoreForReplays)
                     {
                         if (replayManager->IsRecording() && commandExecutes)
                             recordAction = true;
@@ -408,15 +414,15 @@ namespace GameActions
                     }
                     if (recordAction)
                     {
-                        replayManager->AddGameAction(gCurrentTicks, action);
+                        replayManager->AddGameAction(GetGameState().CurrentTicks, action);
                     }
                 }
             }
 
             // Allow autosave to commence
-            if (gLastAutoSaveUpdate == AUTOSAVE_PAUSE)
+            if (gLastAutoSaveUpdate == kAutosavePause)
             {
-                gLastAutoSaveUpdate = platform_get_ticks();
+                gLastAutoSaveUpdate = Platform::GetTicks();
             }
         }
 
@@ -431,12 +437,12 @@ namespace GameActions
         bool shouldShowError = !(flags & GAME_COMMAND_FLAG_GHOST) && !(flags & GAME_COMMAND_FLAG_NO_SPEND) && topLevel;
 
         // In network mode the error should be only shown to the issuer of the action.
-        if (network_get_mode() != NETWORK_MODE_NONE)
+        if (NetworkGetMode() != NETWORK_MODE_NONE)
         {
             // If the action was never networked and query fails locally the player id is not assigned.
             // So compare only if the action went into the queue otherwise show errors by default.
             const bool isActionFromNetwork = (action->GetFlags() & GAME_COMMAND_FLAG_NETWORKED) != 0;
-            if (isActionFromNetwork && action->GetPlayer() != network_get_current_player_id())
+            if (isActionFromNetwork && action->GetPlayer() != NetworkGetCurrentPlayerId())
             {
                 shouldShowError = false;
             }
@@ -444,7 +450,7 @@ namespace GameActions
 
         if (result.Error != GameActions::Status::Ok && shouldShowError)
         {
-            auto windowManager = GetContext()->GetUiContext()->GetWindowManager();
+            auto windowManager = Ui::GetWindowManager();
             windowManager->ShowError(result.GetErrorTitle(), result.GetErrorMessage());
         }
 
@@ -460,7 +466,7 @@ namespace GameActions
     {
         return ExecuteInternal(action, false);
     }
-} // namespace GameActions
+} // namespace OpenRCT2::GameActions
 
 const char* GameAction::GetName() const
 {
@@ -469,7 +475,7 @@ const char* GameAction::GetName() const
 
 bool GameAction::LocationValid(const CoordsXY& coords) const
 {
-    auto result = map_is_location_valid(coords);
+    auto result = MapIsLocationValid(coords);
     if (!result)
         return false;
 #ifdef ENABLE_SCRIPTING

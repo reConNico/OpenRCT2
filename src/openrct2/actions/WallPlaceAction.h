@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -15,6 +15,8 @@
 #include "../world/Scenery.h"
 #include "GameAction.h"
 
+struct WallSceneryEntry;
+
 struct WallPlaceActionResult
 {
     int32_t BaseHeight{};
@@ -24,7 +26,7 @@ struct WallPlaceActionResult
 class WallPlaceAction final : public GameActionBase<GameCommand::PlaceWall>
 {
 private:
-    ObjectEntryIndex _wallType{ OBJECT_ENTRY_INDEX_NULL };
+    ObjectEntryIndex _wallType{ kObjectEntryIndexNull };
     CoordsXYZ _loc;
     Direction _edge{ INVALID_DIRECTION };
     int32_t _primaryColour{ COLOUR_BLACK };
@@ -42,8 +44,8 @@ public:
     uint16_t GetActionFlags() const override final;
 
     void Serialise(DataSerialiser& stream) override;
-    GameActions::Result Query() const override;
-    GameActions::Result Execute() const override;
+    OpenRCT2::GameActions::Result Query() const override;
+    OpenRCT2::GameActions::Result Execute() const override;
 
 private:
     /**
@@ -51,16 +53,18 @@ private:
      *  rct2: 0x006E5CBA
      */
     bool WallCheckObstructionWithTrack(
-        WallSceneryEntry* wall, int32_t z0, TrackElement* trackElement, bool* wallAcrossTrack) const;
+        const WallSceneryEntry* wall, int32_t z0, TrackElement* trackElement, bool* wallAcrossTrack) const;
     /**
      *
      *  rct2: 0x006E5C1A
      */
-    GameActions::Result WallCheckObstruction(WallSceneryEntry* wall, int32_t z0, int32_t z1, bool* wallAcrossTrack) const;
+    OpenRCT2::GameActions::Result WallCheckObstruction(
+        const WallSceneryEntry* wall, int32_t z0, int32_t z1, bool* wallAcrossTrack) const;
 
     /**
      * Gets whether the given track type can have a wall placed on the edge of the given direction.
      * Some thin tracks for example are allowed to have walls either side of the track, but wider tracks can not.
      */
-    static bool TrackIsAllowedWallEdges(uint8_t rideType, track_type_t trackType, uint8_t trackSequence, uint8_t direction);
+    static bool TrackIsAllowedWallEdges(
+        ride_type_t rideType, OpenRCT2::TrackElemType trackType, uint8_t trackSequence, uint8_t direction);
 };

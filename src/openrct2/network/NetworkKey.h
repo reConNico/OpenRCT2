@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,18 +11,16 @@
 
 #ifndef DISABLE_NETWORK
 
-#    include "../common.h"
-
-#    include <memory>
-#    include <string>
-#    include <vector>
+    #include <memory>
+    #include <string>
+    #include <vector>
 
 namespace OpenRCT2
 {
     struct IStream;
 }
 
-namespace Crypt
+namespace OpenRCT2::Crypt
 {
     class RsaKey;
 }
@@ -40,12 +38,12 @@ public:
     std::string PublicKeyString();
     std::string PublicKeyHash();
     void Unload();
-    bool Sign(const uint8_t* md, const size_t len, std::vector<uint8_t>& signature);
-    bool Verify(const uint8_t* md, const size_t len, const std::vector<uint8_t>& signature);
+    bool Sign(const uint8_t* md, const size_t len, std::vector<uint8_t>& signature) const;
+    bool Verify(const uint8_t* md, const size_t len, const std::vector<uint8_t>& signature) const;
 
 private:
     NetworkKey(const NetworkKey&) = delete;
-    std::unique_ptr<Crypt::RsaKey> _key;
+    std::unique_ptr<OpenRCT2::Crypt::RsaKey> _key;
 };
 
 #endif // DISABLE_NETWORK

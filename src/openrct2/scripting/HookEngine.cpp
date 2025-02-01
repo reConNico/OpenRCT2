@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,12 +9,12 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "HookEngine.h"
+    #include "HookEngine.h"
 
-#    include "../core/EnumMap.hpp"
-#    include "ScriptEngine.h"
+    #include "../core/EnumMap.hpp"
+    #include "ScriptEngine.h"
 
-#    include <unordered_map>
+    #include <unordered_map>
 
 using namespace OpenRCT2::Scripting;
 
@@ -31,6 +31,10 @@ static const EnumMap<HOOK_TYPE> HooksLookupTable({
     { "action.location", HOOK_TYPE::ACTION_LOCATION },
     { "guest.generation", HOOK_TYPE::GUEST_GENERATION },
     { "vehicle.crash", HOOK_TYPE::VEHICLE_CRASH },
+    { "map.change", HOOK_TYPE::MAP_CHANGE },
+    { "map.changed", HOOK_TYPE::MAP_CHANGED },
+    { "map.save", HOOK_TYPE::MAP_SAVE },
+    { "park.guest.softcap.calculate", HOOK_TYPE::PARK_CALCULATE_GUEST_CAP },
 });
 
 HOOK_TYPE OpenRCT2::Scripting::GetHookType(const std::string& name)
@@ -94,6 +98,15 @@ bool HookEngine::HasSubscriptions(HOOK_TYPE type) const
 {
     auto& hookList = GetHookList(type);
     return !hookList.Hooks.empty();
+}
+
+bool HookEngine::IsValidHookForPlugin(HOOK_TYPE type, Plugin& plugin) const
+{
+    if (type == HOOK_TYPE::MAP_CHANGED && plugin.GetMetadata().Type != PluginType::Intransient)
+    {
+        return false;
+    }
+    return true;
 }
 
 void HookEngine::Call(HOOK_TYPE type, bool isGameStateMutable)

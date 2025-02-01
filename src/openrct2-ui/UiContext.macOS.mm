@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,7 +11,7 @@
 
 #    include "UiContext.h"
 
-#    include <openrct2/common.h>
+#    include <openrct2/Diagnostic.h>
 #    include <openrct2/core/String.hpp>
 #    include <openrct2/ui/UiContext.h>
 
@@ -49,7 +49,7 @@ namespace OpenRCT2::Ui
 
         bool IsSteamOverlayAttached() override
         {
-            STUB();
+            LOG_WARNING("Function %s at %s:%d is a stub.", __PRETTY_FUNCTION__, __FILE__, __LINE__);
             return false;
         }
 
@@ -110,7 +110,7 @@ namespace OpenRCT2::Ui
 
                 NSString* directory;
                 NSSavePanel* panel;
-                if (desc.Type == FILE_DIALOG_TYPE::SAVE)
+                if (desc.Type == FileDialogType::Save)
                 {
                     NSString* filePath = [NSString stringWithUTF8String:desc.DefaultFilename.c_str()];
                     directory = filePath.stringByDeletingLastPathComponent;
@@ -118,7 +118,7 @@ namespace OpenRCT2::Ui
                     panel = [NSSavePanel savePanel];
                     panel.nameFieldStringValue = [NSString stringWithFormat:@"%@.%@", basename, extensions.firstObject];
                 }
-                else if (desc.Type == FILE_DIALOG_TYPE::OPEN)
+                else if (desc.Type == FileDialogType::Open)
                 {
                     directory = [NSString stringWithUTF8String:desc.InitialDirectory.c_str()];
                     NSOpenPanel* open = [NSOpenPanel openPanel];
@@ -129,6 +129,7 @@ namespace OpenRCT2::Ui
                 }
                 else
                 {
+                    SDL_RaiseWindow(window);
                     return std::string();
                 }
 
@@ -137,10 +138,12 @@ namespace OpenRCT2::Ui
                 panel.directoryURL = [NSURL fileURLWithPath:directory];
                 if ([panel runModal] == NSModalResponseCancel)
                 {
+                    SDL_RaiseWindow(window);
                     return std::string();
                 }
                 else
                 {
+                    SDL_RaiseWindow(window);
                     return panel.URL.path.UTF8String;
                 }
             }
@@ -158,10 +161,12 @@ namespace OpenRCT2::Ui
                 {
                     NSString* selectedPath = panel.URL.path;
                     const char* path = selectedPath.UTF8String;
+                    SDL_RaiseWindow(window);
                     return path;
                 }
                 else
                 {
+                    SDL_RaiseWindow(window);
                     return "";
                 }
             }
@@ -175,7 +180,7 @@ namespace OpenRCT2::Ui
     private:
         static int32_t Execute(const std::string& command, std::string* output = nullptr)
         {
-            log_verbose("executing \"%s\"...", command.c_str());
+            LOG_VERBOSE("executing \"%s\"...", command.c_str());
             FILE* fpipe = popen(command.c_str(), "r");
             if (fpipe == nullptr)
             {
@@ -220,9 +225,9 @@ namespace OpenRCT2::Ui
         }
     };
 
-    IPlatformUiContext* CreatePlatformUiContext()
+    std::unique_ptr<IPlatformUiContext> CreatePlatformUiContext()
     {
-        return new macOSContext();
+        return std::make_unique<macOSContext>();
     }
 } // namespace OpenRCT2::Ui
 

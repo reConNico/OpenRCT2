@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,17 +9,33 @@
 
 #include "LargeScenerySetColourAction.h"
 
+#include "../Diagnostic.h"
+#include "../GameState.h"
 #include "../OpenRCT2.h"
 #include "../management/Finance.h"
+#include "../object/LargeSceneryEntry.h"
 #include "../world/Scenery.h"
+#include "../world/tile_element/LargeSceneryElement.h"
+
+using namespace OpenRCT2;
 
 LargeScenerySetColourAction::LargeScenerySetColourAction(
-    const CoordsXYZD& loc, uint8_t tileIndex, uint8_t primaryColour, uint8_t secondaryColour)
+    const CoordsXYZD& loc, uint8_t tileIndex, uint8_t primaryColour, uint8_t secondaryColour, uint8_t tertiaryColour)
     : _loc(loc)
     , _tileIndex(tileIndex)
     , _primaryColour(primaryColour)
     , _secondaryColour(secondaryColour)
+    , _tertiaryColour(tertiaryColour)
 {
+}
+
+void LargeScenerySetColourAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit(_loc);
+    visitor.Visit("tileIndex", _tileIndex);
+    visitor.Visit("primaryColour", _primaryColour);
+    visitor.Visit("secondaryColour", _secondaryColour);
+    visitor.Visit("tertiaryColour", _tertiaryColour);
 }
 
 uint16_t LargeScenerySetColourAction::GetActionFlags() const
@@ -31,7 +47,8 @@ void LargeScenerySetColourAction::Serialise(DataSerialiser& stream)
 {
     GameAction::Serialise(stream);
 
-    stream << DS_TAG(_loc) << DS_TAG(_tileIndex) << DS_TAG(_primaryColour) << DS_TAG(_secondaryColour);
+    stream << DS_TAG(_loc) << DS_TAG(_tileIndex) << DS_TAG(_primaryColour) << DS_TAG(_secondaryColour)
+           << DS_TAG(_tertiaryColour);
 }
 
 GameActions::Result LargeScenerySetColourAction::Query() const
@@ -50,35 +67,40 @@ GameActions::Result LargeScenerySetColourAction::QueryExecute(bool isExecuting) 
     res.Expenditure = ExpenditureType::Landscaping;
     res.Position.x = _loc.x + 16;
     res.Position.y = _loc.y + 16;
-    res.Position.z = tile_element_height(_loc);
+    res.Position.z = TileElementHeight(_loc);
     res.ErrorTitle = STR_CANT_REPAINT_THIS;
 
-    if (_loc.x < 0 || _loc.y < 0 || _loc.x > GetMapSizeMaxXY() || _loc.y > GetMapSizeMaxXY())
+    auto mapSizeMax = GetMapSizeMaxXY();
+    if (_loc.x < 0 || _loc.y < 0 || _loc.x > mapSizeMax.x || _loc.y > mapSizeMax.y)
     {
-        log_error("Invalid x / y coordinates: x = %d, y = %d", _loc.x, _loc.y);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_NONE);
+        LOG_ERROR("Invalid x / y coordinates: x = %d, y = %d", _loc.x, _loc.y);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_ERR_VALUE_OUT_OF_RANGE);
     }
 
-    if (_primaryColour > 31)
+    if (_primaryColour >= COLOUR_COUNT)
     {
-        log_error("Invalid primary colour: colour = %u", _primaryColour);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_NONE);
+        LOG_ERROR("Invalid primary colour %u", _primaryColour);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_ERR_INVALID_COLOUR);
+    }
+    else if (_secondaryColour >= COLOUR_COUNT)
+    {
+        LOG_ERROR("Invalid secondary colour %u", _secondaryColour);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_ERR_INVALID_COLOUR);
+    }
+    else if (_tertiaryColour >= COLOUR_COUNT)
+    {
+        LOG_ERROR("Invalid tertiary colour %u", _tertiaryColour);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_ERR_INVALID_COLOUR);
     }
 
-    if (_secondaryColour > 31)
-    {
-        log_error("Invalid primary colour: colour = %u", _secondaryColour);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_NONE);
-    }
-
-    auto largeElement = map_get_large_scenery_segment(_loc, _tileIndex);
+    auto largeElement = MapGetLargeScenerySegment(_loc, _tileIndex);
 
     if (largeElement == nullptr)
     {
-        log_error(
+        LOG_ERROR(
             "Could not find large scenery at: x = %d, y = %d, z = %d, direction = %d, tileIndex = %u", _loc.x, _loc.y, _loc.z,
             _loc.direction, _tileIndex);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_NONE);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, kStringIdNone);
     }
 
     if ((GetFlags() & GAME_COMMAND_FLAG_GHOST) && !(largeElement->IsGhost()))
@@ -90,27 +112,24 @@ GameActions::Result LargeScenerySetColourAction::QueryExecute(bool isExecuting) 
 
     if (sceneryEntry == nullptr)
     {
-        log_error("Could not find scenery object. type = %u", largeElement->GetEntryIndex());
-        return GameActions::Result(GameActions::Status::Unknown, STR_CANT_REPAINT_THIS, STR_NONE);
+        LOG_ERROR("Scenery element doesn't have scenery entry");
+        return GameActions::Result(GameActions::Status::Unknown, STR_CANT_REPAINT_THIS, kStringIdNone);
     }
     // Work out the base tile coordinates (Tile with index 0)
-    auto rotatedBaseCoordsOffset = CoordsXYZ{
-        CoordsXY{ sceneryEntry->tiles[_tileIndex].x_offset, sceneryEntry->tiles[_tileIndex].y_offset }.Rotate(_loc.direction),
-        sceneryEntry->tiles[_tileIndex].z_offset
-    };
+    auto rotatedBaseCoordsOffset = CoordsXYZ{ CoordsXY{ sceneryEntry->tiles[_tileIndex].offset }.Rotate(_loc.direction),
+                                              sceneryEntry->tiles[_tileIndex].offset.z };
 
     auto baseTile = CoordsXYZ{ _loc.x, _loc.y, _loc.z } - rotatedBaseCoordsOffset;
 
-    auto i = 0;
-    for (auto tile = sceneryEntry->tiles; tile->x_offset != -1; ++tile, ++i)
+    for (auto& tile : sceneryEntry->tiles)
     {
         // Work out the current tile coordinates
-        auto rotatedTileCoords = CoordsXYZ{ CoordsXY{ tile->x_offset, tile->y_offset }.Rotate(_loc.direction), tile->z_offset };
+        auto rotatedTileCoords = CoordsXYZ{ CoordsXY{ tile.offset }.Rotate(_loc.direction), tile.offset.z };
         auto currentTile = CoordsXYZ{ baseTile.x, baseTile.y, baseTile.z } + rotatedTileCoords;
 
-        if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !gCheatsSandboxMode)
+        if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !GetGameState().Cheats.sandboxMode)
         {
-            if (!map_is_location_owned(currentTile))
+            if (!MapIsLocationOwned(currentTile))
             {
                 return GameActions::Result(GameActions::Status::NotOwned, STR_CANT_REPAINT_THIS, STR_LAND_NOT_OWNED_BY_PARK);
             }
@@ -118,24 +137,25 @@ GameActions::Result LargeScenerySetColourAction::QueryExecute(bool isExecuting) 
 
         if (!LocationValid(currentTile))
         {
-            return GameActions::Result(GameActions::Status::NotOwned, STR_CANT_REPAINT_THIS, STR_LAND_NOT_OWNED_BY_PARK);
+            return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_OFF_EDGE_OF_MAP);
         }
 
-        auto tileElement = map_get_large_scenery_segment({ currentTile.x, currentTile.y, _loc.z, _loc.direction }, i);
+        auto tileElement = MapGetLargeScenerySegment({ currentTile.x, currentTile.y, _loc.z, _loc.direction }, tile.index);
 
         if (tileElement == nullptr)
         {
-            log_error(
+            LOG_ERROR(
                 "Large scenery element not found at: x = %d, y = %d, z = %d, direction = %d", _loc.x, _loc.y, _loc.z,
                 _loc.direction);
-            return GameActions::Result(GameActions::Status::Unknown, STR_CANT_REPAINT_THIS, STR_NONE);
+            return GameActions::Result(GameActions::Status::Unknown, STR_CANT_REPAINT_THIS, kStringIdNone);
         }
         if (isExecuting)
         {
             tileElement->SetPrimaryColour(_primaryColour);
             tileElement->SetSecondaryColour(_secondaryColour);
+            tileElement->SetTertiaryColour(_tertiaryColour);
 
-            map_invalidate_tile_full(currentTile);
+            MapInvalidateTileFull(currentTile);
         }
     }
     return res;

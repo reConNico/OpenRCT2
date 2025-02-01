@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -12,20 +12,19 @@
 #include "TerrainSurfaceObject.h"
 
 #include "../Context.h"
-#include "../core/IStream.hpp"
+#include "../core/Guard.hpp"
 #include "../core/Json.hpp"
-#include "../core/String.hpp"
 #include "../drawing/Drawing.h"
-#include "../drawing/Image.h"
-#include "../localisation/Localisation.h"
 #include "../world/Location.hpp"
 #include "ObjectManager.h"
+
+using namespace OpenRCT2;
 
 void TerrainSurfaceObject::Load()
 {
     GetStringTable().Sort();
-    NameStringId = language_allocate_object_string(GetName());
-    IconImageId = gfx_object_allocate_images(GetImageTable().GetImages(), GetImageTable().GetCount());
+    NameStringId = LanguageAllocateObjectString(GetName());
+    IconImageId = LoadImages();
     if ((Flags & SMOOTH_WITH_SELF) || (Flags & SMOOTH_WITH_OTHER))
     {
         PatternBaseImageId = IconImageId + 1;
@@ -35,13 +34,13 @@ void TerrainSurfaceObject::Load()
     {
         EntryBaseImageId = IconImageId + 1;
     }
-    NumEntries = (GetImageTable().GetCount() - EntryBaseImageId) / NUM_IMAGES_IN_ENTRY;
+    NumEntries = (GetImageTable().GetCount() - EntryBaseImageId) / kNumImagesInEntry;
 }
 
 void TerrainSurfaceObject::Unload()
 {
-    language_free_object_string(NameStringId);
-    gfx_object_free_images(IconImageId, GetImageTable().GetCount());
+    LanguageFreeObjectString(NameStringId);
+    UnloadImages();
 
     NameStringId = 0;
     IconImageId = 0;
@@ -50,12 +49,12 @@ void TerrainSurfaceObject::Unload()
     NumEntries = 0;
 }
 
-void TerrainSurfaceObject::DrawPreview(rct_drawpixelinfo* dpi, int32_t width, int32_t height) const
+void TerrainSurfaceObject::DrawPreview(DrawPixelInfo& dpi, int32_t width, int32_t height) const
 {
-    uint32_t imageId = GetImageId({}, 1, 0, 0, false, false);
-    if (Colour != 255)
+    auto imageId = ImageId(GetImageId({}, 1, 0, 0, false, false));
+    if (Colour != kNoValue)
     {
-        imageId |= SPRITE_ID_PALETTE_COLOUR_1(Colour);
+        imageId = imageId.WithPrimary(Colour);
     }
 
     ScreenCoordsXY screenCoords{};
@@ -70,7 +69,7 @@ void TerrainSurfaceObject::DrawPreview(rct_drawpixelinfo* dpi, int32_t width, in
         }
         for (int32_t j = 0; j < 4; j++)
         {
-            gfx_draw_sprite(dpi, imageId, screenCoords, 0);
+            GfxDrawSprite(dpi, imageId, screenCoords);
             screenCoords.x += 64;
         }
         screenCoords.y += 16;
@@ -85,27 +84,41 @@ void TerrainSurfaceObject::ReadJson(IReadObjectContext* context, json_t& root)
 
     if (properties.is_object())
     {
-        Colour = Colour::FromString(Json::GetString(properties["colour"]), 255);
+        Colour = Colour::FromString(Json::GetString(properties["colour"]), kNoValue);
         Rotations = Json::GetNumber<int8_t>(properties["rotations"], 1);
-        Price = Json::GetNumber<money32>(properties["price"]);
+        Price = Json::GetNumber<money64>(properties["price"]);
         Flags = Json::GetFlags<TERRAIN_SURFACE_FLAGS>(
             properties,
             { { "smoothWithSelf", TERRAIN_SURFACE_FLAGS::SMOOTH_WITH_SELF },
               { "smoothWithOther", TERRAIN_SURFACE_FLAGS::SMOOTH_WITH_OTHER },
               { "canGrow", TERRAIN_SURFACE_FLAGS::CAN_GROW } });
 
+        const auto mapColours = properties["mapColours"];
+        const bool mapColoursAreValid = mapColours.is_array() && mapColours.size() == std::size(MapColours);
+        for (size_t i = 0; i < std::size(MapColours); i++)
+        {
+            if (mapColoursAreValid)
+                MapColours[i] = mapColours[i];
+            else
+                MapColours[i] = PALETTE_INDEX_0;
+        }
+
         for (auto& el : properties["special"])
         {
             if (el.is_object())
             {
                 SpecialEntry entry;
-                entry.Index = Json::GetNumber<uint32_t>(el["index"]);
-                entry.Length = Json::GetNumber<int32_t>(el["length"], -1);
-                entry.Rotation = Json::GetNumber<int32_t>(el["rotation"], -1);
-                entry.Variation = Json::GetNumber<int32_t>(el["variation"], -1);
-                entry.Grid = Json::GetBoolean(el["grid"]);
-                entry.Underground = Json::GetBoolean(el["underground"]);
-                SpecialEntries.push_back(std::move(entry));
+                entry.Index = Json::GetNumber<uint8_t>(el["index"]);
+                entry.Length = Json::GetNumber<uint8_t>(el["length"], kNoValue);
+                entry.Rotation = Json::GetNumber<uint8_t>(el["rotation"], kNoValue);
+                entry.Variation = Json::GetNumber<uint8_t>(el["variation"], kNoValue);
+
+                if (Json::GetBoolean(el["underground"]))
+                    SpecialEntriesUnderground.push_back(entry);
+                else if (Json::GetBoolean(el["grid"]))
+                    SpecialEntriesGrid.push_back(entry);
+                else
+                    SpecialEntries.push_back(entry);
             }
         }
     }
@@ -127,29 +140,48 @@ void TerrainSurfaceObject::ReadJson(IReadObjectContext* context, json_t& root)
     PopulateTablesFromJson(context, root);
 }
 
-uint32_t TerrainSurfaceObject::GetImageId(
-    const CoordsXY& position, int32_t length, int32_t rotation, int32_t offset, bool grid, bool underground) const
+ImageId TerrainSurfaceObject::GetImageId(
+    const CoordsXY& position, uint8_t length, uint8_t rotation, uint8_t offset, bool grid, bool underground) const
 {
-    uint32_t result = (underground ? DefaultUndergroundEntry : (grid ? DefaultGridEntry : DefaultEntry));
+    uint32_t result = DefaultEntry;
+    std::span<const SpecialEntry> entries(SpecialEntries);
+    if (underground)
+    {
+        result = DefaultUndergroundEntry;
+        entries = std::span<const SpecialEntry>(SpecialEntriesUnderground);
+    }
+    else if (grid)
+    {
+        result = DefaultGridEntry;
+        entries = std::span<const SpecialEntry>(SpecialEntriesGrid);
+    }
+
+    TileCoordsXY tilePos(position);
+    uint8_t variation = ((tilePos.x << 1) & 0b10) | (tilePos.y & 0b01);
 
     // Look for a matching special
-    auto variation = ((position.x << 1) & 0b10) | (position.y & 0b01);
-    for (const auto& special : SpecialEntries)
+    for (const SpecialEntry& special : entries)
     {
-        if ((special.Length == -1 || special.Length == length) && (special.Rotation == -1 || special.Rotation == rotation)
-            && (special.Variation == -1 || special.Variation == variation) && special.Grid == grid
-            && special.Underground == underground)
+        if ((special.Length == kNoValue || special.Length == length)
+            && (special.Rotation == kNoValue || special.Rotation == rotation)
+            && (special.Variation == kNoValue || special.Variation == variation))
         {
             result = special.Index;
             break;
         }
     }
-    return EntryBaseImageId + (result * NUM_IMAGES_IN_ENTRY) + offset;
+
+    ImageId image(EntryBaseImageId + (result * kNumImagesInEntry) + offset);
+    if (Colour != kNoValue)
+    {
+        image = image.WithPrimary(Colour);
+    }
+    return image;
 }
 
 TerrainSurfaceObject* TerrainSurfaceObject::GetById(ObjectEntryIndex entryIndex)
 {
     auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
-    auto obj = objMgr.GetLoadedObject(ObjectType::TerrainSurface, entryIndex);
-    return obj != nullptr ? static_cast<TerrainSurfaceObject*>(obj) : nullptr;
+    auto* obj = objMgr.GetLoadedObject(ObjectType::TerrainSurface, entryIndex);
+    return static_cast<TerrainSurfaceObject*>(obj);
 }

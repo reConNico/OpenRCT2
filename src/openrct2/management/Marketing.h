@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,11 +10,9 @@
 #pragma once
 
 #include "../Cheats.h"
-#include "../common.h"
+#include "../localisation/StringIdType.h"
 #include "../ride/RideTypes.h"
 #include "../ride/ShopItem.h"
-
-#include <vector>
 
 struct Guest;
 
@@ -50,23 +48,24 @@ struct MarketingCampaign
     uint8_t Flags{};
     union
     {
-        ride_id_t RideId{};
+        ::RideId RideId{};
         ShopItemIndex ShopItemType;
     };
 };
 
-namespace MarketingCampaignFlags
+namespace OpenRCT2::MarketingCampaignFlags
 {
     constexpr uint8_t FIRST_WEEK = 1 << 0;
 }
 
-extern const money16 AdvertisingCampaignPricePerWeek[ADVERTISING_CAMPAIGN_COUNT];
-extern std::vector<MarketingCampaign> gMarketingCampaigns;
+extern const money64 AdvertisingCampaignPricePerWeek[ADVERTISING_CAMPAIGN_COUNT];
 
-uint16_t marketing_get_campaign_guest_generation_probability(int32_t campaign);
-void marketing_update();
-void marketing_set_guest_campaign(Guest* peep, int32_t campaign);
-bool marketing_is_campaign_type_applicable(int32_t campaignType);
-MarketingCampaign* marketing_get_campaign(int32_t campaignType);
-void marketing_new_campaign(const MarketingCampaign& campaign);
-void MarketingCancelCampaignsForRide(const ride_id_t rideId);
+extern const StringId kMarketingCampaignNames[ADVERTISING_CAMPAIGN_COUNT][3];
+
+uint16_t MarketingGetCampaignGuestGenerationProbability(int32_t campaign);
+void MarketingUpdate();
+void MarketingSetGuestCampaign(Guest* peep, int32_t campaign);
+bool MarketingIsCampaignTypeApplicable(int32_t campaignType);
+MarketingCampaign* MarketingGetCampaign(int32_t campaignType);
+void MarketingNewCampaign(const MarketingCampaign& campaign);
+void MarketingCancelCampaignsForRide(const RideId rideId);

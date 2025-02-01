@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,8 +11,10 @@
 
 #include "Imaging.h"
 
+#include "../Diagnostic.h"
 #include "../Version.h"
 #include "../drawing/Drawing.h"
+#include "FileSystem.hpp"
 #include "Guard.hpp"
 #include "IStream.hpp"
 #include "Memory.hpp"
@@ -24,9 +26,15 @@
 #include <stdexcept>
 #include <unordered_map>
 
-namespace Imaging
+#ifdef __EMSCRIPTEN__
+    #include <emscripten.h>
+    #include <iostream>
+    #include <sstream>
+#endif
+
+namespace OpenRCT2::Imaging
 {
-    constexpr auto EXCEPTION_IMAGE_FORMAT_UNKNOWN = "Unknown image format.";
+    static constexpr auto kExceptionImageFormatUnknown = "Unknown image format.";
 
     static std::unordered_map<IMAGE_FORMAT, ImageReaderFunc> _readerImplementations;
 
@@ -50,12 +58,12 @@ namespace Imaging
 
     static void PngWarning(png_structp, const char* b)
     {
-        log_warning(b);
+        LOG_WARNING(b);
     }
 
     static void PngError(png_structp, const char* b)
     {
-        log_error(b);
+        LOG_ERROR(b);
     }
 
     static Image ReadPng(std::istream& istream, bool expandTo32)
@@ -187,7 +195,7 @@ namespace Imaging
 
             if (image.Depth == 8)
             {
-                if (image.Palette == nullptr)
+                if (!image.Palette.has_value())
                 {
                     throw std::runtime_error("Expected a palette for 8-bit image.");
                 }
@@ -200,7 +208,7 @@ namespace Imaging
                 }
                 for (size_t i = 0; i < PNG_MAX_PALETTE_LENGTH; i++)
                 {
-                    const auto& entry = (*image.Palette)[static_cast<uint16_t>(i)];
+                    const auto& entry = (*image.Palette)[i];
                     png_palette[i].blue = entry.Blue;
                     png_palette[i].green = entry.Green;
                     png_palette[i].red = entry.Red;
@@ -253,12 +261,12 @@ namespace Imaging
 
     IMAGE_FORMAT GetImageFormatFromPath(std::string_view path)
     {
-        if (String::EndsWith(path, ".png", true))
+        if (String::endsWith(path, ".png", true))
         {
             return IMAGE_FORMAT::PNG;
         }
 
-        if (String::EndsWith(path, ".bmp", true))
+        if (String::endsWith(path, ".bmp", true))
         {
             return IMAGE_FORMAT::BITMAP;
         }
@@ -298,7 +306,7 @@ namespace Imaging
                 {
                     return impl(istream, format);
                 }
-                throw std::runtime_error(EXCEPTION_IMAGE_FORMAT_UNKNOWN);
+                throw std::runtime_error(kExceptionImageFormatUnknown);
             }
         }
     }
@@ -311,12 +319,7 @@ namespace Imaging
                 return ReadFromFile(path, GetImageFormatFromPath(path));
             default:
             {
-#if defined(_WIN32) && !defined(__MINGW32__)
-                auto pathW = String::ToWideChar(path);
-                std::ifstream fs(pathW, std::ios::binary);
-#else
-                std::ifstream fs(std::string(path), std::ios::binary);
-#endif
+                std::ifstream fs(fs::u8path(path), std::ios::binary);
                 return ReadFromStream(fs, format);
             }
         }
@@ -337,17 +340,31 @@ namespace Imaging
                 break;
             case IMAGE_FORMAT::PNG:
             {
-#if defined(_WIN32) && !defined(__MINGW32__)
-                auto pathW = String::ToWideChar(path);
-                std::ofstream fs(pathW, std::ios::binary);
-#else
-                std::ofstream fs(std::string(path), std::ios::binary);
-#endif
+#ifndef __EMSCRIPTEN__
+                std::ofstream fs(fs::u8path(path), std::ios::binary);
                 WritePng(fs, image);
+#else
+                std::ostringstream stream(std::ios::binary);
+                WritePng(stream, image);
+                std::string dataStr = stream.str();
+                void* data = reinterpret_cast<void*>(dataStr.data());
+                MAIN_THREAD_EM_ASM(
+                    {
+                        const a = document.createElement("a");
+                        // Blob requires the data must not be shared
+                        const data = new Uint8Array(HEAPU8.subarray($0, $0 + $1));
+                        a.href = URL.createObjectURL(new Blob([data]));
+                        a.download = UTF8ToString($2).split("/").pop();
+                        a.click();
+                        setTimeout(function(){ URL.revokeObjectURL(a.href) }, 1000);
+                    },
+                    data, dataStr.size(), std::string(path).c_str());
+                free(data);
+#endif
                 break;
             }
             default:
-                throw std::runtime_error(EXCEPTION_IMAGE_FORMAT_UNKNOWN);
+                throw std::runtime_error(kExceptionImageFormatUnknown);
         }
     }
-} // namespace Imaging
+} // namespace OpenRCT2::Imaging

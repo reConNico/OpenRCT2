@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,17 +10,18 @@
 #include "SmallSceneryRemoveAction.h"
 
 #include "../Cheats.h"
+#include "../Diagnostic.h"
+#include "../GameState.h"
 #include "../OpenRCT2.h"
-#include "../common.h"
 #include "../core/MemoryStream.h"
-#include "../interface/Window.h"
-#include "../localisation/Localisation.h"
 #include "../localisation/StringIds.h"
 #include "../management/Finance.h"
+#include "../object/ObjectEntryManager.h"
+#include "../object/SmallSceneryEntry.h"
 #include "../ride/Ride.h"
 #include "../world/Park.h"
-#include "../world/SmallScenery.h"
 #include "../world/TileElementsView.h"
+#include "../world/tile_element/SmallSceneryElement.h"
 #include "GameAction.h"
 #include "SmallSceneryPlaceAction.h"
 
@@ -58,24 +59,26 @@ GameActions::Result SmallSceneryRemoveAction::Query() const
 
     if (!LocationValid(_loc))
     {
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, STR_LAND_NOT_OWNED_BY_PARK);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, STR_OFF_EDGE_OF_MAP);
     }
 
-    auto* entry = get_small_scenery_entry(_sceneryType);
+    auto* entry = OpenRCT2::ObjectManager::GetObjectEntry<SmallSceneryEntry>(_sceneryType);
     if (entry == nullptr)
     {
+        LOG_ERROR("Invalid small scenery type %u", _sceneryType);
         return GameActions::Result(
             GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, STR_INVALID_SELECTION_OF_OBJECTS);
     }
 
-    res.Cost = entry->removal_price * 10;
+    res.Cost = entry->removal_price;
     res.Expenditure = ExpenditureType::Landscaping;
     res.Position = _loc;
 
-    if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !(GetFlags() & GAME_COMMAND_FLAG_GHOST) && !gCheatsSandboxMode)
+    if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !(GetFlags() & GAME_COMMAND_FLAG_GHOST)
+        && !GetGameState().Cheats.sandboxMode)
     {
         // Check if allowed to remove item
-        if (gParkFlags & PARK_FLAGS_FORBID_TREE_REMOVAL)
+        if (GetGameState().Park.Flags & PARK_FLAGS_FORBID_TREE_REMOVAL)
         {
             if (entry->HasFlag(SMALL_SCENERY_FLAG_IS_TREE))
             {
@@ -87,7 +90,7 @@ GameActions::Result SmallSceneryRemoveAction::Query() const
         }
 
         // Check if the land is owned
-        if (!map_is_location_owned(_loc))
+        if (!MapIsLocationOwned(_loc))
         {
             res.Error = GameActions::Status::NoClearance;
             res.ErrorTitle = STR_CANT_REMOVE_THIS;
@@ -99,6 +102,7 @@ GameActions::Result SmallSceneryRemoveAction::Query() const
     TileElement* tileElement = FindSceneryElement();
     if (tileElement == nullptr)
     {
+        LOG_ERROR("Small scenery of type %u not found at x = %d, y = %d, z = &d", _sceneryType, _loc.x, _loc.y, _loc.z);
         return GameActions::Result(
             GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, STR_INVALID_SELECTION_OF_OBJECTS);
     }
@@ -110,14 +114,15 @@ GameActions::Result SmallSceneryRemoveAction::Execute() const
 {
     GameActions::Result res = GameActions::Result();
 
-    auto* entry = get_small_scenery_entry(_sceneryType);
+    auto* entry = OpenRCT2::ObjectManager::GetObjectEntry<SmallSceneryEntry>(_sceneryType);
     if (entry == nullptr)
     {
+        LOG_ERROR("Invalid small scenery type %u", _sceneryType);
         return GameActions::Result(
             GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, STR_INVALID_SELECTION_OF_OBJECTS);
     }
 
-    res.Cost = entry->removal_price * 10;
+    res.Cost = entry->removal_price;
     res.Expenditure = ExpenditureType::Landscaping;
     res.Position = _loc;
 
@@ -128,10 +133,8 @@ GameActions::Result SmallSceneryRemoveAction::Execute() const
             GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, STR_INVALID_SELECTION_OF_OBJECTS);
     }
 
-    res.Position.z = tile_element_height(res.Position);
-
-    map_invalidate_tile_full(_loc);
-    tile_element_remove(tileElement);
+    MapInvalidateTileFull(_loc);
+    TileElementRemove(tileElement);
 
     return res;
 }

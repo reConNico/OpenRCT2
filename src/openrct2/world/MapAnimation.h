@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -13,6 +13,8 @@
 
 #include <cstdint>
 #include <vector>
+
+struct TileElement;
 
 struct MapAnimation
 {
@@ -39,7 +41,10 @@ enum
     MAP_ANIMATION_TYPE_COUNT
 };
 
-void map_animation_create(int32_t type, const CoordsXYZ& loc);
-void map_animation_invalidate_all();
+void MapAnimationCreate(int32_t type, const CoordsXYZ& loc);
+void MapAnimationInvalidateAll();
 const std::vector<MapAnimation>& GetMapAnimations();
-void AutoCreateMapAnimations();
+void ClearMapAnimations();
+void MapAnimationAutoCreate();
+void MapAnimationAutoCreateAtTileElement(TileCoordsXY coords, TileElement* el);
+void ShiftAllMapAnimations(CoordsXY amount);

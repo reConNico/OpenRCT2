@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2019 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -8,21 +8,19 @@
  *****************************************************************************/
 
 #include <gtest/gtest.h>
-#include <openrct2/platform/platform.h>
+#include <openrct2/platform/Platform.h>
+
+using namespace OpenRCT2;
 
 TEST(platform, sanitise_filename)
 {
+    ASSERT_EQ("normal-filename.png", Platform::SanitiseFilename("normal-filename.png"));
+    ASSERT_EQ("utf🎱", Platform::SanitiseFilename("utf🎱"));
+    ASSERT_EQ("forbidden_char", Platform::SanitiseFilename("forbidden/char"));
+    ASSERT_EQ("non trimmed", Platform::SanitiseFilename(" non trimmed "));
 #ifndef _WIN32
-    ASSERT_EQ("normal-filename.png", platform_sanitise_filename("normal-filename.png"));
-    ASSERT_EQ("utf🎱", platform_sanitise_filename("utf🎱"));
-    ASSERT_EQ("forbidden_char", platform_sanitise_filename("forbidden/char"));
-    ASSERT_EQ("forbidden_\\:\"|?*chars", platform_sanitise_filename("forbidden/\\:\"|?*chars"));
-    ASSERT_EQ(" non trimmed ", platform_sanitise_filename(" non trimmed "));
+    ASSERT_EQ("forbidden_\\:\"|?*chars", Platform::SanitiseFilename("forbidden/\\:\"|?*chars"));
 #else
-    ASSERT_EQ("normal-filename.png", platform_sanitise_filename("normal-filename.png"));
-    ASSERT_EQ("utf🎱", platform_sanitise_filename("utf🎱"));
-    ASSERT_EQ("forbidden_char", platform_sanitise_filename("forbidden/char"));
-    ASSERT_EQ("forbidden_______chars", platform_sanitise_filename("forbidden/\\:\"|?*chars"));
-    ASSERT_EQ("non trimmed", platform_sanitise_filename(" non trimmed "));
+    ASSERT_EQ("forbidden_______chars", Platform::SanitiseFilename("forbidden/\\:\"|?*chars"));
 #endif
 }

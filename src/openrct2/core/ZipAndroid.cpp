@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,13 +9,16 @@
 
 #ifdef __ANDROID__
 
-#    include "../platform/platform.h"
-#    include "IStream.hpp"
-#    include "MemoryStream.h"
-#    include "Zip.h"
+    #include "../Diagnostic.h"
+    #include "../platform/Platform.h"
+    #include "IStream.hpp"
+    #include "Memory.hpp"
+    #include "MemoryStream.h"
+    #include "Zip.h"
 
-#    include <SDL.h>
-#    include <jni.h>
+    #include <SDL.h>
+    #include <jni.h>
+    #include <string>
 
 using namespace OpenRCT2;
 
@@ -30,7 +33,7 @@ public:
         // retrieve the JNI environment.
         JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
 
-        jclass jniClass = platform_android_find_class(env, "io/openrct2/ZipArchive");
+        jclass jniClass = Platform::AndroidFindClass(env, "io/openrct2/ZipArchive");
         jmethodID constructor = env->GetMethodID(jniClass, "<init>", "(Ljava/lang/String;)V");
 
         jstring jniPath = env->NewStringUTF(path.data());
@@ -76,11 +79,7 @@ public:
         jstring jniString = (jstring)env->CallObjectMethod(_zip, fileNameMethod, (jint)index);
 
         const char* jniChars = env->GetStringUTFChars(jniString, nullptr);
-
-        utf8* string = (char*)malloc(strlen(jniChars) + 1);
-        std::memcpy((void*)string, jniChars, strlen(jniChars));
-        string[strlen(jniChars)] = 0x00;
-
+        std::string string = jniChars;
         env->ReleaseStringUTFChars(jniString, jniChars);
 
         return string;
@@ -124,21 +123,21 @@ public:
 
     void SetFileData(std::string_view path, std::vector<uint8_t>&& data) override
     {
-        STUB();
+        LOG_WARNING("Function %s at %s:%d is a stub.", __PRETTY_FUNCTION__, __FILE__, __LINE__);
     }
 
     void DeleteFile(std::string_view) override
     {
-        STUB();
+        LOG_WARNING("Function %s at %s:%d is a stub.", __PRETTY_FUNCTION__, __FILE__, __LINE__);
     }
 
     void RenameFile(std::string_view, std::string_view) override
     {
-        STUB();
+        LOG_WARNING("Function %s at %s:%d is a stub.", __PRETTY_FUNCTION__, __FILE__, __LINE__);
     }
 };
 
-namespace Zip
+namespace OpenRCT2::Zip
 {
     std::unique_ptr<IZipArchive> Open(std::string_view path, ZIP_ACCESS access)
     {
@@ -157,7 +156,7 @@ namespace Zip
         }
         return result;
     }
-} // namespace Zip
+} // namespace OpenRCT2::Zip
 
 extern "C" {
 JNIEXPORT jlong JNICALL Java_io_openrct2_ZipArchive_allocBytes(JNIEnv* env, jclass, jbyteArray input, jint numBytes);

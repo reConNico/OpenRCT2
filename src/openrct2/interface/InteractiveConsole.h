@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,14 +9,13 @@
 
 #pragma once
 
-#include "../common.h"
 #include "../localisation/FormatCodes.h"
 
-#include <future>
-#include <queue>
+#include <atomic>
+#include <cstdint>
 #include <string>
 
-struct rct_drawpixelinfo;
+struct DrawPixelInfo;
 struct TextInputSession;
 
 enum class ConsoleInput : uint8_t
@@ -32,6 +31,9 @@ enum class ConsoleInput : uint8_t
 
 class InteractiveConsole
 {
+private:
+    std::atomic_flag _commandExecuting;
+
 public:
     virtual ~InteractiveConsole()
     {
@@ -43,31 +45,13 @@ public:
     void WriteLineWarning(const std::string& s);
     void WriteFormatLine(const char* format, ...);
 
-    virtual void Clear() abstract;
-    virtual void Close() abstract;
-    virtual void Hide() abstract;
-    virtual void WriteLine(const std::string& s, FormatToken colourFormat) abstract;
-};
+    void BeginAsyncExecution();
+    void EndAsyncExecution();
 
-class StdInOutConsole final : public InteractiveConsole
-{
-private:
-    std::queue<std::tuple<std::promise<void>, std::string>> _evalQueue;
-    bool _isPromptShowing{};
+    bool IsExecuting();
 
-public:
-    void Start();
-    std::future<void> Eval(const std::string& s);
-    void ProcessEvalQueue();
-
-    void Clear() override;
-    void Close() override;
-    void Hide() override
-    {
-    }
-    void WriteLine(const std::string& s)
-    {
-        InteractiveConsole::WriteLine(s);
-    }
-    void WriteLine(const std::string& s, FormatToken colourFormat) override;
+    virtual void Clear() = 0;
+    virtual void Close() = 0;
+    virtual void Hide() = 0;
+    virtual void WriteLine(const std::string& s, FormatToken colourFormat) = 0;
 };

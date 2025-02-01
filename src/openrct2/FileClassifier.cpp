@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,14 +9,19 @@
 
 #include "FileClassifier.h"
 
-#include "ParkFile.h"
+#include "Diagnostic.h"
 #include "core/Console.hpp"
 #include "core/FileStream.h"
+#include "core/Memory.hpp"
 #include "core/Path.hpp"
+#include "core/SawyerCoding.h"
 #include "core/String.hpp"
+#include "park/ParkFile.h"
 #include "rct12/SawyerChunkReader.h"
+#include "rct2/RCT2.h"
 #include "scenario/Scenario.h"
-#include "util/SawyerCoding.h"
+
+using namespace OpenRCT2;
 
 static bool TryClassifyAsPark(OpenRCT2::IStream* stream, ClassifiedFileInfo* result);
 static bool TryClassifyAsS6(OpenRCT2::IStream* stream, ClassifiedFileInfo* result);
@@ -77,7 +82,7 @@ static bool TryClassifyAsPark(OpenRCT2::IStream* stream, ClassifiedFileInfo* res
     try
     {
         auto magic = stream->ReadValue<uint32_t>();
-        if (magic == OpenRCT2::PARK_FILE_MAGIC)
+        if (magic == OpenRCT2::kParkFileMagic)
         {
             result->Type = FILE_TYPE::PARK;
             result->Version = 0;
@@ -87,7 +92,7 @@ static bool TryClassifyAsPark(OpenRCT2::IStream* stream, ClassifiedFileInfo* res
     catch (const std::exception& e)
     {
         success = false;
-        log_verbose(e.what());
+        LOG_VERBOSE(e.what());
     }
     stream->SetPosition(originalPosition);
     return success;
@@ -101,21 +106,21 @@ static bool TryClassifyAsS6(OpenRCT2::IStream* stream, ClassifiedFileInfo* resul
     {
         auto chunkReader = SawyerChunkReader(stream);
         auto s6Header = chunkReader.ReadChunkAs<RCT2::S6Header>();
-        if (s6Header.type == S6_TYPE_SAVEDGAME)
+        if (s6Header.Type == S6_TYPE_SAVEDGAME)
         {
             result->Type = FILE_TYPE::SAVED_GAME;
         }
-        else if (s6Header.type == S6_TYPE_SCENARIO)
+        else if (s6Header.Type == S6_TYPE_SCENARIO)
         {
             result->Type = FILE_TYPE::SCENARIO;
         }
-        result->Version = s6Header.version;
+        result->Version = s6Header.Version;
         success = true;
     }
     catch (const std::exception& e)
     {
         // Exceptions are likely to occur if file is not S6 format
-        log_verbose(e.what());
+        LOG_VERBOSE(e.what());
     }
     stream->SetPosition(originalPosition);
     return success;
@@ -130,7 +135,7 @@ static bool TryClassifyAsS4(OpenRCT2::IStream* stream, ClassifiedFileInfo* resul
         size_t dataLength = static_cast<size_t>(stream->GetLength());
         auto data = stream->ReadArray<uint8_t>(dataLength);
         stream->SetPosition(originalPosition);
-        int32_t fileTypeVersion = sawyercoding_detect_file_type(data.get(), dataLength);
+        int32_t fileTypeVersion = SawyerCoding::DetectFileType(data.get(), dataLength);
 
         int32_t type = fileTypeVersion & FILE_TYPE_MASK;
         int32_t version = fileTypeVersion & FILE_VERSION_MASK;
@@ -168,11 +173,11 @@ static bool TryClassifyAsTD4_TD6(OpenRCT2::IStream* stream, ClassifiedFileInfo* 
         auto data = stream->ReadArray<uint8_t>(dataLength);
         stream->SetPosition(originalPosition);
 
-        if (sawyercoding_validate_track_checksum(data.get(), dataLength))
+        if (SawyerCoding::ValidateTrackChecksum(data.get(), dataLength))
         {
             std::unique_ptr<uint8_t, decltype(&Memory::Free<uint8_t>)> td6data(
                 Memory::Allocate<uint8_t>(0x10000), &Memory::Free<uint8_t>);
-            size_t td6len = sawyercoding_decode_td6(data.get(), td6data.get(), dataLength);
+            size_t td6len = SawyerCoding::DecodeTD6(data.get(), td6data.get(), dataLength);
             if (td6data != nullptr && td6len >= 8)
             {
                 uint8_t version = (td6data.get()[7] >> 2) & 3;
@@ -193,28 +198,28 @@ static bool TryClassifyAsTD4_TD6(OpenRCT2::IStream* stream, ClassifiedFileInfo* 
     return success;
 }
 
-uint32_t get_file_extension_type(const utf8* path)
+FileExtension GetFileExtensionType(u8string_view path)
 {
     auto extension = Path::GetExtension(path);
-    if (String::Equals(extension, ".dat", true) || String::Equals(extension, ".pob", true))
-        return FILE_EXTENSION_DAT;
-    if (String::Equals(extension, ".sc4", true))
-        return FILE_EXTENSION_SC4;
-    if (String::Equals(extension, ".sv4", true))
-        return FILE_EXTENSION_SV4;
-    if (String::Equals(extension, ".td4", true))
-        return FILE_EXTENSION_TD4;
-    if (String::Equals(extension, ".sc6", true))
-        return FILE_EXTENSION_SC6;
-    if (String::Equals(extension, ".sea", true))
-        return FILE_EXTENSION_SC6;
-    if (String::Equals(extension, ".sv6", true))
-        return FILE_EXTENSION_SV6;
-    if (String::Equals(extension, ".sv7", true))
-        return FILE_EXTENSION_SV6;
-    if (String::Equals(extension, ".td6", true))
-        return FILE_EXTENSION_TD6;
-    if (String::Equals(extension, ".park", true))
-        return FILE_EXTENSION_PARK;
-    return FILE_EXTENSION_UNKNOWN;
+    if (String::iequals(extension, ".dat") || String::iequals(extension, ".pob"))
+        return FileExtension::DAT;
+    if (String::iequals(extension, ".sc4"))
+        return FileExtension::SC4;
+    if (String::iequals(extension, ".sv4"))
+        return FileExtension::SV4;
+    if (String::iequals(extension, ".td4"))
+        return FileExtension::TD4;
+    if (String::iequals(extension, ".sc6"))
+        return FileExtension::SC6;
+    if (String::iequals(extension, ".sea"))
+        return FileExtension::SC6;
+    if (String::iequals(extension, ".sv6"))
+        return FileExtension::SV6;
+    if (String::iequals(extension, ".sv7"))
+        return FileExtension::SV6;
+    if (String::iequals(extension, ".td6"))
+        return FileExtension::TD6;
+    if (String::iequals(extension, ".park"))
+        return FileExtension::PARK;
+    return FileExtension::Unknown;
 }

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -7,694 +7,761 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
-#include <algorithm>
+#include <openrct2-ui/UiContext.h>
+#include <openrct2-ui/input/InputManager.h>
 #include <openrct2-ui/interface/Viewport.h>
+#include <openrct2-ui/interface/ViewportInteraction.h>
 #include <openrct2-ui/interface/Widget.h>
-#include <openrct2-ui/windows/Window.h>
+#include <openrct2-ui/windows/Windows.h>
 #include <openrct2/Cheats.h>
 #include <openrct2/Context.h>
 #include <openrct2/Game.h>
+#include <openrct2/GameState.h>
 #include <openrct2/Input.h>
 #include <openrct2/actions/TrackDesignAction.h>
 #include <openrct2/audio/audio.h>
-#include <openrct2/localisation/Localisation.h>
+#include <openrct2/localisation/Formatter.h>
+#include <openrct2/paint/VirtualFloor.h>
+#include <openrct2/ride/RideConstruction.h>
 #include <openrct2/ride/RideData.h>
 #include <openrct2/ride/Track.h>
 #include <openrct2/ride/TrackData.h>
 #include <openrct2/ride/TrackDesign.h>
 #include <openrct2/ride/TrackDesignRepository.h>
 #include <openrct2/sprites.h>
-#include <openrct2/ui/UiContext.h>
 #include <openrct2/ui/WindowManager.h>
 #include <openrct2/windows/Intent.h>
 #include <openrct2/world/Park.h>
-#include <openrct2/world/Surface.h>
+#include <openrct2/world/tile_element/Slope.h>
+#include <openrct2/world/tile_element/SurfaceElement.h>
 #include <vector>
 
-using namespace OpenRCT2;
+using namespace OpenRCT2::Numerics;
 using namespace OpenRCT2::TrackMetaData;
 
-static constexpr const rct_string_id WINDOW_TITLE = STR_STRING;
-static constexpr const int32_t WH = 124;
-static constexpr const int32_t WW = 200;
-constexpr int16_t TRACK_MINI_PREVIEW_WIDTH = 168;
-constexpr int16_t TRACK_MINI_PREVIEW_HEIGHT = 78;
-constexpr uint16_t TRACK_MINI_PREVIEW_SIZE = TRACK_MINI_PREVIEW_WIDTH * TRACK_MINI_PREVIEW_HEIGHT;
-
-static constexpr uint8_t _PaletteIndexColourEntrance = PALETTE_INDEX_20; // White
-static constexpr uint8_t _PaletteIndexColourExit = PALETTE_INDEX_10;     // Black
-static constexpr uint8_t _PaletteIndexColourTrack = PALETTE_INDEX_248;   // Grey (dark)
-static constexpr uint8_t _PaletteIndexColourStation = PALETTE_INDEX_252; // Grey (light)
-
-// clang-format off
-enum {
-    WIDX_BACKGROUND,
-    WIDX_TITLE,
-    WIDX_CLOSE,
-    WIDX_ROTATE,
-    WIDX_MIRROR,
-    WIDX_SELECT_DIFFERENT_DESIGN,
-    WIDX_PRICE
-};
-
-validate_global_widx(WC_TRACK_DESIGN_PLACE, WIDX_ROTATE);
-
-static rct_widget window_track_place_widgets[] = {
-    WINDOW_SHIM(WINDOW_TITLE, WW, WH),
-    MakeWidget({173,  83}, { 24, 24}, WindowWidgetType::FlatBtn, WindowColour::Primary, SPR_ROTATE_ARROW,              STR_ROTATE_90_TIP                         ),
-    MakeWidget({173,  59}, { 24, 24}, WindowWidgetType::FlatBtn, WindowColour::Primary, SPR_MIRROR_ARROW,              STR_MIRROR_IMAGE_TIP                      ),
-    MakeWidget({  4, 109}, {192, 12}, WindowWidgetType::Button,  WindowColour::Primary, STR_SELECT_A_DIFFERENT_DESIGN, STR_GO_BACK_TO_DESIGN_SELECTION_WINDOW_TIP),
-    MakeWidget({  0,   0}, {  1,  1}, WindowWidgetType::Empty,   WindowColour::Primary),
-    WIDGETS_END,
-};
-
-static void WindowTrackPlaceClose(rct_window *w);
-static void WindowTrackPlaceMouseup(rct_window *w, rct_widgetindex widgetIndex);
-static void WindowTrackPlaceUpdate(rct_window *w);
-static void WindowTrackPlaceToolupdate(rct_window* w, rct_widgetindex widgetIndex, const ScreenCoordsXY& screenCoords);
-static void WindowTrackPlaceTooldown(rct_window* w, rct_widgetindex widgetIndex, const ScreenCoordsXY& screenCoords);
-static void WindowTrackPlaceToolabort(rct_window *w, rct_widgetindex widgetIndex);
-static void WindowTrackPlaceUnknown14(rct_window *w);
-static void WindowTrackPlaceInvalidate(rct_window *w);
-static void WindowTrackPlacePaint(rct_window *w, rct_drawpixelinfo *dpi);
-
-static rct_window_event_list window_track_place_events([](auto& events)
+namespace OpenRCT2::Ui::Windows
 {
-    events.close = &WindowTrackPlaceClose;
-    events.mouse_up = &WindowTrackPlaceMouseup;
-    events.update = &WindowTrackPlaceUpdate;
-    events.tool_update = &WindowTrackPlaceToolupdate;
-    events.tool_down = &WindowTrackPlaceTooldown;
-    events.tool_abort = &WindowTrackPlaceToolabort;
-    events.viewport_rotate = &WindowTrackPlaceUnknown14;
-    events.invalidate = &WindowTrackPlaceInvalidate;
-    events.paint = &WindowTrackPlacePaint;
-});
-// clang-format on
+    static constexpr StringId WINDOW_TITLE = STR_STRING;
+    static constexpr int32_t WH = 124;
+    static constexpr int32_t WW = 200;
+    constexpr int16_t TRACK_MINI_PREVIEW_WIDTH = 168;
+    constexpr int16_t TRACK_MINI_PREVIEW_HEIGHT = 78;
+    constexpr uint16_t TRACK_MINI_PREVIEW_SIZE = TRACK_MINI_PREVIEW_WIDTH * TRACK_MINI_PREVIEW_HEIGHT;
 
-static std::vector<uint8_t> _window_track_place_mini_preview;
-static CoordsXY _windowTrackPlaceLast;
+    static constexpr uint8_t kPaletteIndexColourEntrance = PALETTE_INDEX_20; // White
+    static constexpr uint8_t kPaletteIndexColourExit = PALETTE_INDEX_10;     // Black
+    static constexpr uint8_t kPaletteIndexColourTrack = PALETTE_INDEX_248;   // Grey (dark)
+    static constexpr uint8_t kPaletteIndexColourStation = PALETTE_INDEX_252; // Grey (light)
 
-static ride_id_t _window_track_place_ride_index;
-static bool _window_track_place_last_was_valid;
-static CoordsXYZ _windowTrackPlaceLastValid;
-static money32 _window_track_place_last_cost;
-
-static std::unique_ptr<TrackDesign> _trackDesign;
-
-static void WindowTrackPlaceClearProvisional();
-static int32_t WindowTrackPlaceGetBaseZ(const CoordsXY& loc);
-
-static void WindowTrackPlaceClearMiniPreview();
-static void WindowTrackPlaceDrawMiniPreview(TrackDesign* td6);
-static void WindowTrackPlaceDrawMiniPreviewTrack(
-    TrackDesign* td6, int32_t pass, const CoordsXY& origin, CoordsXY min, CoordsXY max);
-static void WindowTrackPlaceDrawMiniPreviewMaze(
-    TrackDesign* td6, int32_t pass, const CoordsXY& origin, CoordsXY min, CoordsXY max);
-static ScreenCoordsXY DrawMiniPreviewGetPixelPosition(const CoordsXY& location);
-static bool DrawMiniPreviewIsPixelInBounds(const ScreenCoordsXY& pixel);
-static uint8_t* DrawMiniPreviewGetPixelPtr(const ScreenCoordsXY& pixel);
-
-/**
- *
- *  rct2: 0x006D182E
- */
-static void WindowTrackPlaceClearMiniPreview()
-{
-    // Fill with transparent colour.
-    std::fill(_window_track_place_mini_preview.begin(), _window_track_place_mini_preview.end(), PALETTE_INDEX_0);
-}
-
-/**
- *
- *  rct2: 0x006CFCA0
- */
-rct_window* WindowTrackPlaceOpen(const track_design_file_ref* tdFileRef)
-{
-    _trackDesign = TrackDesignImport(tdFileRef->path);
-    if (_trackDesign == nullptr)
+    enum
     {
-        return nullptr;
-    }
+        WIDX_BACKGROUND,
+        WIDX_TITLE,
+        WIDX_CLOSE,
+        WIDX_ROTATE,
+        WIDX_MIRROR,
+        WIDX_SELECT_DIFFERENT_DESIGN,
+        WIDX_PRICE
+    };
 
-    window_close_construction_windows();
+    validate_global_widx(WC_TRACK_DESIGN_PLACE, WIDX_ROTATE);
 
-    _window_track_place_mini_preview.resize(TRACK_MINI_PREVIEW_SIZE);
+    // clang-format off
+    static constexpr Widget _trackPlaceWidgets[] = {
+        WINDOW_SHIM(WINDOW_TITLE, WW, WH),
+        MakeWidget({173,  83}, { 24, 24}, WindowWidgetType::FlatBtn, WindowColour::Primary, ImageId(SPR_ROTATE_ARROW),              STR_ROTATE_90_TIP                         ),
+        MakeWidget({173,  59}, { 24, 24}, WindowWidgetType::FlatBtn, WindowColour::Primary, ImageId(SPR_MIRROR_ARROW),              STR_MIRROR_IMAGE_TIP                      ),
+        MakeWidget({  4, 109}, {192, 12}, WindowWidgetType::Button,  WindowColour::Primary, STR_SELECT_A_DIFFERENT_DESIGN, STR_GO_BACK_TO_DESIGN_SELECTION_WINDOW_TIP),
+        MakeWidget({  0,   0}, {  1,  1}, WindowWidgetType::Empty,   WindowColour::Primary),
+    };
+    // clang-format on
 
-    rct_window* w = WindowCreate(ScreenCoordsXY(0, 29), 200, 124, &window_track_place_events, WC_TRACK_DESIGN_PLACE, 0);
-    w->widgets = window_track_place_widgets;
-    w->enabled_widgets = 1ULL << WIDX_CLOSE | 1ULL << WIDX_ROTATE | 1ULL << WIDX_MIRROR | 1ULL << WIDX_SELECT_DIFFERENT_DESIGN;
-    WindowInitScrollWidgets(w);
-    tool_set(w, WIDX_PRICE, Tool::Crosshair);
-    input_set_flag(INPUT_FLAG_6, true);
-    window_push_others_right(w);
-    show_gridlines();
-    _window_track_place_last_cost = MONEY32_UNDEFINED;
-    _windowTrackPlaceLast.SetNull();
-    _currentTrackPieceDirection = (2 - get_current_rotation()) & 3;
-
-    WindowTrackPlaceClearMiniPreview();
-    WindowTrackPlaceDrawMiniPreview(_trackDesign.get());
-
-    return w;
-}
-
-/**
- *
- *  rct2: 0x006D0119
- */
-static void WindowTrackPlaceClose(rct_window* w)
-{
-    WindowTrackPlaceClearProvisional();
-    viewport_set_visibility(0);
-    map_invalidate_map_selection_tiles();
-    gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_CONSTRUCT;
-    gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_ARROW;
-    hide_gridlines();
-    _window_track_place_mini_preview.clear();
-    _window_track_place_mini_preview.shrink_to_fit();
-    _trackDesign = nullptr;
-}
-
-/**
- *
- *  rct2: 0x006CFEAC
- */
-static void WindowTrackPlaceMouseup(rct_window* w, rct_widgetindex widgetIndex)
-{
-    switch (widgetIndex)
+    class TrackDesignPlaceWindow final : public Window
     {
-        case WIDX_CLOSE:
-            window_close(w);
-            break;
-        case WIDX_ROTATE:
-            WindowTrackPlaceClearProvisional();
-            _currentTrackPieceDirection = (_currentTrackPieceDirection + 1) & 3;
-            w->Invalidate();
-            _windowTrackPlaceLast.SetNull();
-            WindowTrackPlaceDrawMiniPreview(_trackDesign.get());
-            break;
-        case WIDX_MIRROR:
-            TrackDesignMirror(_trackDesign.get());
-            _currentTrackPieceDirection = (0 - _currentTrackPieceDirection) & 3;
-            w->Invalidate();
-            _windowTrackPlaceLast.SetNull();
-            WindowTrackPlaceDrawMiniPreview(_trackDesign.get());
-            break;
-        case WIDX_SELECT_DIFFERENT_DESIGN:
-            window_close(w);
+    private:
+        std::unique_ptr<TrackDesign> _trackDesign;
 
-            auto intent = Intent(WC_TRACK_DESIGN_LIST);
-            intent.putExtra(INTENT_EXTRA_RIDE_TYPE, _window_track_list_item.Type);
-            intent.putExtra(INTENT_EXTRA_RIDE_ENTRY_INDEX, _window_track_list_item.EntryIndex);
-            context_open_intent(&intent);
-            break;
-    }
-}
+        CoordsXYZD _placementLoc;
+        RideId _placementGhostRideId;
+        bool _hasPlacementGhost;
+        money64 _placementCost;
+        CoordsXYZD _placementGhostLoc;
 
-/**
- *
- *  rct2: 0x006CFCA0
- */
-static void WindowTrackPlaceUpdate(rct_window* w)
-{
-    if (!(input_test_flag(INPUT_FLAG_TOOL_ACTIVE)))
-        if (gCurrentToolWidget.window_classification != WC_TRACK_DESIGN_PLACE)
-            window_close(w);
-}
+        std::vector<uint8_t> _miniPreview;
 
-static GameActions::Result FindValidTrackDesignPlaceHeight(CoordsXYZ& loc, uint32_t flags)
-{
-    GameActions::Result res;
-    for (int32_t i = 0; i < 7; i++, loc.z += 8)
-    {
-        auto tdAction = TrackDesignAction(CoordsXYZD{ loc.x, loc.y, loc.z, _currentTrackPieceDirection }, *_trackDesign);
-        tdAction.SetFlags(flags);
-        res = GameActions::Query(&tdAction);
+        bool _trackPlaceCtrlState = false;
+        int32_t _trackPlaceCtrlZ;
 
-        // If successful don't keep trying.
-        // If failure due to no money then increasing height only makes problem worse
-        if (res.Error == GameActions::Status::Ok || res.Error == GameActions::Status::InsufficientFunds)
+        bool _trackPlaceShiftState = false;
+        ScreenCoordsXY _trackPlaceShiftStart;
+        int32_t _trackPlaceShiftZ;
+
+        int32_t _trackPlaceZ;
+
+    public:
+        void OnOpen() override
         {
-            return res;
+            SetWidgets(_trackPlaceWidgets);
+            WindowInitScrollWidgets(*this);
+            ToolSet(*this, WIDX_PRICE, Tool::Crosshair);
+            InputSetFlag(INPUT_FLAG_6, true);
+            WindowPushOthersRight(*this);
+            ShowGridlines();
+            _miniPreview.resize(TRACK_MINI_PREVIEW_SIZE);
+            _placementCost = kMoney64Undefined;
+            _placementLoc.SetNull();
+            _currentTrackPieceDirection = (2 - GetCurrentRotation()) & 3;
         }
-    }
-    return res;
-}
 
-/**
- *
- *  rct2: 0x006CFF2D
- */
-static void WindowTrackPlaceToolupdate(rct_window* w, rct_widgetindex widgetIndex, const ScreenCoordsXY& screenCoords)
-{
-    int16_t mapZ;
-
-    map_invalidate_map_selection_tiles();
-    gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE;
-    gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_CONSTRUCT;
-    gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_ARROW;
-
-    // Get the tool map position
-    CoordsXY mapCoords = ViewportInteractionGetTileStartAtCursor(screenCoords);
-    if (mapCoords.IsNull())
-    {
-        WindowTrackPlaceClearProvisional();
-        return;
-    }
-
-    // Check if tool map position has changed since last update
-    if (mapCoords == _windowTrackPlaceLast)
-    {
-        TrackDesignPreviewDrawOutlines(_trackDesign.get(), GetOrAllocateRide(PreviewRideId), { mapCoords, 0 });
-        return;
-    }
-
-    money32 cost = MONEY32_UNDEFINED;
-
-    // Get base Z position
-    mapZ = WindowTrackPlaceGetBaseZ(mapCoords);
-    CoordsXYZ trackLoc = { mapCoords, mapZ };
-
-    if (game_is_not_paused() || gCheatsBuildInPauseMode)
-    {
-        WindowTrackPlaceClearProvisional();
-        auto res = FindValidTrackDesignPlaceHeight(trackLoc, GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
-
-        if (res.Error == GameActions::Status::Ok)
+        void OnClose() override
         {
-            // Valid location found. Place the ghost at the location.
-            auto tdAction = TrackDesignAction({ trackLoc, _currentTrackPieceDirection }, *_trackDesign);
-            tdAction.SetFlags(GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
-            tdAction.SetCallback([trackLoc](const GameAction*, const GameActions::Result* result) {
-                if (result->Error == GameActions::Status::Ok)
-                {
-                    _window_track_place_ride_index = result->GetData<ride_id_t>();
-                    _windowTrackPlaceLastValid = trackLoc;
-                    _window_track_place_last_was_valid = true;
-                }
-            });
-            res = GameActions::Execute(&tdAction);
-            cost = res.Error == GameActions::Status::Ok ? res.Cost : MONEY32_UNDEFINED;
+            ClearProvisional();
+            ViewportSetVisibility(ViewportVisibility::Default);
+            MapInvalidateMapSelectionTiles();
+            gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_CONSTRUCT;
+            gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_ARROW;
+            HideGridlines();
+            _miniPreview.clear();
+            _miniPreview.shrink_to_fit();
+            _trackDesign = nullptr;
         }
-    }
 
-    _windowTrackPlaceLast = trackLoc;
-    if (cost != _window_track_place_last_cost)
-    {
-        _window_track_place_last_cost = cost;
-        widget_invalidate(w, WIDX_PRICE);
-    }
-
-    TrackDesignPreviewDrawOutlines(_trackDesign.get(), GetOrAllocateRide(PreviewRideId), trackLoc);
-}
-
-/**
- *
- *  rct2: 0x006CFF34
- */
-static void WindowTrackPlaceTooldown(rct_window* w, rct_widgetindex widgetIndex, const ScreenCoordsXY& screenCoords)
-{
-    WindowTrackPlaceClearProvisional();
-    map_invalidate_map_selection_tiles();
-    gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE;
-    gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_CONSTRUCT;
-    gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_ARROW;
-
-    const CoordsXY mapCoords = ViewportInteractionGetTileStartAtCursor(screenCoords);
-    if (mapCoords.IsNull())
-        return;
-
-    // Try increasing Z until a feasible placement is found
-    int16_t mapZ = WindowTrackPlaceGetBaseZ(mapCoords);
-    CoordsXYZ trackLoc = { mapCoords, mapZ };
-
-    auto res = FindValidTrackDesignPlaceHeight(trackLoc, 0);
-    if (res.Error == GameActions::Status::Ok)
-    {
-        auto tdAction = TrackDesignAction({ trackLoc, _currentTrackPieceDirection }, *_trackDesign);
-        tdAction.SetCallback([trackLoc](const GameAction*, const GameActions::Result* result) {
-            if (result->Error == GameActions::Status::Ok)
+        void OnMouseUp(WidgetIndex widgetIndex) override
+        {
+            switch (widgetIndex)
             {
-                const auto rideId = result->GetData<ride_id_t>();
-                auto ride = get_ride(rideId);
-                if (ride != nullptr)
-                {
-                    window_close_by_class(WC_ERROR);
-                    OpenRCT2::Audio::Play3D(OpenRCT2::Audio::SoundId::PlaceItem, trackLoc);
+                case WIDX_CLOSE:
+                    Close();
+                    break;
+                case WIDX_ROTATE:
+                    ClearProvisional();
+                    _currentTrackPieceDirection = (_currentTrackPieceDirection + 1) & 3;
+                    Invalidate();
+                    _placementLoc.SetNull();
+                    DrawMiniPreview(*_trackDesign);
+                    break;
+                case WIDX_MIRROR:
+                    TrackDesignMirror(*_trackDesign);
+                    _currentTrackPieceDirection = (0 - _currentTrackPieceDirection) & 3;
+                    Invalidate();
+                    _placementLoc.SetNull();
+                    DrawMiniPreview(*_trackDesign);
+                    break;
+                case WIDX_SELECT_DIFFERENT_DESIGN:
+                    Close();
 
+                    auto intent = Intent(WindowClass::TrackDesignList);
+                    intent.PutExtra(INTENT_EXTRA_RIDE_TYPE, _window_track_list_item.Type);
+                    intent.PutExtra(INTENT_EXTRA_RIDE_ENTRY_INDEX, _window_track_list_item.EntryIndex);
+                    ContextOpenIntent(&intent);
+                    break;
+            }
+        }
+
+        void OnUpdate() override
+        {
+            if (!isToolActive(WindowClass::TrackDesignPlace))
+                Close();
+        }
+
+        void OnToolUpdate(WidgetIndex widgetIndex, const ScreenCoordsXY& screenCoords) override
+        {
+            TrackDesignState tds{};
+
+            MapInvalidateMapSelectionTiles();
+            gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE;
+            gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_CONSTRUCT;
+            gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_ARROW;
+
+            // Take shift modifier into account
+            ScreenCoordsXY targetScreenCoords = screenCoords;
+            if (_trackPlaceShiftState)
+                targetScreenCoords = _trackPlaceShiftStart;
+
+            // Get the tool map position
+            CoordsXY mapCoords = ViewportInteractionGetTileStartAtCursor(targetScreenCoords);
+            if (mapCoords.IsNull())
+            {
+                ClearProvisional();
+                return;
+            }
+
+            // Get base Z position
+            // NB: always use the actual screenCoords here, not the shifted ones
+            auto maybeMapZ = GetBaseZ(mapCoords, screenCoords);
+            if (!maybeMapZ.has_value())
+            {
+                ClearProvisional();
+                return;
+            }
+
+            CoordsXYZD trackLoc = { mapCoords, *maybeMapZ, _currentTrackPieceDirection };
+
+            // Check if tool map position has changed since last update
+            if (trackLoc == _placementLoc)
+            {
+                TrackDesignPreviewDrawOutlines(
+                    tds, *_trackDesign, RideGetTemporaryForPreview(), { mapCoords, 0, _currentTrackPieceDirection });
+                return;
+            }
+
+            money64 cost = kMoney64Undefined;
+            if (GameIsNotPaused() || GetGameState().Cheats.buildInPauseMode)
+            {
+                ClearProvisional();
+                auto res = FindValidTrackDesignPlaceHeight(trackLoc, GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
+
+                if (res.Error == GameActions::Status::Ok)
+                {
+                    // Valid location found. Place the ghost at the location.
+                    auto tdAction = TrackDesignAction(trackLoc, *_trackDesign);
+                    tdAction.SetFlags(GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
+                    tdAction.SetCallback([&](const GameAction*, const GameActions::Result* result) {
+                        if (result->Error == GameActions::Status::Ok)
+                        {
+                            _placementGhostRideId = result->GetData<RideId>();
+                            _placementGhostLoc = trackLoc;
+                            _hasPlacementGhost = true;
+                        }
+                    });
+                    res = GameActions::Execute(&tdAction);
+                    cost = res.Error == GameActions::Status::Ok ? res.Cost : kMoney64Undefined;
+
+                    VirtualFloorSetHeight(trackLoc.z);
+                }
+            }
+
+            _placementLoc = trackLoc;
+            if (cost != _placementCost)
+            {
+                _placementCost = cost;
+                InvalidateWidget(WIDX_PRICE);
+            }
+
+            TrackDesignPreviewDrawOutlines(tds, *_trackDesign, RideGetTemporaryForPreview(), trackLoc);
+        }
+
+        void OnToolDown(WidgetIndex widgetIndex, const ScreenCoordsXY& screenCoords) override
+        {
+            ClearProvisional();
+            MapInvalidateMapSelectionTiles();
+            gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE;
+            gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_CONSTRUCT;
+            gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_ARROW;
+
+            // Take shift modifier into account
+            ScreenCoordsXY targetScreenCoords = screenCoords;
+            if (_trackPlaceShiftState)
+                targetScreenCoords = _trackPlaceShiftStart;
+
+            // Get the tool map position
+            CoordsXY mapCoords = ViewportInteractionGetTileStartAtCursor(targetScreenCoords);
+            if (mapCoords.IsNull())
+            {
+                ClearProvisional();
+                return;
+            }
+
+            // NB: always use the actual screenCoords here, not the shifted ones
+            auto maybeMapZ = GetBaseZ(mapCoords, screenCoords);
+            if (!maybeMapZ.has_value())
+            {
+                ClearProvisional();
+                return;
+            }
+
+            // Try increasing Z until a feasible placement is found
+            CoordsXYZ trackLoc = { mapCoords, maybeMapZ.value() };
+            auto res = FindValidTrackDesignPlaceHeight(trackLoc, 0);
+            if (res.Error != GameActions::Status::Ok)
+            {
+                // Unable to build track
+                Audio::Play3D(Audio::SoundId::Error, trackLoc);
+
+                auto windowManager = GetWindowManager();
+                windowManager->ShowError(res.GetErrorTitle(), res.GetErrorMessage());
+                return;
+            }
+
+            auto tdAction = TrackDesignAction({ trackLoc, _currentTrackPieceDirection }, *_trackDesign);
+            tdAction.SetCallback([&](const GameAction*, const GameActions::Result* result) {
+                if (result->Error != GameActions::Status::Ok)
+                {
+                    Audio::Play3D(Audio::SoundId::Error, result->Position);
+                    return;
+                }
+
+                rideId = result->GetData<RideId>();
+                auto getRide = GetRide(rideId);
+                if (getRide != nullptr)
+                {
+                    auto* windowMgr = Ui::GetWindowManager();
+                    windowMgr->CloseByClass(WindowClass::Error);
+
+                    Audio::Play3D(Audio::SoundId::PlaceItem, trackLoc);
                     _currentRideIndex = rideId;
-                    if (track_design_are_entrance_and_exit_placed())
+
+                    if (TrackDesignAreEntranceAndExitPlaced())
                     {
-                        auto intent = Intent(WC_RIDE);
-                        intent.putExtra(INTENT_EXTRA_RIDE_ID, static_cast<int32_t>(rideId));
-                        context_open_intent(&intent);
-                        auto wnd = window_find_by_class(WC_TRACK_DESIGN_PLACE);
-                        window_close(wnd);
+                        auto intent = Intent(WindowClass::Ride);
+                        intent.PutExtra(INTENT_EXTRA_RIDE_ID, rideId.ToUnderlying());
+                        ContextOpenIntent(&intent);
+                        auto* wnd = windowMgr->FindByClass(WindowClass::TrackDesignPlace);
+                        windowMgr->Close(*wnd);
                     }
                     else
                     {
-                        ride_initialise_construction_window(ride);
-                        auto wnd = window_find_by_class(WC_RIDE_CONSTRUCTION);
-                        window_event_mouse_up_call(wnd, WC_RIDE_CONSTRUCTION__WIDX_ENTRANCE);
+                        RideInitialiseConstructionWindow(*getRide);
+                        auto* wnd = windowMgr->FindByClass(WindowClass::RideConstruction);
+                        wnd->OnMouseUp(WC_RIDE_CONSTRUCTION__WIDX_ENTRANCE);
                     }
+                }
+            });
+            GameActions::Execute(&tdAction);
+        }
+
+        void OnToolAbort(WidgetIndex widgetIndex) override
+        {
+            ClearProvisional();
+        }
+
+        void OnViewportRotate() override
+        {
+            DrawMiniPreview(*_trackDesign);
+        }
+
+        void OnPrepareDraw() override
+        {
+            DrawMiniPreview(*_trackDesign);
+        }
+
+        void OnDraw(DrawPixelInfo& dpi) override
+        {
+            auto ft = Formatter::Common();
+            ft.Add<char*>(_trackDesign->gameStateData.name.c_str());
+            WindowDrawWidgets(*this, dpi);
+
+            // Draw mini tile preview
+            DrawPixelInfo clippedDpi;
+            if (ClipDrawPixelInfo(clippedDpi, dpi, this->windowPos + ScreenCoordsXY{ 4, 18 }, 168, 78))
+            {
+                G1Element g1temp = {};
+                g1temp.offset = _miniPreview.data();
+                g1temp.width = TRACK_MINI_PREVIEW_WIDTH;
+                g1temp.height = TRACK_MINI_PREVIEW_HEIGHT;
+                GfxSetG1Element(SPR_TEMP, &g1temp);
+                DrawingEngineInvalidateImage(SPR_TEMP);
+                GfxDrawSprite(clippedDpi, ImageId(SPR_TEMP, this->colours[0].colour), { 0, 0 });
+            }
+
+            // Price
+            if (_placementCost != kMoney64Undefined && !(GetGameState().Park.Flags & PARK_FLAGS_NO_MONEY))
+            {
+                ft = Formatter();
+                ft.Add<money64>(_placementCost);
+                DrawTextBasic(dpi, this->windowPos + ScreenCoordsXY{ 88, 94 }, STR_COST_LABEL, ft, { TextAlignment::CENTRE });
+            }
+        }
+
+        void OnResize() override
+        {
+            ResizeFrame();
+        }
+
+        void ClearProvisionalTemporarily()
+        {
+            if (_hasPlacementGhost)
+            {
+                auto provRide = GetRide(_placementGhostRideId);
+                if (provRide != nullptr)
+                {
+                    TrackDesignPreviewRemoveGhosts(*_trackDesign, *provRide, _placementGhostLoc);
+                }
+            }
+        }
+
+        void RestoreProvisional()
+        {
+            if (_hasPlacementGhost)
+            {
+                auto tdAction = TrackDesignAction({ _placementGhostLoc }, *_trackDesign);
+                tdAction.SetFlags(GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
+                auto res = GameActions::Execute(&tdAction);
+                if (res.Error != GameActions::Status::Ok)
+                {
+                    _hasPlacementGhost = false;
+                }
+            }
+        }
+
+        void Init(std::unique_ptr<TrackDesign>&& trackDesign)
+        {
+            _trackDesign = std::move(trackDesign);
+        }
+
+        void DrawMiniPreview(const TrackDesign& td)
+        {
+            ClearMiniPreview();
+
+            // First pass is used to determine the width and height of the image so it can centre it
+            CoordsXY min = { 0, 0 };
+            CoordsXY max = { 0, 0 };
+            for (int32_t pass = 0; pass < 2; pass++)
+            {
+                CoordsXY origin = { 0, 0 };
+                if (pass == 1)
+                {
+                    origin.x -= ((max.x + min.x) >> 6) * kCoordsXYStep;
+                    origin.y -= ((max.y + min.y) >> 6) * kCoordsXYStep;
+                }
+
+                const auto& rtd = GetRideTypeDescriptor(td.trackAndVehicle.rtdIndex);
+                if (rtd.specialType == RtdSpecialType::maze)
+                {
+                    DrawMiniPreviewMaze(td, pass, origin, min, max);
+                }
+                else
+                {
+                    DrawMiniPreviewTrack(td, pass, origin, min, max);
+                }
+            }
+        }
+
+        void ClearMiniPreview()
+        {
+            // Fill with transparent colour.
+            std::fill(_miniPreview.begin(), _miniPreview.end(), PALETTE_INDEX_0);
+        }
+
+    private:
+        void ClearProvisional()
+        {
+            if (_hasPlacementGhost)
+            {
+                auto newRide = GetRide(_placementGhostRideId);
+                if (newRide != nullptr)
+                {
+                    TrackDesignPreviewRemoveGhosts(*_trackDesign, *newRide, _placementGhostLoc);
+                    _hasPlacementGhost = false;
+                }
+
+                VirtualFloorSetHeight(0);
+            }
+        }
+
+        std::optional<int32_t> GetBaseZ([[maybe_unused]] const CoordsXY& loc, const ScreenCoordsXY& screenCoords)
+        {
+            CoordsXY mapCoords = ViewportInteractionGetTileStartAtCursor(screenCoords);
+            auto surfaceElement = MapGetSurfaceElementAt(mapCoords);
+            if (surfaceElement == nullptr)
+                return std::nullopt;
+
+            auto& im = GetInputManager();
+
+            if (!_trackPlaceCtrlState && im.IsModifierKeyPressed(ModifierKey::ctrl))
+            {
+                constexpr auto interactionFlags = EnumsToFlags(
+                    ViewportInteractionItem::Terrain, ViewportInteractionItem::Ride, ViewportInteractionItem::Scenery,
+                    ViewportInteractionItem::Footpath, ViewportInteractionItem::Wall, ViewportInteractionItem::LargeScenery);
+
+                auto info = GetMapCoordinatesFromPos(screenCoords, interactionFlags);
+                if (info.interactionType == ViewportInteractionItem::Terrain)
+                {
+                    _trackPlaceCtrlZ = floor2(surfaceElement->GetBaseZ(), kCoordsZStep);
+
+                    // Increase Z above water
+                    if (surfaceElement->GetWaterHeight() > 0)
+                        _trackPlaceCtrlZ = std::max(_trackPlaceCtrlZ, surfaceElement->GetWaterHeight());
+                }
+                else
+                {
+                    _trackPlaceCtrlZ = floor2(info.Element->GetBaseZ(), kCoordsZStep);
+                }
+
+                _trackPlaceCtrlState = true;
+            }
+            else if (!im.IsModifierKeyPressed(ModifierKey::ctrl))
+            {
+                _trackPlaceCtrlState = false;
+                _trackPlaceCtrlZ = 0;
+            }
+
+            if (!_trackPlaceShiftState && im.IsModifierKeyPressed(ModifierKey::shift))
+            {
+                _trackPlaceShiftState = true;
+                _trackPlaceShiftStart = screenCoords;
+                _trackPlaceShiftZ = 0;
+            }
+            else if (im.IsModifierKeyPressed(ModifierKey::shift))
+            {
+                uint16_t maxHeight = ZoomLevel::max().ApplyTo(
+                    std::numeric_limits<decltype(TileElement::BaseHeight)>::max() - 32);
+
+                _trackPlaceShiftZ = _trackPlaceShiftStart.y - screenCoords.y + 4;
+
+                // Scale delta by zoom to match mouse position.
+                auto* mainWnd = WindowGetMain();
+                if (mainWnd != nullptr && mainWnd->viewport != nullptr)
+                    _trackPlaceShiftZ = mainWnd->viewport->zoom.ApplyTo(_trackPlaceShiftZ);
+
+                // Floor to closest kCoordsZStep
+                _trackPlaceShiftZ = floor2(_trackPlaceShiftZ, kCoordsZStep);
+
+                // Clamp to maximum possible value of BaseHeight can offer.
+                _trackPlaceShiftZ = std::min<int16_t>(_trackPlaceShiftZ, maxHeight);
+            }
+            else if (_trackPlaceShiftState)
+            {
+                _trackPlaceShiftState = false;
+                _trackPlaceShiftZ = 0;
+            }
+
+            if (!_trackPlaceCtrlState)
+            {
+                _trackPlaceZ = floor2(surfaceElement->GetBaseZ(), kCoordsZStep);
+
+                // Increase Z above water
+                if (surfaceElement->GetWaterHeight() > 0)
+                    _trackPlaceZ = std::max(_trackPlaceZ, surfaceElement->GetWaterHeight());
+
+                if (_trackPlaceShiftState)
+                {
+                    _trackPlaceZ += _trackPlaceShiftZ;
+                    _trackPlaceZ = std::max<int16_t>(16, _trackPlaceZ);
                 }
             }
             else
             {
-                OpenRCT2::Audio::Play3D(OpenRCT2::Audio::SoundId::Error, result->Position);
+                _trackPlaceZ = _trackPlaceCtrlZ;
+                if (_trackPlaceShiftState)
+                    _trackPlaceZ += _trackPlaceShiftZ;
+
+                _trackPlaceZ = std::max<int32_t>(16, _trackPlaceZ);
             }
-        });
-        GameActions::Execute(&tdAction);
-        return;
-    }
 
-    // Unable to build track
-    OpenRCT2::Audio::Play3D(OpenRCT2::Audio::SoundId::Error, trackLoc);
+            if (mapCoords.x == kLocationNull)
+                return std::nullopt;
 
-    auto windowManager = GetContext()->GetUiContext()->GetWindowManager();
-    windowManager->ShowError(res.GetErrorTitle(), res.GetErrorMessage());
-}
-
-/**
- *
- *  rct2: 0x006D015C
- */
-static void WindowTrackPlaceToolabort(rct_window* w, rct_widgetindex widgetIndex)
-{
-    WindowTrackPlaceClearProvisional();
-}
-
-/**
- *
- *  rct2: 0x006CFF01
- */
-static void WindowTrackPlaceUnknown14(rct_window* w)
-{
-    WindowTrackPlaceDrawMiniPreview(_trackDesign.get());
-}
-
-static void WindowTrackPlaceInvalidate(rct_window* w)
-{
-    WindowTrackPlaceDrawMiniPreview(_trackDesign.get());
-}
-
-/**
- *
- *  rct2: 0x006D017F
- */
-static void WindowTrackPlaceClearProvisional()
-{
-    if (_window_track_place_last_was_valid)
-    {
-        auto ride = get_ride(_window_track_place_ride_index);
-        if (ride != nullptr)
-        {
-            TrackDesignPreviewRemoveGhosts(_trackDesign.get(), ride, _windowTrackPlaceLastValid);
-            _window_track_place_last_was_valid = false;
-        }
-    }
-}
-
-void TrackPlaceClearProvisionalTemporarily()
-{
-    if (_window_track_place_last_was_valid)
-    {
-        auto ride = get_ride(_window_track_place_ride_index);
-        if (ride != nullptr)
-        {
-            TrackDesignPreviewRemoveGhosts(_trackDesign.get(), ride, _windowTrackPlaceLastValid);
-        }
-    }
-}
-
-void TrackPlaceRestoreProvisional()
-{
-    if (_window_track_place_last_was_valid)
-    {
-        auto tdAction = TrackDesignAction({ _windowTrackPlaceLastValid, _currentTrackPieceDirection }, *_trackDesign);
-        tdAction.SetFlags(GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
-        auto res = GameActions::Execute(&tdAction);
-        if (res.Error != GameActions::Status::Ok)
-        {
-            _window_track_place_last_was_valid = false;
-        }
-    }
-}
-
-/**
- *
- *  rct2: 0x006D17C6
- */
-static int32_t WindowTrackPlaceGetBaseZ(const CoordsXY& loc)
-{
-    auto surfaceElement = map_get_surface_element_at(loc);
-    if (surfaceElement == nullptr)
-        return 0;
-
-    auto z = surfaceElement->GetBaseZ();
-
-    // Increase Z above slope
-    if (surfaceElement->GetSlope() & TILE_ELEMENT_SLOPE_ALL_CORNERS_UP)
-    {
-        z += 16;
-
-        // Increase Z above double slope
-        if (surfaceElement->GetSlope() & TILE_ELEMENT_SLOPE_DOUBLE_HEIGHT)
-            z += 16;
-    }
-
-    // Increase Z above water
-    if (surfaceElement->GetWaterHeight() > 0)
-        z = std::max(z, surfaceElement->GetWaterHeight());
-
-    return z + TrackDesignGetZPlacement(_trackDesign.get(), GetOrAllocateRide(PreviewRideId), { loc, z });
-}
-
-/**
- *
- *  rct2: 0x006CFD9D
- */
-static void WindowTrackPlacePaint(rct_window* w, rct_drawpixelinfo* dpi)
-{
-    auto ft = Formatter::Common();
-    ft.Add<char*>(_trackDesign->name.c_str());
-    WindowDrawWidgets(w, dpi);
-
-    // Draw mini tile preview
-    rct_drawpixelinfo clippedDpi;
-    if (clip_drawpixelinfo(&clippedDpi, dpi, w->windowPos + ScreenCoordsXY{ 4, 18 }, 168, 78))
-    {
-        rct_g1_element g1temp = {};
-        g1temp.offset = _window_track_place_mini_preview.data();
-        g1temp.width = TRACK_MINI_PREVIEW_WIDTH;
-        g1temp.height = TRACK_MINI_PREVIEW_HEIGHT;
-        gfx_set_g1_element(SPR_TEMP, &g1temp);
-        drawing_engine_invalidate_image(SPR_TEMP);
-        gfx_draw_sprite(&clippedDpi, ImageId(SPR_TEMP, NOT_TRANSLUCENT(w->colours[0])), { 0, 0 });
-    }
-
-    // Price
-    if (_window_track_place_last_cost != MONEY32_UNDEFINED && !(gParkFlags & PARK_FLAGS_NO_MONEY))
-    {
-        ft = Formatter();
-        ft.Add<money64>(_window_track_place_last_cost);
-        DrawTextBasic(dpi, w->windowPos + ScreenCoordsXY{ 88, 94 }, STR_COST_LABEL, ft, { TextAlignment::CENTRE });
-    }
-}
-
-/**
- *
- *  rct2: 0x006D1845
- */
-static void WindowTrackPlaceDrawMiniPreview(TrackDesign* td6)
-{
-    WindowTrackPlaceClearMiniPreview();
-
-    // First pass is used to determine the width and height of the image so it can centre it
-    CoordsXY min = { 0, 0 };
-    CoordsXY max = { 0, 0 };
-    for (int32_t pass = 0; pass < 2; pass++)
-    {
-        CoordsXY origin = { 0, 0 };
-        if (pass == 1)
-        {
-            origin.x -= ((max.x + min.x) >> 6) * COORDS_XY_STEP;
-            origin.y -= ((max.y + min.y) >> 6) * COORDS_XY_STEP;
+            return _trackPlaceZ
+                + TrackDesignGetZPlacement(
+                       *_trackDesign, RideGetTemporaryForPreview(), { mapCoords, _trackPlaceZ, _currentTrackPieceDirection });
         }
 
-        if (td6->type == RIDE_TYPE_MAZE)
+        void DrawMiniPreviewEntrances(
+            const TrackDesign& td, int32_t pass, const CoordsXY& origin, CoordsXY& min, CoordsXY& max, Direction rotation)
         {
-            WindowTrackPlaceDrawMiniPreviewMaze(td6, pass, origin, min, max);
-        }
-        else
-        {
-            WindowTrackPlaceDrawMiniPreviewTrack(td6, pass, origin, min, max);
-        }
-    }
-}
-
-static void WindowTrackPlaceDrawMiniPreviewTrack(
-    TrackDesign* td6, int32_t pass, const CoordsXY& origin, CoordsXY min, CoordsXY max)
-{
-    const uint8_t rotation = (_currentTrackPieceDirection + get_current_rotation()) & 3;
-
-    CoordsXY curTrackStart = origin;
-    uint8_t curTrackRotation = rotation;
-    for (const auto& trackElement : td6->track_elements)
-    {
-        int32_t trackType = trackElement.type;
-        if (trackType == TrackElemType::InvertedUp90ToFlatQuarterLoopAlias)
-        {
-            trackType = TrackElemType::MultiDimInvertedUp90ToFlatQuarterLoop;
-        }
-
-        // Follow a single track piece shape
-        const auto& ted = GetTrackElementDescriptor(trackType);
-        const rct_preview_track* trackBlock = ted.Block;
-        while (trackBlock->index != 255)
-        {
-            auto rotatedAndOffsetTrackBlock = curTrackStart + CoordsXY{ trackBlock->x, trackBlock->y }.Rotate(curTrackRotation);
-
-            if (pass == 0)
+            for (const auto& entrance : td.entranceElements)
             {
-                min.x = std::min(min.x, rotatedAndOffsetTrackBlock.x);
-                max.x = std::max(max.x, rotatedAndOffsetTrackBlock.x);
-                min.y = std::min(min.y, rotatedAndOffsetTrackBlock.y);
-                max.y = std::max(max.y, rotatedAndOffsetTrackBlock.y);
-            }
-            else
-            {
-                auto pixelPosition = DrawMiniPreviewGetPixelPosition(rotatedAndOffsetTrackBlock);
-                if (DrawMiniPreviewIsPixelInBounds(pixelPosition))
+                auto rotatedAndOffsetEntrance = origin + entrance.location.ToCoordsXY().Rotate(rotation);
+
+                if (pass == 0)
                 {
-                    uint8_t* pixel = DrawMiniPreviewGetPixelPtr(pixelPosition);
-
-                    auto bits = trackBlock->var_08.Rotate(curTrackRotation & 3).GetBaseQuarterOccupied();
-
-                    // Station track is a lighter colour
-                    uint8_t colour = (ted.SequenceProperties[0] & TRACK_SEQUENCE_FLAG_ORIGIN) ? _PaletteIndexColourStation
-                                                                                              : _PaletteIndexColourTrack;
-
-                    for (int32_t i = 0; i < 4; i++)
+                    min.x = std::min(min.x, rotatedAndOffsetEntrance.x);
+                    max.x = std::max(max.x, rotatedAndOffsetEntrance.x);
+                    min.y = std::min(min.y, rotatedAndOffsetEntrance.y);
+                    max.y = std::max(max.y, rotatedAndOffsetEntrance.y);
+                }
+                else
+                {
+                    auto pixelPosition = DrawMiniPreviewGetPixelPosition(rotatedAndOffsetEntrance);
+                    if (DrawMiniPreviewIsPixelInBounds(pixelPosition))
                     {
-                        if (bits & 1)
+                        uint8_t* pixel = DrawMiniPreviewGetPixelPtr(pixelPosition);
+                        uint8_t colour = entrance.isExit ? kPaletteIndexColourExit : kPaletteIndexColourEntrance;
+                        for (int32_t i = 0; i < 4; i++)
+                        {
                             pixel[338 + i] = colour; // x + 2, y + 2
-                        if (bits & 2)
                             pixel[168 + i] = colour; //        y + 1
-                        if (bits & 4)
-                            pixel[2 + i] = colour; // x + 2
-                        if (bits & 8)
+                            pixel[2 + i] = colour;   // x + 2
                             pixel[172 + i] = colour; // x + 4, y + 1
+                        }
                     }
                 }
             }
-            trackBlock++;
         }
 
-        // Change rotation and next position based on track curvature
-        curTrackRotation &= 3;
-
-        const rct_track_coordinates* track_coordinate = &ted.Coordinates;
-
-        curTrackStart += CoordsXY{ track_coordinate->x, track_coordinate->y }.Rotate(curTrackRotation);
-        curTrackRotation += track_coordinate->rotation_end - track_coordinate->rotation_begin;
-        curTrackRotation &= 3;
-        if (track_coordinate->rotation_end & 4)
+        void DrawMiniPreviewTrack(const TrackDesign& td, int32_t pass, const CoordsXY& origin, CoordsXY& min, CoordsXY& max)
         {
-            curTrackRotation |= 4;
-        }
-        if (!(curTrackRotation & 4))
-        {
-            curTrackStart += CoordsDirectionDelta[curTrackRotation];
-        }
-    }
+            const uint8_t rotation = (_currentTrackPieceDirection + GetCurrentRotation()) & 3;
 
-    // Draw entrance and exit preview.
-    for (const auto& entrance : td6->entrance_elements)
-    {
-        auto rotatedAndOffsetEntrance = origin + CoordsXY{ entrance.x, entrance.y }.Rotate(rotation);
-
-        if (pass == 0)
-        {
-            min.x = std::min(min.x, rotatedAndOffsetEntrance.x);
-            max.x = std::max(max.x, rotatedAndOffsetEntrance.x);
-            min.y = std::min(min.y, rotatedAndOffsetEntrance.y);
-            max.y = std::max(max.y, rotatedAndOffsetEntrance.y);
-        }
-        else
-        {
-            auto pixelPosition = DrawMiniPreviewGetPixelPosition(rotatedAndOffsetEntrance);
-            if (DrawMiniPreviewIsPixelInBounds(pixelPosition))
+            CoordsXY curTrackStart = origin;
+            uint8_t curTrackRotation = rotation;
+            for (const auto& trackElement : td.trackElements)
             {
-                uint8_t* pixel = DrawMiniPreviewGetPixelPtr(pixelPosition);
-                uint8_t colour = entrance.isExit ? _PaletteIndexColourExit : _PaletteIndexColourEntrance;
-                for (int32_t i = 0; i < 4; i++)
+                // Follow a single track piece shape
+                const auto& ted = GetTrackElementDescriptor(trackElement.type);
+                for (size_t sequenceIndex = 0; sequenceIndex < ted.numSequences; sequenceIndex++)
                 {
-                    pixel[338 + i] = colour; // x + 2, y + 2
-                    pixel[168 + i] = colour; //        y + 1
-                    pixel[2 + i] = colour;   // x + 2
-                    pixel[172 + i] = colour; // x + 4, y + 1
+                    const auto& trackBlock = ted.sequences[sequenceIndex].clearance;
+                    auto rotatedAndOffsetTrackBlock = curTrackStart
+                        + CoordsXY{ trackBlock.x, trackBlock.y }.Rotate(curTrackRotation);
+
+                    if (pass == 0)
+                    {
+                        min.x = std::min(min.x, rotatedAndOffsetTrackBlock.x);
+                        max.x = std::max(max.x, rotatedAndOffsetTrackBlock.x);
+                        min.y = std::min(min.y, rotatedAndOffsetTrackBlock.y);
+                        max.y = std::max(max.y, rotatedAndOffsetTrackBlock.y);
+                    }
+                    else
+                    {
+                        auto pixelPosition = DrawMiniPreviewGetPixelPosition(rotatedAndOffsetTrackBlock);
+                        if (DrawMiniPreviewIsPixelInBounds(pixelPosition))
+                        {
+                            uint8_t* pixel = DrawMiniPreviewGetPixelPtr(pixelPosition);
+
+                            auto bits = trackBlock.quarterTile.Rotate(curTrackRotation & 3).GetBaseQuarterOccupied();
+
+                            // Station track is a lighter colour
+                            uint8_t colour = (ted.sequences[0].flags & TRACK_SEQUENCE_FLAG_ORIGIN) ? kPaletteIndexColourStation
+                                                                                                   : kPaletteIndexColourTrack;
+
+                            for (int32_t i = 0; i < 4; i++)
+                            {
+                                if (bits & 1)
+                                    pixel[338 + i] = colour; // x + 2, y + 2
+                                if (bits & 2)
+                                    pixel[168 + i] = colour; //        y + 1
+                                if (bits & 4)
+                                    pixel[2 + i] = colour; // x + 2
+                                if (bits & 8)
+                                    pixel[172 + i] = colour; // x + 4, y + 1
+                            }
+                        }
+                    }
+                }
+
+                // Change rotation and next position based on track curvature
+                curTrackRotation &= 3;
+
+                const TrackCoordinates* track_coordinate = &ted.coordinates;
+
+                curTrackStart += CoordsXY{ track_coordinate->x, track_coordinate->y }.Rotate(curTrackRotation);
+                curTrackRotation += track_coordinate->rotationEnd - track_coordinate->rotationBegin;
+                curTrackRotation &= 3;
+                if (track_coordinate->rotationEnd & 4)
+                {
+                    curTrackRotation |= 4;
+                }
+                if (!(curTrackRotation & 4))
+                {
+                    curTrackStart += CoordsDirectionDelta[curTrackRotation];
                 }
             }
-        }
-    }
-}
 
-static void WindowTrackPlaceDrawMiniPreviewMaze(
-    TrackDesign* td6, int32_t pass, const CoordsXY& origin, CoordsXY min, CoordsXY max)
-{
-    uint8_t rotation = (_currentTrackPieceDirection + get_current_rotation()) & 3;
-    for (const auto& mazeElement : td6->maze_elements)
-    {
-        auto rotatedMazeCoords = origin + TileCoordsXY{ mazeElement.x, mazeElement.y }.ToCoordsXY().Rotate(rotation);
-
-        if (pass == 0)
-        {
-            min.x = std::min(min.x, rotatedMazeCoords.x);
-            max.x = std::max(max.x, rotatedMazeCoords.x);
-            min.y = std::min(min.y, rotatedMazeCoords.y);
-            max.y = std::max(max.y, rotatedMazeCoords.y);
+            DrawMiniPreviewEntrances(td, pass, origin, min, max, rotation);
         }
-        else
+
+        void DrawMiniPreviewMaze(const TrackDesign& td, int32_t pass, const CoordsXY& origin, CoordsXY& min, CoordsXY& max)
         {
-            auto pixelPosition = DrawMiniPreviewGetPixelPosition(rotatedMazeCoords);
-            if (DrawMiniPreviewIsPixelInBounds(pixelPosition))
+            uint8_t rotation = (_currentTrackPieceDirection + GetCurrentRotation()) & 3;
+            for (const auto& mazeElement : td.mazeElements)
             {
-                uint8_t* pixel = DrawMiniPreviewGetPixelPtr(pixelPosition);
+                auto rotatedMazeCoords = origin + mazeElement.location.ToCoordsXY().Rotate(rotation);
 
-                uint8_t colour = _PaletteIndexColourTrack;
-
-                // Draw entrance and exit with different colours.
-                if (mazeElement.type == MAZE_ELEMENT_TYPE_ENTRANCE)
-                    colour = _PaletteIndexColourEntrance;
-                else if (mazeElement.type == MAZE_ELEMENT_TYPE_EXIT)
-                    colour = _PaletteIndexColourExit;
-
-                for (int32_t i = 0; i < 4; i++)
+                if (pass == 0)
                 {
-                    pixel[338 + i] = colour; // x + 2, y + 2
-                    pixel[168 + i] = colour; //        y + 1
-                    pixel[2 + i] = colour;   // x + 2
-                    pixel[172 + i] = colour; // x + 4, y + 1
+                    min.x = std::min(min.x, rotatedMazeCoords.x);
+                    max.x = std::max(max.x, rotatedMazeCoords.x);
+                    min.y = std::min(min.y, rotatedMazeCoords.y);
+                    max.y = std::max(max.y, rotatedMazeCoords.y);
+                }
+                else
+                {
+                    auto pixelPosition = DrawMiniPreviewGetPixelPosition(rotatedMazeCoords);
+                    if (DrawMiniPreviewIsPixelInBounds(pixelPosition))
+                    {
+                        uint8_t* pixel = DrawMiniPreviewGetPixelPtr(pixelPosition);
+
+                        uint8_t colour = kPaletteIndexColourTrack;
+                        for (int32_t i = 0; i < 4; i++)
+                        {
+                            pixel[338 + i] = colour; // x + 2, y + 2
+                            pixel[168 + i] = colour; //        y + 1
+                            pixel[2 + i] = colour;   // x + 2
+                            pixel[172 + i] = colour; // x + 4, y + 1
+                        }
+                    }
                 }
             }
+
+            DrawMiniPreviewEntrances(td, pass, origin, min, max, rotation);
+        }
+
+        ScreenCoordsXY DrawMiniPreviewGetPixelPosition(const CoordsXY& location)
+        {
+            auto tilePos = TileCoordsXY(location);
+            return { (80 + (tilePos.y - tilePos.x) * 4), (38 + (tilePos.y + tilePos.x) * 2) };
+        }
+
+        bool DrawMiniPreviewIsPixelInBounds(const ScreenCoordsXY& pixel)
+        {
+            return pixel.x >= 0 && pixel.y >= 0 && pixel.x <= 160 && pixel.y <= 75;
+        }
+
+        uint8_t* DrawMiniPreviewGetPixelPtr(const ScreenCoordsXY& pixel)
+        {
+            return &_miniPreview[pixel.y * TRACK_MINI_PREVIEW_WIDTH + pixel.x];
+        }
+
+        GameActions::Result FindValidTrackDesignPlaceHeight(CoordsXYZ& loc, uint32_t newFlags)
+        {
+            GameActions::Result res;
+            for (int32_t i = 0; i < 7; i++, loc.z += kCoordsZStep)
+            {
+                auto tdAction = TrackDesignAction(
+                    CoordsXYZD{ loc.x, loc.y, loc.z, _currentTrackPieceDirection }, *_trackDesign);
+                tdAction.SetFlags(newFlags);
+                res = GameActions::Query(&tdAction);
+
+                // If successful don't keep trying.
+                // If failure due to no money then increasing height only makes problem worse
+                if (res.Error == GameActions::Status::Ok || res.Error == GameActions::Status::InsufficientFunds)
+                {
+                    return res;
+                }
+            }
+            return res;
+        }
+    };
+
+    WindowBase* TrackPlaceOpen(const TrackDesignFileRef* tdFileRef)
+    {
+        std::unique_ptr<TrackDesign> openTrackDesign = TrackDesignImport(tdFileRef->path.c_str());
+
+        if (openTrackDesign == nullptr)
+        {
+            return nullptr;
+        }
+
+        auto* windowMgr = Ui::GetWindowManager();
+        windowMgr->CloseConstructionWindows();
+
+        auto* window = windowMgr->FocusOrCreate<TrackDesignPlaceWindow>(WindowClass::TrackDesignPlace, WW, WH, 0);
+        if (window != nullptr)
+        {
+            window->Init(std::move(openTrackDesign));
+        }
+        return window;
+    }
+
+    void TrackPlaceClearProvisionalTemporarily()
+    {
+        auto* windowMgr = GetWindowManager();
+        auto* trackPlaceWnd = static_cast<TrackDesignPlaceWindow*>(windowMgr->FindByClass(WindowClass::TrackDesignPlace));
+        if (trackPlaceWnd != nullptr)
+        {
+            trackPlaceWnd->ClearProvisionalTemporarily();
         }
     }
-}
 
-static ScreenCoordsXY DrawMiniPreviewGetPixelPosition(const CoordsXY& location)
-{
-    auto tilePos = TileCoordsXY(location);
-    return { (80 + (tilePos.y - tilePos.x) * 4), (38 + (tilePos.y + tilePos.x) * 2) };
-}
-
-static bool DrawMiniPreviewIsPixelInBounds(const ScreenCoordsXY& pixel)
-{
-    return pixel.x >= 0 && pixel.y >= 0 && pixel.x <= 160 && pixel.y <= 75;
-}
-
-static uint8_t* DrawMiniPreviewGetPixelPtr(const ScreenCoordsXY& pixel)
-{
-    return &_window_track_place_mini_preview[pixel.y * TRACK_MINI_PREVIEW_WIDTH + pixel.x];
-}
+    void TrackPlaceRestoreProvisional()
+    {
+        auto* windowMgr = GetWindowManager();
+        auto* trackPlaceWnd = static_cast<TrackDesignPlaceWindow*>(windowMgr->FindByClass(WindowClass::TrackDesignPlace));
+        if (trackPlaceWnd != nullptr)
+        {
+            trackPlaceWnd->RestoreProvisional();
+        }
+    }
+} // namespace OpenRCT2::Ui::Windows

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,23 +11,23 @@
 
 #ifdef __ENABLE_DISCORD__
 
-#    include "../common.h"
+    #include "../core/Timer.hpp"
 
-#    include <limits>
+    #include <limits>
 
 class DiscordService final
 {
 private:
-    uint32_t _ticksSinceLastRefresh = std::numeric_limits<uint32_t>::max();
+    OpenRCT2::Timer _updateTimer;
 
 public:
     DiscordService();
     ~DiscordService();
 
-    void Update();
+    void Tick();
 
 private:
-    void RefreshPresence();
+    void RefreshPresence() const;
 };
 
 #endif

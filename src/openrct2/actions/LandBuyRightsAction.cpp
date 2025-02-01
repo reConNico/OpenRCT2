@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,19 +10,21 @@
 #include "LandBuyRightsAction.h"
 
 #include "../Context.h"
+#include "../Diagnostic.h"
+#include "../GameState.h"
 #include "../OpenRCT2.h"
 #include "../actions/LandSetHeightAction.h"
 #include "../audio/audio.h"
-#include "../interface/Window.h"
-#include "../localisation/Localisation.h"
+#include "../core/EnumUtils.hpp"
 #include "../localisation/StringIds.h"
 #include "../management/Finance.h"
 #include "../ride/RideData.h"
-#include "../util/Util.h"
 #include "../windows/Intent.h"
 #include "../world/Park.h"
 #include "../world/Scenery.h"
-#include "../world/Surface.h"
+#include "../world/tile_element/SurfaceElement.h"
+
+using namespace OpenRCT2;
 
 LandBuyRightsAction::LandBuyRightsAction(const MapRange& range, LandBuyRightSetting setting)
     : _range(range)
@@ -34,6 +36,12 @@ LandBuyRightsAction::LandBuyRightsAction(const CoordsXY& coord, LandBuyRightSett
     : _range(coord.x, coord.y, coord.x, coord.y)
     , _setting(setting)
 {
+}
+
+void LandBuyRightsAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit(_range);
+    visitor.Visit("setting", _setting);
 }
 
 uint16_t LandBuyRightsAction::GetActionFlags() const
@@ -64,28 +72,29 @@ GameActions::Result LandBuyRightsAction::QueryExecute(bool isExecuting) const
 
     MapRange normRange = _range.Normalise();
     // Keep big coordinates within map boundaries
+    auto mapSizeMaxXY = GetMapSizeMaxXY();
     auto aX = std::max<decltype(normRange.GetLeft())>(32, normRange.GetLeft());
-    auto bX = std::min<decltype(normRange.GetRight())>(GetMapSizeMaxXY(), normRange.GetRight());
+    auto bX = std::min<decltype(normRange.GetRight())>(mapSizeMaxXY.x, normRange.GetRight());
     auto aY = std::max<decltype(normRange.GetTop())>(32, normRange.GetTop());
-    auto bY = std::min<decltype(normRange.GetBottom())>(GetMapSizeMaxXY(), normRange.GetBottom());
+    auto bY = std::min<decltype(normRange.GetBottom())>(mapSizeMaxXY.y, normRange.GetBottom());
 
     MapRange validRange = MapRange{ aX, aY, bX, bY };
 
     CoordsXYZ centre{ (validRange.GetLeft() + validRange.GetRight()) / 2 + 16,
                       (validRange.GetTop() + validRange.GetBottom()) / 2 + 16, 0 };
-    centre.z = tile_element_height(centre);
+    centre.z = TileElementHeight(centre);
 
     res.Position = centre;
     res.Expenditure = ExpenditureType::LandPurchase;
 
     // Game command modified to accept selection size
-    for (auto y = validRange.GetTop(); y <= validRange.GetBottom(); y += COORDS_XY_STEP)
+    for (auto y = validRange.GetTop(); y <= validRange.GetBottom(); y += kCoordsXYStep)
     {
-        for (auto x = validRange.GetLeft(); x <= validRange.GetRight(); x += COORDS_XY_STEP)
+        for (auto x = validRange.GetLeft(); x <= validRange.GetRight(); x += kCoordsXYStep)
         {
             if (!LocationValid({ x, y }))
                 continue;
-            auto result = map_buy_land_rights_for_tile({ x, y }, isExecuting);
+            auto result = MapBuyLandRightsForTile({ x, y }, isExecuting);
             if (result.Error == GameActions::Status::Ok)
             {
                 res.Cost += result.Cost;
@@ -94,24 +103,25 @@ GameActions::Result LandBuyRightsAction::QueryExecute(bool isExecuting) const
     }
     if (isExecuting)
     {
-        map_count_remaining_land_rights();
+        MapCountRemainingLandRights();
     }
     return res;
 }
 
-GameActions::Result LandBuyRightsAction::map_buy_land_rights_for_tile(const CoordsXY& loc, bool isExecuting) const
+GameActions::Result LandBuyRightsAction::MapBuyLandRightsForTile(const CoordsXY& loc, bool isExecuting) const
 {
     if (_setting >= LandBuyRightSetting::Count)
     {
-        log_warning("Tried calling buy land rights with an incorrect setting. setting = %u", _setting);
-        return GameActions::Result(GameActions::Status::InvalidParameters, _ErrorTitles[0], STR_NONE);
+        LOG_ERROR("Invalid land buying setting %u", _setting);
+        return GameActions::Result(GameActions::Status::InvalidParameters, kErrorTitles[0], STR_ERR_VALUE_OUT_OF_RANGE);
     }
 
-    SurfaceElement* surfaceElement = map_get_surface_element_at(loc);
+    SurfaceElement* surfaceElement = MapGetSurfaceElementAt(loc);
     if (surfaceElement == nullptr)
     {
-        log_error("Could not find surface. x = %d, y = %d", loc.x, loc.y);
-        return GameActions::Result(GameActions::Status::InvalidParameters, _ErrorTitles[EnumValue(_setting)], STR_NONE);
+        LOG_ERROR("No surface at x = %d, y = %d", loc.x, loc.y);
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, kErrorTitles[EnumValue(_setting)], STR_ERR_SURFACE_ELEMENT_NOT_FOUND);
     }
 
     auto res = GameActions::Result();
@@ -127,14 +137,14 @@ GameActions::Result LandBuyRightsAction::map_buy_land_rights_for_tile(const Coor
                 || (surfaceElement->GetOwnership() & OWNERSHIP_AVAILABLE) == 0)
             {
                 return GameActions::Result(
-                    GameActions::Status::NotOwned, _ErrorTitles[EnumValue(_setting)], STR_LAND_NOT_FOR_SALE);
+                    GameActions::Status::NotOwned, kErrorTitles[EnumValue(_setting)], STR_LAND_NOT_FOR_SALE);
             }
             if (isExecuting)
             {
                 surfaceElement->SetOwnership(OWNERSHIP_OWNED);
-                update_park_fences_around_tile(loc);
+                Park::UpdateFencesAroundTile(loc);
             }
-            res.Cost = gLandPrice;
+            res.Cost = GetGameState().LandPrice;
             return res;
 
         case LandBuyRightSetting::BuyConstructionRights: // 2
@@ -147,20 +157,20 @@ GameActions::Result LandBuyRightsAction::map_buy_land_rights_for_tile(const Coor
                 || (surfaceElement->GetOwnership() & OWNERSHIP_CONSTRUCTION_RIGHTS_AVAILABLE) == 0)
             {
                 return GameActions::Result(
-                    GameActions::Status::NotOwned, _ErrorTitles[EnumValue(_setting)], STR_CONSTRUCTION_RIGHTS_NOT_FOR_SALE);
+                    GameActions::Status::NotOwned, kErrorTitles[EnumValue(_setting)], STR_CONSTRUCTION_RIGHTS_NOT_FOR_SALE);
             }
 
             if (isExecuting)
             {
                 surfaceElement->SetOwnership(surfaceElement->GetOwnership() | OWNERSHIP_CONSTRUCTION_RIGHTS_OWNED);
                 uint16_t baseZ = surfaceElement->GetBaseZ();
-                map_invalidate_tile({ loc, baseZ, baseZ + 16 });
+                MapInvalidateTile({ loc, baseZ, baseZ + 16 });
             }
-            res.Cost = gConstructionRightsPrice;
+            res.Cost = GetGameState().ConstructionRightsPrice;
             return res;
 
         default:
-            log_warning("Tried calling buy land rights with an incorrect setting. setting = %u", _setting);
-            return GameActions::Result(GameActions::Status::InvalidParameters, _ErrorTitles[0], STR_NONE);
+            LOG_ERROR("Invalid land buying setting %u", _setting);
+            return GameActions::Result(GameActions::Status::InvalidParameters, kErrorTitles[0], STR_ERR_VALUE_OUT_OF_RANGE);
     }
 }

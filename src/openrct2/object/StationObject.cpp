@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,23 +9,24 @@
 
 #include "StationObject.h"
 
+#include "../core/Guard.hpp"
 #include "../core/IStream.hpp"
 #include "../core/Json.hpp"
 #include "../core/String.hpp"
 #include "../drawing/Drawing.h"
-#include "../drawing/Image.h"
-#include "../localisation/Localisation.h"
 #include "../world/Banner.h"
+
+using namespace OpenRCT2;
 
 void StationObject::Load()
 {
     GetStringTable().Sort();
-    NameStringId = language_allocate_object_string(GetName());
+    NameStringId = LanguageAllocateObjectString(GetName());
 
     auto numImages = GetImageTable().GetCount();
     if (numImages != 0)
     {
-        BaseImageId = gfx_object_allocate_images(GetImageTable().GetImages(), GetImageTable().GetCount());
+        BaseImageId = LoadImages();
 
         uint32_t shelterOffset = (Flags & STATION_OBJECT_FLAGS::IS_TRANSPARENT) ? 32 : 16;
         if (numImages > shelterOffset)
@@ -37,45 +38,43 @@ void StationObject::Load()
 
 void StationObject::Unload()
 {
-    language_free_object_string(NameStringId);
-    gfx_object_free_images(BaseImageId, GetImageTable().GetCount());
+    LanguageFreeObjectString(NameStringId);
+    UnloadImages();
 
     NameStringId = 0;
-    BaseImageId = ImageIndexUndefined;
-    ShelterImageId = ImageIndexUndefined;
+    BaseImageId = kImageIndexUndefined;
+    ShelterImageId = kImageIndexUndefined;
 }
 
-void StationObject::DrawPreview(rct_drawpixelinfo* dpi, int32_t width, int32_t height) const
+void StationObject::DrawPreview(DrawPixelInfo& dpi, int32_t width, int32_t height) const
 {
     auto screenCoords = ScreenCoordsXY{ width / 2, (height / 2) + 16 };
 
     auto colour0 = COLOUR_LIGHT_BLUE;
     auto colour1 = COLOUR_BORDEAUX_RED;
-    auto tcolour0 = EnumValue(GlassPaletteIds[colour0]);
+    auto tcolour0 = colour0;
 
-    uint32_t imageId = BaseImageId;
-    uint32_t tImageId = BaseImageId + 16;
+    auto imageId = ImageId(BaseImageId);
+    auto tImageId = ImageId(BaseImageId + 16).WithTransparency(tcolour0);
     if (Flags & STATION_OBJECT_FLAGS::HAS_PRIMARY_COLOUR)
     {
-        imageId |= (colour0 << 19) | IMAGE_TYPE_REMAP;
-        tImageId |= (EnumValue(GlassPaletteIds[tcolour0]) << 19) | IMAGE_TYPE_TRANSPARENT;
+        imageId = imageId.WithPrimary(colour0);
     }
     if (Flags & STATION_OBJECT_FLAGS::HAS_SECONDARY_COLOUR)
     {
-        imageId |= (colour1 << 24) | IMAGE_TYPE_REMAP_2_PLUS;
-        tImageId |= (colour1 << 24) | IMAGE_TYPE_REMAP_2_PLUS;
+        imageId = imageId.WithSecondary(colour1);
     }
 
-    gfx_draw_sprite(dpi, imageId + 0, screenCoords, 0);
+    GfxDrawSprite(dpi, imageId, screenCoords);
     if (Flags & STATION_OBJECT_FLAGS::IS_TRANSPARENT)
     {
-        gfx_draw_sprite(dpi, tImageId, screenCoords, 0);
+        GfxDrawSprite(dpi, tImageId, screenCoords);
     }
 
-    gfx_draw_sprite(dpi, imageId + 4, screenCoords, 0);
+    GfxDrawSprite(dpi, imageId.WithIndexOffset(4), screenCoords);
     if (Flags & STATION_OBJECT_FLAGS::IS_TRANSPARENT)
     {
-        gfx_draw_sprite(dpi, tImageId + 4, screenCoords, 0);
+        GfxDrawSprite(dpi, tImageId.WithIndexOffset(4), screenCoords);
     }
 }
 

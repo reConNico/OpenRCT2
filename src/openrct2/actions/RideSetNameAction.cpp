@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,17 +11,17 @@
 
 #include "../Cheats.h"
 #include "../Context.h"
+#include "../Diagnostic.h"
 #include "../core/MemoryStream.h"
 #include "../drawing/Drawing.h"
-#include "../interface/Window.h"
-#include "../localisation/Localisation.h"
 #include "../localisation/StringIds.h"
 #include "../ride/Ride.h"
-#include "../ui/UiContext.h"
 #include "../ui/WindowManager.h"
 #include "../world/Park.h"
 
-RideSetNameAction::RideSetNameAction(ride_id_t rideIndex, const std::string& name)
+using namespace OpenRCT2;
+
+RideSetNameAction::RideSetNameAction(RideId rideIndex, const std::string& name)
     : _rideIndex(rideIndex)
     , _name(name)
 {
@@ -47,11 +47,12 @@ void RideSetNameAction::Serialise(DataSerialiser& stream)
 
 GameActions::Result RideSetNameAction::Query() const
 {
-    auto ride = get_ride(_rideIndex);
+    auto ride = GetRide(_rideIndex);
     if (ride == nullptr)
     {
-        log_warning("Invalid game command for ride %u", uint32_t(_rideIndex));
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_RENAME_RIDE_ATTRACTION, STR_NONE);
+        LOG_ERROR("Ride not found for rideIndex %u", _rideIndex.ToUnderlying());
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_CANT_RENAME_RIDE_ATTRACTION, STR_ERR_RIDE_NOT_FOUND);
     }
 
     if (!_name.empty() && Ride::NameExists(_name, ride->id))
@@ -65,11 +66,12 @@ GameActions::Result RideSetNameAction::Query() const
 
 GameActions::Result RideSetNameAction::Execute() const
 {
-    auto ride = get_ride(_rideIndex);
+    auto ride = GetRide(_rideIndex);
     if (ride == nullptr)
     {
-        log_warning("Invalid game command for ride %u", uint32_t(_rideIndex));
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_RENAME_RIDE_ATTRACTION, STR_NONE);
+        LOG_ERROR("Ride not found for rideIndex %u", _rideIndex.ToUnderlying());
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_CANT_RENAME_RIDE_ATTRACTION, STR_ERR_RIDE_NOT_FOUND);
     }
 
     if (_name.empty())
@@ -81,18 +83,18 @@ GameActions::Result RideSetNameAction::Execute() const
         ride->custom_name = _name;
     }
 
-    scrolling_text_invalidate();
-    gfx_invalidate_screen();
+    ScrollingTextInvalidate();
+    GfxInvalidateScreen();
 
     // Refresh windows that display ride name
-    auto windowManager = OpenRCT2::GetContext()->GetUiContext()->GetWindowManager();
+    auto windowManager = OpenRCT2::Ui::GetWindowManager();
     windowManager->BroadcastIntent(Intent(INTENT_ACTION_REFRESH_CAMPAIGN_RIDE_LIST));
     windowManager->BroadcastIntent(Intent(INTENT_ACTION_REFRESH_RIDE_LIST));
     windowManager->BroadcastIntent(Intent(INTENT_ACTION_REFRESH_GUEST_LIST));
 
     auto res = GameActions::Result();
     auto location = ride->overall_view.ToTileCentre();
-    res.Position = { location, tile_element_height(location) };
+    res.Position = { location, TileElementHeight(location) };
 
     return res;
 }

@@ -18,7 +18,7 @@ STR_0016    :Observatietoren
 STR_0017    :Stalen achtbaan
 STR_0018    :Waterglijbaan
 STR_0019    :Mijntreinachtbaan
-STR_0020    :Kabelbaan
+STR_0020    :Stoeltjeslift
 STR_0021    :Stalen schroefachtbaan
 STR_0022    :Doolhof
 STR_0023    :Spiraalglijbaan
@@ -42,7 +42,7 @@ STR_0040    :Bewegingssimulator
 STR_0041    :3D-bioscoop
 STR_0042    :Topspin
 STR_0043    :Ruimteringen
-STR_0044    :Achterwaartsevrijevalachtbaan
+STR_0044    :Achtbaan met achterwaartse vrije val
 STR_0045    :Lift
 STR_0046    :Verticale achtbaan
 STR_0047    :Geldautomaat
@@ -75,7 +75,7 @@ STR_0073    :Crooked house
 STR_0074    :Fietsbaan
 STR_0075    :Compacte omgekeerde achtbaan
 STR_0076    :Waterachtbaan
-STR_0077    :Luchtaangedreven verticale achtbaan
+STR_0077    :Verticale achtbaan op luchtdruk
 STR_0078    :Omgekeerde haarspeldachtbaan
 STR_0079    :Vliegend tapijt
 STR_0080    :Onderzeeër-attractie
@@ -93,6 +93,11 @@ STR_0091    :Onbekende attractie (59)
 STR_0092    :LIM-lanceringsachtbaan
 STR_0093    :Hybride achtbaan
 STR_0094    :Achtbaan met enkele rail
+STR_0095    :Rodelachtbaan
+STR_0096    :Klassieke houten achtbaan
+STR_0097    :Klassieke staande achtbaan
+STR_0098    :LSM-lanceringsachtbaan
+STR_0099    :Klassieke houten twisterachtbaan
 STR_0512    :Een compacte achtbaan met een spiraalvormige kettingheuvel en soepele, kronkelende afdalingen.
 STR_0513    :Een achtbaan met loopings waar de passagiers in de karretjes staan.
 STR_0514    :Treinen hangen onder de baan en zwaaien naar buiten in de bochten.
@@ -110,36 +115,36 @@ STR_0525    :Passagiers rijden over een kronkelende baan, waarbij ze enkel worde
 STR_0526    :Bezoekers gaan in een roterende observatiecabine langs een toren omhoog
 STR_0527    :Een soepele stalen achtbaan die verticale loopings kan maken.
 STR_0528    :Passagiers glijden in opblaasboten door een kronkelende halfopen of compleet gesloten glijbaan.
-STR_0529    :Achtbaantreinen in de vorm van een mijntrein razen over stalen achtbaanrails die er uitziet als een oude spoorbaan.
+STR_0529    :Achtbaantreinen in de vorm van een mijntrein razen over stalen achtbaanrails die er uitzien als een oude spoorbaan.
 STR_0530    :Stoeltjes hangen aan een continu draaiende stalen kabel die van het ene uiteinde van de baan naar het andere loopt, en daarna weer terug.
 STR_0531    :Een compacte stalen achtbaan waar de trein door schroeven en loopings gaat.
-STR_0532    :
-STR_0533    :
+STR_0532    :Bezoekers lopen door een doolhof van 1,8m hoge heggen of muren, en kunnen er pas uit wanneer ze de uitgang vinden.
+STR_0533    :Houten gebouw met van binnen een trap en van buiten een spiraalglijbaan voor glijmatten.
 STR_0534    :Bezoekers racen tegen elkaar in go-karts op een asfaltbaan.
 STR_0535    :Bezoekers varen in bootjes door een waterbak, waarbij ze van steile hellingen afdalen en doorweekt raken.
 STR_0536    :Ronde boten varen door een brede waterbak, waarbij ze de passagiers opwinden door watervallen en schuimende stroomversnellingen.
 STR_0537    :Bezoekers botsen tegen elkaar in elektrisch aangedreven botsauto’s die ze zelf kunnen besturen.
-STR_0538    :
-STR_0539    :
-STR_0540    :
-STR_0542    :
-STR_0544    :
-STR_0545    :
-STR_0547    :
-STR_0548    :
-STR_0549    :
-STR_0550    :
-STR_0551    :
-STR_0552    :
-STR_0553    :
+STR_0538    :Groot schommelend piratenschip.
+STR_0539    :Schip dat is bevestigd aan een arm met een contragewicht, en 360 graden kan draaien.
+STR_0540    :Een kraampje waar de bezoekers eten kunnen kopen.
+STR_0542    :Een kraampje waar de bezoekers drinken kunnen kopen.
+STR_0544    :Een kraampje dat souvenirs verkoopt.
+STR_0545    :Traditionele draaimolen met uit hout gesneden paarden.
+STR_0547    :Een kraam waar bezoekers kaarten van het park en paraplu’s kunnen kopen.
+STR_0548    :Een toiletgebouw.
+STR_0549    :Groot draaiend rad met open stoeltjes.
+STR_0550    :Passagiers bekijken een film in de cabine van een bewegingssimulator die wordt gedraaid en bewogen door een hydraulische arm.
+STR_0551    :Bioscoop in een bolvormig gebouw waarin 3D-films worden getoond.
+STR_0552    :Passagiers zitten in een gondel die is opgehangen aan grote roterende armen, en worden halsoverkop vooruit en achteruit gedraaid.
+STR_0553    :Concentrische draaiende ringen waarmee de passagiers vrij kunnen draaien in alle richtingen.
 STR_0554    :Het karretje wordt het station uitgelanceerd over een lange rechte baan door middel van lineaire inductiemotoren, om daarna recht omhoog te gaan en weer terug te vallen richting het station.
 STR_0555    :Bezoekers gaan in een lift in een toren omhoog of omlaag om naar een ander hoogteniveau te komen.
 STR_0556    :Extra brede karretjes rijden over een compleet verticale baan voor de ultieme vrijevalbeleving.
-STR_0557    :
-STR_0558    :
-STR_0559    :
-STR_0560    :
-STR_0561    :
+STR_0557    :Een geldautomaat die de bezoekers kunnen gebruiken als ze bijna door hun contante geld heen zijn.
+STR_0558    :Passagiers zitten per twee in stoelen die ronddraaien aan de uiteinden van drie lange draaiarmen.
+STR_0559    :Groot gethematiseerd gebouw met enge gangen en spookachtige kamers.
+STR_0560    :Een gebouw waar misselijke bezoekers sneller kunnen opknappen.
+STR_0561    :Een dierennummer in een circustent.
 STR_0562    :Aangedreven karretjes rijden langs eng decor en special effects over een baan met hoogteverschillen.
 STR_0563    :Bezoekers zitten in comfortabele treinen met enkel een schootbeugel en gaan soepel door grote afdalingen en kronkelende stukken baan, met veel ‘airtime’ in de heuvels.
 STR_0564    :Deze over een houten baan lopende achtbaan is snel, ruw, luidruchtig en geeft het gevoel van controleverlies met veel ‘airtime’.
@@ -154,32 +159,37 @@ STR_0574    :Passagiers worden door middel van een speciale beugel in een liggen
 STR_0575    :Aangedreven treinen hangen aan een enkele rail en vervoeren mensen door het park heen.
 STR_0577    :Karretjes met draaistellen rijden op een houten baan en kunnen omkeren op speciale stukken baan.
 STR_0578    :Karretjes rijden in een baan omgeven door hoepels en gaan door steile afdalingen en heartline-twists.
-STR_0579    :
+STR_0579    :Een rustig spelletje minigolf.
 STR_0580    :Een gigantische stalen achtbaan die in staat is tot soepele afdalingen en heuvels die hoger zijn dan 90 meter.
 STR_0581    :Een ring van stoelen wordt naar de bovenkant van een hoge toren getrokken terwijl hij rustig ronddraait, waarna hij losgelaten wordt in een vrije val, waarna hij beneden rustig wordt afgeremd door middel van magnetische remmen.
 STR_0582    :Bezoekers botsen tegen elkaar in hovercrafts die ze zelf kunnen besturen.
-STR_0583    :
+STR_0583    :Gebouw met scheve kamers en gangen die de bezoekers desoriënteren.
 STR_0584    :Speciale fietsen rijden over een stalen monorail, voortbewogen door het trappen van de passagiers.
 STR_0585    :Passagiers zitten in stoelparen die onder de baan hangen terwijl ze door kronkelende en scherpe omkeringen gaan.
 STR_0586    :Bootvormige karretjes rijden over achtbaanrails, waardoor ze hellende bochten en diepe afdalingen kunnen maken, waarna ze in bakken water neerplonzen en rustig een stukje kunnen varen.
 STR_0587    :Na een enerverende pneumatische lancering rijdt de trein met hogere snelheid over een verticale baan, over de top, en vervolgens over de andere kant weer naar beneden om terug te keren naar het station.
 STR_0588    :Losse karretjes hangen onder een zigzaggende baan met haarspeldbochten en scherpe afdalingen.
-STR_0589    :
+STR_0589    :Een grote wagen in de vorm van een vliegend tapijt draait rond aan de uiteinden van vier draaiarmen.
 STR_0590    :Passagiers rijden over een onderwaterparcours in onderzeeërs.
 STR_0591    :Boten in de vorm van een vlot varen rustig door een waterbak.
-STR_0593    :
+STR_0593    :Draaiend wiel met hangende passagierscabines, dat eerst gaat draaien en vervolgens wordt opgetild door een steunarm.
 STR_0598    :Een omgekeerde achtbaantrein wordt het station uit gelanceerd en gaat een verticale kronkelende baan op, waarna deze terugzakt, door het station heengaat en achteruit een ander stuk verticale baan opgaat.
 STR_0599    :Een compacte achtbaan met individuele karretjes en steile, kronkelende afdalingen.
 STR_0600    :Aangedreven mijntreinen rijden over een soepele en kronkelende baan.
 STR_0602    :Achtbaantreinen worden door lineaire inductiemotoren het station uit gelanceerd en razen door een kronkelende baan die vaak over de kop gaat.
 STR_0603    :Een achtbaan met houten ondersteuningen en stalen rails, waardoor steile afdalingen en omkeringen mogelijk worden.
 STR_0604    :Passagiers zitten achter elkaar op een smalle baan met één rail, waar ze met hoge snelheid door krappe bochten en over de kop gaan.
+STR_0605    :Passagiers rodelen over een kronkelende stalen baan, waarbij ze zelf kunnen beslissen hoe snel ze gaan.
+STR_0606    :Een ouder type houten achtbaan met een snelle en ruwe loop, veel airtime, enige zijwaartse G-krachten en het gevoel van controleverlies.
+STR_0607    :Een intens ouder type achtbaan waarin de passagiers staan.
+STR_0608    :Achtbaan worden door lineaire synchroonmotoren gelanceerd en razen door een kronkelende baan die vaak over de kop gaat.
+STR_0609    :Een ouder type houten achtbaan met een snelle en ruwe loop, veel airtime en een kronkelende baan, waar de passagiers doorheen razen in een gelede trein.
 STR_0767    :Bezoeker {INT32}
 STR_0768    :Klusjesman {INT32}
 STR_0769    :Monteur {INT32}
 STR_0770    :Bewaker {INT32}
 STR_0771    :Entertainer {INT32}
-STR_0777    :Naamloos park{POP16}{POP16}
+STR_0777    :Naamloos park
 STR_0778    :Bord
 STR_0779    :1
 STR_0780    :2
@@ -278,7 +288,7 @@ STR_0892    :Screenshot opgeslagen als ‘{STRINGID}’
 STR_0893    :Screenshot maken mislukt!
 STR_0894    :‘Landscape data area’ zit vol!
 STR_0895    :Kan niet gedeeltelijk onder en boven de grond bouwen
-STR_0896    :{POP16}{POP16}Constructie {STRINGID}
+STR_0896    :Constructie {POP16}{POP16}{STRINGID}
 STR_0897    :Richting
 STR_0898    :Bocht naar links
 STR_0899    :Bocht naar rechts
@@ -336,7 +346,6 @@ STR_0950    :Spel laden
 STR_0951    :Spel afsluiten
 STR_0952    :Spel afsluiten
 STR_0953    :Landschap laden
-STR_0954    :
 STR_0955    :Selecteer de draaiing van de stoelen voor dit gedeelte
 STR_0956    :-180°
 STR_0957    :-135°
@@ -384,10 +393,10 @@ STR_0998    :Voor deze attractie zijn meer stations niet mogelijk
 STR_0999    :Vereist een station
 STR_1000    :Baan vormt geen volledig circuit
 STR_1001    :Baan is ongeschikt voor dit type trein
-STR_1002    :Kan {POP16}{POP16}{POP16}{STRINGID} niet openen…
-STR_1003    :Kan {POP16}{POP16}{POP16}{STRINGID} niet testen…
-STR_1004    :Kan {POP16}{POP16}{POP16}{STRINGID} niet sluiten…
-STR_1005    :Kan de verbouwing van {POP16}{POP16}{POP16}{STRINGID} niet starten…
+STR_1002    :Kan {STRINGID} niet openen…
+STR_1003    :Kan {STRINGID} niet testen…
+STR_1004    :Kan {STRINGID} niet sluiten…
+STR_1005    :Kan de verbouwing van {STRINGID} niet starten…
 STR_1006    :Moet eerst worden gesloten
 STR_1007    :Kan niet voldoende voertuigen aanmaken
 STR_1008    :Attractie openen, sluiten of testen
@@ -749,7 +758,7 @@ STR_1363    :Te hoog voor ondersteuningen!
 STR_1364    :Ondersteuningen voor de baan kunnen niet verder verlengd worden!
 STR_1365    :Inlinetwist (links)
 STR_1366    :Inlinetwist (rechts)
-STR_1367    :Halve looping
+STR_1367    :Kleine halve looping
 STR_1368    :Halve schroef (links)
 STR_1369    :Halve schroef (rechts)
 STR_1370    :Barrel roll (links)
@@ -1154,17 +1163,6 @@ STR_1773    :Een attractie mag maar één actiefotogedeelte hebben
 STR_1774    :Een attractie mag maar één kabellift hebben
 STR_1777    :Attractiemuziek
 STR_1778    :{STRINGID} - - 
-STR_1779    :{INLINE_SPRITE}{254}{19}{00}{00} Pandapak
-STR_1780    :{INLINE_SPRITE}{255}{19}{00}{00} Tijgerpak
-STR_1781    :{INLINE_SPRITE}{00}{20}{00}{00} Olifantenpak
-STR_1782    :{INLINE_SPRITE}{01}{20}{00}{00} Romeins kostuum
-STR_1783    :{INLINE_SPRITE}{02}{20}{00}{00} Gorillapak
-STR_1784    :{INLINE_SPRITE}{03}{20}{00}{00} Sneeuwpoppak
-STR_1785    :{INLINE_SPRITE}{04}{20}{00}{00} Ridderkostuum
-STR_1786    :{INLINE_SPRITE}{05}{20}{00}{00} Astronautenpak
-STR_1787    :{INLINE_SPRITE}{06}{20}{00}{00} Bandietenkostuum
-STR_1788    :{INLINE_SPRITE}{07}{20}{00}{00} Sheriffkostuum
-STR_1789    :{INLINE_SPRITE}{08}{20}{00}{00} Piratenkostuum
 STR_1790    :Selecteer de uniformkleur voor dit type werknemer
 STR_1791    :{WINDOW_COLOUR_2}Uniformkleur:
 STR_1792    :Gaat {STRINGID} repareren
@@ -1216,8 +1214,8 @@ STR_1838    :Voldoening: {COMMA16}%
 STR_1839    :Betrouwbaarheid: {COMMA16}%
 STR_1840    :Stilstandtijd: {COMMA16}%
 STR_1841    :Winst: {CURRENCY2DP} per uur
-STR_1842    :Favoriete attractie van: {COMMA16} bezoeker
-STR_1843    :Favoriete attractie van: {COMMA16} bezoekers
+STR_1842    :Favoriete attractie van: {COMMA32} bezoeker
+STR_1843    :Favoriete attractie van: {COMMA32} bezoekers
 STR_1844    :Selecteer het type informatie dat je in de attractielijst wilt zien
 STR_1845    :{MONTHYEAR}
 STR_1846    :{COMMA32} bezoekers
@@ -1241,7 +1239,7 @@ STR_1863    :klusjesman
 STR_1864    :monteur
 STR_1865    :bewaker
 STR_1866    :entertainer
-STR_1867    :{BLACK}{COMMA16} {STRINGID}
+STR_1867    :{BLACK}{COMMA32} {STRINGID}
 STR_1868    :Kan het aantal rotaties niet aanpassen…
 STR_1869    :{WINDOW_COLOUR_2}Aantal rotaties:
 STR_1870    :Aantal complete rotaties
@@ -1673,7 +1671,7 @@ STR_2314    :{WINDOW_COLOUR_2}Lengte: {BLACK}{STRINGID}
 STR_2315    :{WINDOW_COLOUR_2}Kosten: {BLACK}ongeveer {CURRENCY}
 STR_2316    :{WINDOW_COLOUR_2}Vereiste ruimte: {BLACK}{COMMA16} × {COMMA16} blokken
 STR_2321    :{WINDOW_COLOUR_2}Aantal attracties: {BLACK}{COMMA16}
-STR_2322    :{WINDOW_COLOUR_2}Werknemers: {BLACK}{COMMA16}
+STR_2322    :{WINDOW_COLOUR_2}Werknemers: {BLACK}{COMMA32}
 STR_2323    :{WINDOW_COLOUR_2}Parkgrootte: {BLACK}{COMMA32}m²
 STR_2324    :{WINDOW_COLOUR_2}Parkgrootte: {BLACK}{COMMA32}sq.ft.
 STR_2325    :Land kopen om het park uit te breiden
@@ -1701,12 +1699,12 @@ STR_2347    :{RED}{STRINGID} is verdronken!
 STR_2348    :Statistieken voor deze werknemer tonen
 STR_2349    :{WINDOW_COLOUR_2}Loon: {BLACK}{CURRENCY} per maand
 STR_2350    :{WINDOW_COLOUR_2}In dienst genomen: {BLACK}{MONTHYEAR}
-STR_2351    :{WINDOW_COLOUR_2}Velden gemaaid: {BLACK}{COMMA16}
-STR_2352    :{WINDOW_COLOUR_2}Bloemen water gegeven: {BLACK}{COMMA16}
-STR_2353    :{WINDOW_COLOUR_2}Afval opgeveegd: {BLACK}{COMMA16}
-STR_2354    :{WINDOW_COLOUR_2}Prullenbakken geleegd: {BLACK}{COMMA16}
-STR_2355    :{WINDOW_COLOUR_2}Reparaties: {BLACK}{COMMA16}
-STR_2356    :{WINDOW_COLOUR_2}Inspecties: {BLACK}{COMMA16}
+STR_2351    :{WINDOW_COLOUR_2}Velden gemaaid: {BLACK}{COMMA32}
+STR_2352    :{WINDOW_COLOUR_2}Bloemen water gegeven: {BLACK}{COMMA32}
+STR_2353    :{WINDOW_COLOUR_2}Afval opgeveegd: {BLACK}{COMMA32}
+STR_2354    :{WINDOW_COLOUR_2}Prullenbakken geleegd: {BLACK}{COMMA32}
+STR_2355    :{WINDOW_COLOUR_2}Reparaties: {BLACK}{COMMA32}
+STR_2356    :{WINDOW_COLOUR_2}Inspecties: {BLACK}{COMMA32}
 STR_2358    :Eenheden
 STR_2359    :Echte waarden
 STR_2360    :Schermresolutie:
@@ -1735,12 +1733,12 @@ STR_2382    :Land
 STR_2383    :Water
 STR_2384    :{WINDOW_COLOUR_2}Je doelstelling:
 STR_2385    :{BLACK}Geen
-STR_2386    :{BLACK}Om ten minste {COMMA16} bezoekers in je park te hebben aan het einde van {MONTHYEAR}, met een parkwaardering van ten minste 600
+STR_2386    :{BLACK}Om ten minste {COMMA32} bezoekers in je park te hebben aan het einde van {MONTHYEAR}, met een parkwaardering van ten minste 600
 STR_2387    :{BLACK}Om een parkwaarde van ten minste {POP16}{POP16}{CURRENCY} te hebben aan het einde van {PUSH16}{PUSH16}{PUSH16}{PUSH16}{PUSH16}{MONTHYEAR}
 STR_2388    :{BLACK}Om plezier te hebben!
 STR_2389    :{BLACK}Om de beste {STRINGID} te bouwen!
 STR_2390    :{BLACK}Om 10 verschillende typen achtbanen in je park te hebben, elk met een plezierwaarde van ten minste 6,00
-STR_2391    :{BLACK}Om ten minste {COMMA16} bezoekers in je park te hebben. Je parkwaardering mag geen moment onder de 700 komen!
+STR_2391    :{BLACK}Om ten minste {COMMA32} bezoekers in je park te hebben. Je parkwaardering mag geen moment onder de 700 komen!
 STR_2392    :{BLACK}Om in één maand ten minste {POP16}{POP16}{CURRENCY} aan attractiekaartjes te verdienen
 STR_2393    :{BLACK}Om 10 verschillende typen achtbanen in je park te hebben, elk met een lengte van ten minste {LENGTH} en een plezierwaarde van ten minste 7,00
 STR_2394    :{BLACK}Om alle 5 deels gebouwde achtbanen in je park af te maken, elk met een plezierwaarde van ten minste {POP16}{POP16}{COMMA2DP32}
@@ -1795,7 +1793,6 @@ STR_2450    :{YELLOW}Je advertentiecampagne voor het park is afgelopen
 STR_2451    :{YELLOW}Je advertentiecampagne voor {STRINGID} is afgelopen
 STR_2452    :{WINDOW_COLOUR_2}Saldo (zonder lening): {BLACK}{CURRENCY2DP}
 STR_2453    :{WINDOW_COLOUR_2}Saldo (zonder lening): {RED}{CURRENCY2DP}
-STR_2454    :{BLACK}{CURRENCY2DP} -
 STR_2457    :Laat financiële posten zien
 STR_2458    :Toon grafiek van saldoverloop (zonder lening)
 STR_2459    :Toon grafiek van parkwaardeverloop
@@ -1825,7 +1822,7 @@ STR_2482    :Winst: {CURRENCY} per week,  parkwaarde: {CURRENCY}
 STR_2483    :{WINDOW_COLOUR_2}Wekelijkse winst: {BLACK}+{CURRENCY2DP}
 STR_2484    :{WINDOW_COLOUR_2}Wekelijkse winst: {RED}{CURRENCY2DP}
 STR_2487    :‘Echte’ namen van bezoekers tonen
-STR_2488    :Wissel tussen het tonen van ‘echte’ namen van bezoekers en bezoekernummers
+STR_2488    :Wissel tussen het tonen van ‘echte’ namen van bezoekers en bezoekernummers.
 STR_2489    :Sneltoetsen…
 STR_2490    :Sneltoetsen
 STR_2491    :Toetsen herstellen
@@ -1907,8 +1904,8 @@ STR_2670    :Scroll
 STR_2680    :Alle onderzoeken zijn voltooid
 STR_2684    :Er arriveert een grote groep bezoekers
 STR_2685    :Parameters voor Simplex noise
-STR_2686    :Minimum:
-STR_2687    :Maximum:
+STR_2686    :Minimumlandhoogte:
+STR_2687    :Maximumlandhoogte:
 STR_2688    :Basisfrequentie:
 STR_2689    :Octaven:
 STR_2690    :Kaartgenerator
@@ -1953,8 +1950,6 @@ STR_2738    :Titelschermmuziek:
 STR_2739    :Geen
 STR_2740    :RollerCoaster Tycoon 1
 STR_2741    :RollerCoaster Tycoon 2
-STR_2742    :css50.dat niet gevonden
-STR_2743    :Kopieer ‘data/css17.dat’ van je RCT1-installatie naar ‘data/css50.dat’ in je RCT2-installatie, of stel een pad in naar je RCT1-bestanden onder het tabblad ‘Geavanceerd’.
 STR_2749    :Mijn nieuwe scenario
 STR_2750    :Alles naar boven verplaatsen
 STR_2751    :Alles naar beneden verplaatsen
@@ -2095,39 +2090,6 @@ STR_3008    :{PEARLAQUA}ABC
 STR_3009    :{PALESILVER}ABC
 STR_3010    :Kan dit bestand niet laden…
 STR_3011    :Bestand bevat ongeldige gegevens
-STR_3012    :Botsautostijl
-STR_3013    :Kermisorgelstijl
-STR_3014    :Romeinsefanfarestijl
-STR_3015    :Oosterse stijl
-STR_3016    :Marsstijl
-STR_3017    :Jungledrumsstijl
-STR_3018    :Egyptische stijl
-STR_3019    :Speelgoedlandstijl
-STR_3020    :
-STR_3021    :Ruimtestijl
-STR_3022    :Horrorstijl
-STR_3023    :Technostijl
-STR_3024    :Rustige stijl
-STR_3025    :Zomerstijl
-STR_3026    :Waterstijl
-STR_3027    :Wildweststijl
-STR_3028    :Jurastijl
-STR_3029    :Rockstijl
-STR_3030    :Ragtimestijl
-STR_3031    :Fantasiestijl
-STR_3032    :Rockstijl 2
-STR_3033    :IJsstijl
-STR_3034    :Sneeuwstijl
-STR_3035    :Extra muziek 1
-STR_3036    :Extra muziek 2
-STR_3037    :Middeleeuwse stijl
-STR_3038    :Stadsstijl
-STR_3039    :Orgelstijl
-STR_3040    :Mechanische stijl
-STR_3041    :Moderne stijl
-STR_3042    :Piratenstijl
-STR_3043    :Rockstijl 3
-STR_3044    :Snoepstijl
 STR_3045    :Selecteer welke muziekstijl er moet worden gedraaid
 STR_3047    :De gemeente staat de sloop van en wijzigingen aan deze attractie niet toe
 STR_3048    :Marketingcampagnes worden niet toegestaan door de gemeente
@@ -2188,8 +2150,8 @@ STR_3118    :{BLACK}{STRINGID} gaat naar deze attractie
 STR_3119    :{BLACK}{STRINGID} is bezig deze attractie te repareren
 STR_3120    :Vind de dichtstbijzijnde monteur of de monteur die de attractie aan het repareren is
 STR_3121    :Kan geen monteur vinden of alle monteurs in de buurt zijn bezig
-STR_3122    :{WINDOW_COLOUR_2}Favoriet van: {BLACK}{COMMA16} bezoeker
-STR_3123    :{WINDOW_COLOUR_2}Favoriet van: {BLACK}{COMMA16} bezoekers
+STR_3122    :{WINDOW_COLOUR_2}Favoriet van: {BLACK}{COMMA32} bezoeker
+STR_3123    :{WINDOW_COLOUR_2}Favoriet van: {BLACK}{COMMA32} bezoekers
 STR_3124    :{STRINGID} (vernield)
 STR_3125    :{WINDOW_COLOUR_2}Plezierfactor: {BLACK}+{COMMA16}%
 STR_3126    :{WINDOW_COLOUR_2}Intensiteitsfactor: {BLACK}+{COMMA16}%
@@ -2225,7 +2187,6 @@ STR_3174    :een ander object is afhankelijk van dit object.
 STR_3175    :dit object is altijd benodigd.
 STR_3176    :Kan object niet selecteren:
 STR_3177    :Kan object niet deselecteren:
-STR_3178    :er moet minstens één voetpad worden geselecteerd.
 STR_3179    :er moet minstens één attractie worden geselecteerd.
 STR_3180    :Ongeldige selectie van objecten:
 STR_3181    :Objectselectie - {STRINGID}
@@ -2258,7 +2219,7 @@ STR_3208    :Baanontwerpbeheer
 STR_3209    :Terug naar de vorige stap:
 STR_3210    :Verder naar de volgende stap:
 STR_3211    :Kaartgrootte:
-STR_3212    :{POP16}{COMMA16} × {PUSH16}{COMMA16}
+STR_3212    :{POP16}{COMMA16}
 STR_3213    :Kan de kaart niet verder verkleinen
 STR_3214    :Kan de kaart niet verder vergroten
 STR_3215    :Te dicht bij de rand van de kaart
@@ -2355,7 +2316,7 @@ STR_3305    :{WINDOW_COLOUR_2}Maandelijkse inkomsten:
 STR_3306    :{WINDOW_COLOUR_2}Maandelijkse winst:
 STR_3307    :{WINDOW_COLOUR_2}Minimumlengte:
 STR_3308    :{WINDOW_COLOUR_2}Plezierwaarde:
-STR_3309    :{WINDOW_COLOUR_2}{COMMA16}
+STR_3309    :{WINDOW_COLOUR_2}{COMMA32}
 STR_3310    :{WINDOW_COLOUR_2}{LENGTH}
 STR_3311    :{WINDOW_COLOUR_2}{COMMA2DP32}
 STR_3312    :{WINDOW_COLOUR_2}Attracties met een monumentenstatus:
@@ -2555,8 +2516,6 @@ STR_5250    :Afsluitknop titelscherm
 STR_5251    :Optiesknop titelscherm
 STR_5252    :Scenarioselectie titelscherm
 STR_5253    :Parkinformatie
-STR_5254    :Aanmaken
-STR_5255    :Begint een nieuwe, lege titelpresentatie
 STR_5256    :Maak een nieuw thema aan om wijzigingen aan te brengen.
 STR_5257    :Een nieuw thema aanmaken dat is gebaseerd op het huidige
 STR_5258    :Het huidige thema verwijderen
@@ -2637,8 +2596,8 @@ STR_5357    :{BLACK}Misselijkheidstol.:
 STR_5358    :{BLACK}WC:
 STR_5359    :Bez. verwijderen
 STR_5360    :Verwijdert alle bezoekers van de kaart
-STR_5361    :Geef alle bez.:
-STR_5362    :{BLACK}Zet de voorkeursintensiteit van alle bez. op:
+STR_5361    :Inventaris
+STR_5362    :{BLACK}Voorkeursintensiteit
 STR_5363    :Meer dan 1
 STR_5364    :Minder dan 15
 STR_5365    :{BLACK}Snelh. werknemers:
@@ -2648,78 +2607,12 @@ STR_5368    :Crashstatus weg
 STR_5371    :Objectselectie
 STR_5372    :Sleeprichting van rechtermuisknop omkeren
 STR_5373    :Naam {STRINGID}
-STR_5374    :Datum {STRINGID}
+STR_5374    :Gewijzigd {STRINGID}
 STR_5375    :▲
 STR_5376    :▼
-STR_5377    :Opgeslagen spellen
-STR_5378    :Script
-STR_5379    :Ga naar volgend Wacht-commando
-STR_5380    :Start het afspelen van de titelpresentatie
-STR_5381    :Stopt het afspelen van de titelpresentatie
-STR_5382    :Titelpresentatie herstarten
-STR_5383    :Een nieuwe titelpresentatie aanmaken die is gebaseerd op de huidige
-STR_5384    :Huidige titelpresentatie verwijderen
-STR_5385    :Huidige titelpresentatie hernoemen
-STR_5386    :Nieuw commando invoegen
-STR_5387    :Geselecteerd commando bewerken
-STR_5388    :Geselecteerd commando verwijderen
-STR_5389    :Naar geselecteerd commando titelpresentatie springen
-STR_5390    :Geselecteerd commando naar beneden verplaatsen
-STR_5391    :Geselecteerd commando naar boven verplaatsen
-STR_5392    :Opgeslagen spel aan titelpresentatie toevoegen
-STR_5393    :Geselecteerd opgeslagen spel uit titelpresentatie verwijderen
-STR_5394    :Opgeslagen spel hernoemen
-STR_5395    :Opgeslagen spel laden
-STR_5396    :Titelpresentatie herladen als ze buiten het spel om is aangepast
-STR_5397    :Kan enkel in het titelscherm worden gebruikt
-STR_5398    :Kan de titelpresentatie niet aanpassen wanneer deze wordt afgespeeld
-STR_5399    :Klik op Stop om verder te gaan met aanpassen
-STR_5400    :Kan deze titelpresentatie niet aanpassen
-STR_5401    :Een nieuwe titelpresentatie aanmaken om wijzigingen aan te brengen
-STR_5402    :Kan titelpresentatie niet laden
-STR_5403    :Er is mogelijk geen Laad- or Wacht-commando of één van de opgeslagen spellen is mogelijk beschadigd
 STR_5404    :Naam bestaat al
-STR_5405    :Voer een naam in voor het opgeslagen spel
-STR_5406    :Voer een naam in voor de titelpresentatie
-STR_5407    :Toevoegen
-STR_5408    :Verwijderen
-STR_5409    :Invoegen
-STR_5410    :Bewerken
-STR_5411    :Herladen
-STR_5412    :Spring naar
-STR_5413    :Laad
-STR_5415    :Laad{MOVE_X}{87}{STRING}
-STR_5416    :Laad{MOVE_X}{87}Geen opgeslagen spel geselecteerd
-STR_5417    :Locatie
-STR_5418    :Locatie{MOVE_X}{87}{COMMA16}   {COMMA16}
-STR_5419    :Draai
-STR_5420    :Draai{MOVE_X}{87}{COMMA16}
-STR_5421    :Zoom
-STR_5422    :Zoom{MOVE_X}{87}{COMMA16}
-STR_5423    :Wacht
-STR_5424    :Wacht{MOVE_X}{87}{UINT16}
-STR_5425    :Herstarten
-STR_5426    :Einde
-STR_5427    :Coördinaten:
-STR_5428    :Aant. draaiingen tegen de klok:
-STR_5429    :Zoomniveau:
-STR_5430    :Te wachten milliseconden:
-STR_5431    :Te laden opgeslagen spel:
-STR_5432    :Commando:
-STR_5433    :Titelpresentaties
-STR_5434    :Commandobewerker
-STR_5435    :Opgeslagen spel hernoemen
-STR_5436    :Titelpresentaties bewerken…
-STR_5437    :Geen opgeslagen spel geselecteerd
-STR_5438    :Kan geen wijzigingen aanbrengen wanneer de commandobewerker open is
-STR_5439    :Een Herstart-commando moet worden voorafgegaan door een Wacht-commando van minstens vier seconden.
 STR_5440    :Volledig scherm minimaliseren bij focusverlies
-STR_5441    :Sorteert attracties per baantype,{NEWLINE}zodat achteraf wisselen van treintypes mogelijk{NEWLINE}wordt, zoals in RCT1.
 STR_5442    :Parkwaardering forc.:
-STR_5443    :Snelheid{MOVE_X}{87}{STRINGID}
-STR_5444    :Snelheid:
-STR_5445    :Snelheid
-STR_5446    :Ophalen
 STR_5447    :Type {STRINGID}
 STR_5448    :Attractie/voertuig {STRINGID}
 STR_5449    :Spelsnelheid verlagen
@@ -2734,7 +2627,7 @@ STR_5457    :Ondersteuningslimieten uitschakelen
 STR_5458    :Met de klok mee draaien
 STR_5459    :Tegen de klok in draaien
 STR_5460    :Beeld tegen de klok in draaien
-STR_5461    :Bezoekersparameters aanpassen
+STR_5461    :Parameters aanpassen voor alle bezoekers
 STR_5462    :{CURRENCY}
 STR_5463    :Doel: Plezier hebben!
 STR_5464    :Algemeen
@@ -2778,8 +2671,6 @@ STR_5503    :Hostnaam of IP-adres invoeren:
 STR_5504    :Status multiplayer tonen
 STR_5505    :Kan niet met de server verbinden.
 STR_5506    :Bezoekers negeren intensiteit
-STR_5508    :Bestanden met incorrecte checksum toch laden
-STR_5509    :Maakt het mogelijk om scenario’s en opgeslagen spellen met een incorrecte checksum te laden, zoals scenario’s uit de demo of beschadigde opgeslagen parken.
 STR_5510    :Standaard geluidsapparaat
 STR_5511    :(ONBEKEND)
 STR_5512    :Spel opslaan als…
@@ -2834,8 +2725,6 @@ STR_5560    :Stelt het inspectieinterval van alle attracties in op ‘Elke 10 mi
 STR_5561    :Kon taal niet laden
 STR_5562    :WAARSCHUWING:
 STR_5563    :Deze functie is momenteel niet helemaal stabiel, wees voorzichtig.
-STR_5564    :Ongeldig element invoegen
-STR_5565    :Plaatst een ongeldig element boven de andere elementen van dit vakje. Alle elementen die boven dit ongeldige element worden geplaatst worden onzichtbaar.
 STR_5566    :Wachtwoord:
 STR_5567    :Bekendmaken
 STR_5568    :Wachtwoord vereist
@@ -2963,8 +2852,6 @@ STR_5723    :Flinke regen
 STR_5724    :Onweer
 STR_5725    :{BLACK}Weer veranderen:
 STR_5726    :Stelt het huidige weer in het park in
-STR_5727    :Opschaalkwaliteit:
-STR_5731    :Lineair
 # tooltip for tab in options window
 STR_5734    :Rendering
 STR_5735    :Netwerkstatus
@@ -2991,7 +2878,7 @@ STR_5755    :Incompatibele softwareversie (server gebruikt {STRING})
 STR_5756    :Ongeldig wachtwoord
 STR_5757    :Server is vol
 STR_5758    :{OUTLINE}{GREEN}Nieuwe speler: {STRING}.
-STR_5759    :Bezig met downloaden van de kaart… ({INT32} / {INT32} KiB)
+STR_5759    :Bezig met downloaden van de kaart…
 STR_5760    :Hong Kong-dollar (HK$)
 STR_5761    :Taiwanese dollar (NT$)
 STR_5762    :Chinese yuan (CN¥)
@@ -3049,7 +2936,6 @@ STR_5813    :‘{STRING}’
 STR_5814    :{WINDOW_COLOUR_1}‘{STRING}’
 STR_5815    :Toont FPS-teller aan de bovenkant van het scherm.
 STR_5816    :Stelt de factor in waarmee alles vergroot moet worden.{NEWLINE}Vooral handig als je met een hoge schermresolutie speelt.
-STR_5817    :(Vereist weergave via hardware){NEWLINE}Stelt manier van vergroten in.{NEWLINE}{NEWLINE}Lineair is sneller, maar niet zo scherp. SNN is scherp maar kost iets meer verwerkingskracht.
 STR_5819    :[Vereist ‘Weergave uitgevoerd door hardware’]{NEWLINE}Pauzeert het spel als de Steam-overlay wordt geopend.
 STR_5820    :Minimaliseert het spel als het de focus verliest tijdens het spelen op volledig scherm.
 STR_5822    :Activeert de dag/nachtcyclus. Een volledige cyclus neemt ongeveer één maand in het spel in beslag.
@@ -3066,7 +2952,7 @@ STR_5832    :Toon hoogtes in eenheden in plaats van echte maten.
 STR_5833    :Stelt de datumindeling in.
 STR_5834    :Stelt in welk audioapparaat OpenRCT2 zal gebruiken.
 STR_5835    :Dempt het geluid als het venster de focus kwijtraakt.
-STR_5836    :Selecteert welke muziek er wordt gebruikt tijdens de titelpresentatie.{NEWLINE}Om de muziek van RCT1 te gebruiken moet je het bestand ‘data/css17.dat’ uit je RCT1-map kopiëren naar ‘data/css50.dat’ in je RCT2-map, of een pad naar je RCT1-bestanden instellen onder het tabblad ‘Overige instellingen’.
+STR_5836    :Selecteert welke muziek er wordt gebruikt tijdens de titelpresentatie.{NEWLINE}Om de muziek van RCT1 te gebruiken moet je een pad naar je RCT1-bestanden instellen onder het tabblad ‘Geavanceerd’.
 STR_5837    :Eigen thema’s voor de GUI aanmaken en beheren.
 STR_5838    :Toont een knop voor financiën in de werkbalk.
 STR_5839    :Toont een knop voor onderzoek en ontwikkeling in de werkbalk.
@@ -3078,7 +2964,6 @@ STR_5844    :Blijf altijd verbonden met een multiplayerserver,{NEWLINE}zelfs als
 STR_5845    :Toont knoppen om het spel te debuggen en geeft toegang tot de console.
 STR_5846    :Stelt in hoe vaak OpenRCT2 automatisch een back-up maakt van je park.
 STR_5847    :Stelt in welke titelpresentatie er wordt gebruikt. {NEWLINE}Titelpresentaties uit RCT1 en RCT2 vereisen dat je de gebruikte scenario’s hebt geïmporteerd.
-STR_5848    :Eigen titelpresentaties maken en beheren.
 STR_5849    :Nieuwe werknemers automatisch plaatsen.
 STR_5851    :Stelt het standaardinspectie-interval voor nieuwe attracties in.
 STR_5853    :Geluidseffecten in-/uitschakelen.
@@ -3272,13 +3157,12 @@ STR_6041    :{BLACK}Er zijn geen monteurs ingehuurd!
 STR_6042    :Hoogtekaart laden
 STR_6043    :Hoogtekaart selecteren
 STR_6044    :Hoogtekaart verzachten
-STR_6045    :Sterkte
+STR_6045    :Sterkte:
 STR_6046    :Hoogtekaart normaliseren
 STR_6047    :Landschap verzachten
 STR_6048    :Fout bij het verwerken van hoogtekaart
 STR_6049    :Kon PNG niet inlezen
 STR_6050    :Kon bitmap niet inlezen
-STR_6051    :De breedte en hoogte moeten overeenkomen
 STR_6052    :De hoogtekaart is te groot en zal worden bijgesneden
 STR_6053    :De hoogtekaart kan niet worden genormaliseerd
 STR_6054    :Alleen 24-bit bitmaps worden ondersteund
@@ -3357,7 +3241,7 @@ STR_6134    :Decor verwijderen
 STR_6135    :Ongeldig verzoek van de client
 STR_6136    :Ongeldig verzoek van de server
 STR_6137    :OpenRCT2, een gratis en open source remake van Roller Coaster Tycoon 2.
-STR_6138    :OpenRCT2 is het werk van velen, een volledige lijst is te vinden in ‘contributors.md’. Ga naar http://github.com/OpenRCT2/OpenRCT2 voor meer informatie.
+STR_6138    :OpenRCT2 is het werk van velen, de volledige lijst kun je zien door op de knop ‘Deelnemers’ te klikken. Ga naar http://github.com/OpenRCT2/OpenRCT2 voor meer informatie.
 STR_6139    :Alle product- en bedrijfsnamen zijn eigendom van hun respectieve eigenaren. Het gebruik ervan impliceert geen overeenkomst of goedkeuring.
 STR_6140    :Wijzigingsoverzicht…
 STR_6141    :Onderste werkbalk in RCT1-stijl
@@ -3377,8 +3261,6 @@ STR_6154    :Om veiligheidsredenen wordt het afgeraden om OpenRCT2 te gebruiken 
 STR_6155    :KDialog en Zenity zijn geen beide geïnstalleerd. Je moet minstens één van de twee installeren, of het pad naar de RCT2-bestanden handmatig toevoegen in config.ini.
 STR_6156    :Deze naam is gereserveerd
 STR_6157    :Console
-STR_6158    :Kan dit bestand niet laden…{NEWLINE}Incompatibele RCTC-versie: {COMMA16}
-STR_6159    :Smooth Nearest Neighbour
 STR_6160    :{WINDOW_COLOUR_2}Beschikbare voertuigen: {BLACK}{STRING}
 STR_6161    :Rasterlijnen tonen
 STR_6162    :Draaiende wilde muis
@@ -3393,23 +3275,8 @@ STR_6170    :Overig
 STR_6171    :Zoeken
 STR_6172    :Zoeken
 STR_6173    :Geef een naam op om te zoeken:
-STR_6174    :Opgeslagen park laden
-STR_6175    :Scenario laden
-STR_6176    :Te laden scenario:
-STR_6177    :Load{MOVE_X}{87}Geen scenario geselecteerd
-STR_6178    :Load{MOVE_X}{87}{RED}Ontbrekend scenario
-STR_6179    :Selecteren
-STR_6180    :Geen scenario geselecteerd
-STR_6181    :{RED}Ontbrekend scenario
-STR_6182    :Volg{MOVE_X}{87}{STRING}
-STR_6183    :Volg{MOVE_X}{87}Geen sprite geselecteerd
-STR_6184    :Sprite volgen
-STR_6185    :Sprite selecteren
-STR_6186    :Geen sprite geselecteerd
-STR_6187    :{OUTLINE}{WINDOW_COLOUR_2}{STRING}
 STR_6188    :Braaksel
 STR_6189    :Eend
-STR_6190    :Je kunt geen sprite selecteren als het spel nog op het titelscherm staat. Laad eerst het opgeslagen spel waarvan je een sprite wilt selecteren.
 STR_6191    :Land
 STR_6192    :Muur
 STR_6193    :{COMMA16} bezoeker
@@ -3518,11 +3385,11 @@ STR_6318    :Netwerkdesynchronisatie gedetecteerd.{NEWLINE}Logbestand: {STRING}
 STR_6319    :Blokrem is gesloten
 STR_6320    :Mag niet worden verwijderd
 STR_6321    :Straatmeubel is kapot
-STR_6322    :{WINDOW_COLOUR_2}Sprite-id: {BLACK}{INT32}
+STR_6322    :{WINDOW_COLOUR_2}Entiteit-ID: {BLACK}{INT32}
 STR_6323    :Simulatie
 STR_6324    :Simuleren
 STR_6325    :Testrit simuleren
-STR_6326    :Kan {POP16}{POP16}{POP16}{STRINGID} niet in simulatiemodus zetten…
+STR_6326    :Kan {STRINGID} niet in simulatiemodus zetten…
 STR_6327    :Reuzenscreenshots hebben transparante achtergrond
 STR_6328    :Als deze optie is ingeschakeld, worden reuzenscreenshots met een transparante achtergrond genomen, in plaats van de zwarte standaardachtergrond.
 STR_6329    :{STRING}{STRINGID}
@@ -3531,7 +3398,6 @@ STR_6331    :Eenden aanmaken
 STR_6332    :Eenden verw.
 STR_6333    :Vergrotingsfactor verhogen
 STR_6334    :Vergrotingsfactor verlagen
-STR_6335    :Vakinspecteur: Ongeldig element invoegen
 STR_6336    :Vakinspecteur: Element kopiëren
 STR_6337    :Vakinspecteur: Element plakken
 STR_6338    :Vakinspecteur: Element verwijderen
@@ -3556,7 +3422,6 @@ STR_6356    :Maakt eenden aan, mits er water op de kaart is.
 STR_6357    :Verwijdert alle eenden van de kaart.
 STR_6358    :Pagina {UINT16}
 STR_6359    :{POP16}{POP16}Pagina {UINT16}
-STR_6360    :{BLACK}{COMMA32}
 STR_6361    :Belichtingseffecten op attracties (experimenteel)
 STR_6362    :Als dit is ingeschakeld zullen de voertuigen van attracties die een baan hebben ’s nachts verlicht worden.
 STR_6363    :Tekst is naar het klembord gekopieerd.
@@ -3567,14 +3432,14 @@ STR_6367    :Animatieframe:
 STR_6368    :Om compatibiliteitsredenen wordt het afgeraden om OpenRCT2 te draaien via Wine. OpenRCT2 heeft eigen versies voor macOS, Linux, FreeBSD en OpenBSD.
 STR_6369    :Sta bouwen van attracties op ongeldige hoogtes toe
 STR_6370    :Maakt het mogelijk om attracties te bouwen op “tussenhoogtes”.
-STR_6371    :Het opgegeven pad bevat wel een installatie van RollerCoaster Tycoon 1, maar het bestand “csg1i.dat” ontbreekt. Dit bestand moet je van de CD van RollerCoaster Tycoon 1 naar de “Data”-map van de RollerCoaster Tycoon 1-installatie op je harde schijf kopiëren.
-STR_6372    :Het opgegeven pad bevat wel een installatie van RollerCoaster Tycoon 1, maar deze versie is niet bruikbaar. OpenRCT2 vereist een installatie van Loopy Landscapes or RCT Deluxe om de grafische assets van  RollerCoaster Tycoon 1 te kunnen gebruiken.
+STR_6371    :Het opgegeven pad bevat wel een installatie van RollerCoaster Tycoon 1, maar het bestand “csg1i.dat” ontbreekt. Dit bestand moet je van de CD van Loopy Landscapes of RCT Deluxe naar de “Data”-map van de RollerCoaster Tycoon 1-installatie op je harde schijf kopiëren.
+STR_6372    :Het opgegeven pad bevat wel een installatie van RollerCoaster Tycoon 1, maar deze versie is niet bruikbaar. OpenRCT2 vereist een installatie van Loopy Landscapes of RCT Deluxe om de grafische assets van  RollerCoaster Tycoon 1 te kunnen gebruiken.
 STR_6373    :Hoogtecontroles in- of uitschakelen
 STR_6374    :H
 STR_6375    :Onbekende attractie
 STR_6376    :{WINDOW_COLOUR_2}Voertuig:{NEWLINE}{BLACK}{STRINGID} voor {STRINGID}
 STR_6377    :{WINDOW_COLOUR_2}Type: {BLACK}{STRINGID} voor {STRINGID}
-STR_6378    :Objectenlijst ophalen: {INT32} / {INT32}
+STR_6378    :Objectenlijst ophalen:
 STR_6379    :Ongeldige gegevens ontvangen
 STR_6380    :Update beschikbaar!
 STR_6381    :Meepraten op de OpenRCT2-Discord
@@ -3631,10 +3496,10 @@ STR_6431    :R-muiskn.
 STR_6432    :Muiskn. {INT32}
 STR_6433    :Verwijderen
 STR_6434    :Verwijder alle gekoppelde toetsen en knoppen voor deze sneltoets.
-STR_6435    :{WINDOW_COLOUR_2}Vandalen gestopt: {BLACK}{COMMA16}
+STR_6435    :{WINDOW_COLOUR_2}Vandalen gestopt: {BLACK}{COMMA32}
 STR_6436    :Onzichtbaarheid in/uitschakelen
-STR_6437    :Onzichtbaar
-STR_6438    :O
+STR_6437    :Zichtbaar
+STR_6438    :{MOVE_X}{2}👁
 STR_6439    :Vakinspecteur: Onzichtbaarheid in/uitschakelen
 STR_6440    :Doorzichtig water
 STR_6441    :Er moet minstens één reguliere bestrating zijn geselecteerd.
@@ -3657,879 +3522,259 @@ STR_6457    :Bug rapporteren op GitHub
 STR_6458    :Volgen in het hoofdvenster
 STR_6460    :R
 STR_6461    :Richting
-
-#############
-# Scenarios #
-#############
-
-## RCT1 Original
-<Forest Frontiers>
-STR_SCNR    :Forest Frontiers
-STR_PARK    :Forest Frontiers
-STR_DTLS    :Bouw een bloeiend pretpark diep in het bos, op een grote open plek.
-
-<Dynamite Dunes>
-STR_SCNR    :Dynamite Dunes
-STR_PARK    :Dynamite Dunes
-STR_DTLS    :Dit park, gebouwd in de woestijn, beschikt over slechts één achtbaan maar heeft ruimte voor uitbreiding.
-
-<Leafy Lake>
-STR_SCNR    :Leafy Lake
-STR_PARK    :Leafy Lake
-STR_DTLS    :Bouw vanaf het begin een pretpark rond een groot meer.
-
-<Diamond Heights>
-STR_SCNR    :Diamond Heights
-STR_PARK    :Diamond Heights
-STR_DTLS    :Diamond Heights is al een succesvol pretpark met fantastische attracties. Verbeter het om de waarde ervan te verdubbelen.
-
-<Evergreen Gardens>
-STR_SCNR    :Evergreen Gardens
-STR_PARK    :Evergreen Gardens
-STR_DTLS    :Verander de schitterende Evergreen Gardens in een bloeiend pretpark.
-
-<Bumbly Beach>
-STR_SCNR    :Bumbly Beach
-STR_PARK    :Bumbly Beach
-STR_DTLS    :Verander het kleine amusementspark van Bumbly Beach in een succesvol pretpark.
-
-<Trinity Islands>
-STR_SCNR    :Trinity Islands
-STR_PARK    :Trinity Islands
-STR_DTLS    :Verscheidene eilanden vormen de basis voor dit nieuwe park.
-
-<Katie's Dreamland>
-STR_SCNR    :Katie’s Dreamland
-STR_PARK    :Katie’s Dreamland
-STR_DTLS    :Een klein pretpark met een paar attracties en ruimte voor uitbreiding. Jouw doel is om de parkwaarde te verdubbelen.
-
-<Pokey Park>
-STR_SCNR    :Pokey Park
-STR_PARK    :Pokey Park
-STR_DTLS    :Een klein, krap pretpark dat grote uitbreiding vereist.
-
-<White Water Park>
-STR_SCNR    :White Water Park
-STR_PARK    :White Water Park
-STR_DTLS    :Een park met enkele uitstekende waterattracties vereist uitbreiding.
-
-<Millennium Mines>
-STR_SCNR    :Millennium Mines
-STR_PARK    :Millennium Mines
-STR_DTLS    :Verander een grote verlaten mijn (een toeristische attractie) in een pretpark.
-
-<Karts & Coasters>
-STR_SCNR    :Karts & Coasters
-STR_PARK    :Karts & Coasters
-STR_DTLS    :Een groot park, verscholen in het bos, met alleen kartbanen en houten achtbanen.
-
-<Mel's World>
-STR_SCNR    :Mel’s World
-STR_PARK    :Mel’s World
-STR_DTLS    :Dit pretpark heeft goed ontworpen, moderne attracties, maar heeft ook veel ruimte voor uitbreiding.
-
-<Mystic Mountain>
-STR_SCNR    :Mystic Mountain
-STR_PARK    :Mystic Mountain
-STR_DTLS    :Bouw vanaf het begin een pretpark in de heuvelachtige bossen van Mystic Mountain.
-
-<Pacific Pyramids>
-STR_SCNR    :Pacific Pyramids
-STR_PARK    :Pacific Pyramids
-STR_DTLS    :Verander de Egyptische ruïnes (een toeristische attractie) in een bloeiend pretpark.
-
-<Crumbly Woods>
-STR_SCNR    :Crumbly Woods
-STR_PARK    :Crumbly Woods
-STR_DTLS    :Een groot park met goed ontwerpen maar nogal oude attracties. Vervang de oude attracties of voeg nieuwe toe om het park populairder te maken.
-
-<Paradise Pier>
-STR_SCNR    :Paradise Pier
-STR_PARK    :Paradise Pier
-STR_DTLS    :Verander de pier van dit slaperige stadje in een bloeiende attractie.
-
-<Lightning Peaks>
-STR_SCNR    :Lightning Peaks
-STR_PARK    :Lightning Peaks
-STR_DTLS    :De mooie bergen van Lightning Peaks zijn populair bij wandelaars en toeristen. Gebruik de beschikbare grond om nieuwe sensatiezoekende klanten aan te trekken.
-
-<Ivory Towers>
-STR_SCNR    :Ivory Towers
-STR_PARK    :Ivory Towers
-STR_DTLS    :Een gevestigd park met een aantal problemen.
-
-<Rainbow Valley>
-STR_SCNR    :Rainbow Valley
-STR_PARK    :Rainbow Valley
-STR_DTLS    :Van de gemeenteraad van Rainbow Valley mag het landschap niet gewijzigd worden en er mogen er geen grote bomen worden gekapt. Desondanks moet je het gebied ontwikkelen tot een groot pretpark.
-
-<Thunder Rock>
-STR_SCNR    :Thunder Rock
-STR_PARK    :Thunder Rock
-STR_DTLS    :Thunder Rock staat midden in een woestijn en trekt veel toeristen aan. Gebruik de beschikbare ruimte om attracties te bouwen en meer mensen aan te trekken.
-
-<Mega Park>
-STR_SCNR    :Mega Park
-STR_PARK    :Mega Park
-STR_DTLS    :Gewoon voor de lol!
-
-## Added Attractions
-<Whispering Cliffs>
-STR_SCNR    :Whispering Cliffs
-STR_PARK    :Whispering Cliffs
-STR_DTLS    :Ontwikkel het rotsgebied bij de kust tot een bloeiend pretpark.
-
-<Three Monkeys Park>
-STR_SCNR    :Three Monkeys Park
-STR_PARK    :Three Monkeys Park
-STR_DTLS    :Het middelpunt van dit grote park in ontwikkeling is een enorme duellerende stalen achtbaan met drie sporen.
-
-<Canary Mines>
-STR_SCNR    :Canary Mines
-STR_PARK    :Canary Mines
-STR_DTLS    :Deze verlaten mijn heeft reeds kenmerken van een toeristische attractie: een miniatuurspoorweg en een paar verticale achtbanen.
-
-<Barony Bridge>
-STR_SCNR    :Barony Bridge
-STR_PARK    :Barony Bridge
-STR_DTLS    :Je hebt de beschikking over een oude, niet meer gebruikte brug. Verander deze in een pretpark.
-
-<Funtopia>
-STR_SCNR    :Funtopia
-STR_PARK    :Funtopia
-STR_DTLS    :Dit park beslaat land aan beide zijden van een snelweg en beschikt reeds over enkele functionerende attracties.
-
-<Haunted Harbour>
-STR_SCNR    :Haunted Harbour
-STR_PARK    :Haunted Harbour
-STR_DTLS    :De gemeente is bereid het omliggende land voor een gunstige prijs te verkopen aan dit kleine kustpark, op voorwaarde dat bepaalde attracties behouden blijven.
-
-<Fun Fortress>
-STR_SCNR    :Fun Fortress
-STR_PARK    :Fun Fortress
-STR_DTLS    :Je mag dit kasteel naar eigen inzicht veranderen in een pretpark.
-
-<Future World>
-STR_SCNR    :Future World
-STR_PARK    :Future World
-STR_DTLS    :Dit futuristische park met buitenaards landschap heeft genoeg ruimte beschikbaar voor nieuwe attracties.
-
-<Gentle Glen>
-STR_SCNR    :Gentle Glen
-STR_PARK    :Gentle Glen
-STR_DTLS    :De lokale bevolking heeft een voorkeur voor rustige en ontspannende attracties, dus is het je taak om dit park uit te breiden naar hun smaak.
-
-<Jolly Jungle>
-STR_SCNR    :Jolly Jungle
-STR_PARK    :Jolly Jungle
-STR_DTLS    :Dit grote stuk land, diep in het oerwoud, ligt klaar om te worden veranderd in een attractiepark.
-
-<Hydro Hills>
-STR_SCNR    :Hydro Hills
-STR_PARK    :Hydro Hills
-STR_DTLS    :Een aantal meren op verschillende hoogtes vormt de basis voor dit nieuwe park.
-
-<Sprightly Park>
-STR_SCNR    :Sprightly Park
-STR_PARK    :Sprightly Park
-STR_DTLS    :Dit oude park heeft veel historische attracties maar ook grote schulden.
-
-<Magic Quarters>
-STR_SCNR    :Magic Quarters
-STR_PARK    :Magic Quarters
-STR_DTLS    :Een groot stuk land is al voor je ontruimd en gedeeltelijk gethematiseerd, zodat je het kunt ontwikkelen tot een themapark.
-
-<Fruit Farm>
-STR_SCNR    :Fruit Farm
-STR_PARK    :Fruit Farm
-STR_DTLS    :Een bloeiende fruitplantage heeft een spoorweg gebouwd om haar inkomen te vergroten. Jouw taak is om de plantage uit te breiden tot een bloeiend pretpark.
-
-<Butterfly Dam>
-STR_SCNR    :Butterfly Dam
-STR_PARK    :Butterfly Dam
-STR_DTLS    :Je mag het gebied rondom een dam ontwikkelen tot een attractiepark.
-
-<Coaster Canyon>
-STR_SCNR    :Coaster Canyon
-STR_PARK    :Coaster Canyon
-STR_DTLS    :Je mag een enorme kloof ontwikkelen tot een attractiepark.
-
-<Thunderstorm Park>
-STR_SCNR    :Thunderstorm Park
-STR_PARK    :Thunderstorm Park
-STR_DTLS    :In dit park regent het zo vaak dat er een enorme piramide is gebouwd om overdekte attracties te kunnen bouwen.
-
-<Harmonic Hills>
-STR_SCNR    :Harmonic Hills
-STR_PARK    :Harmonic Hills
-STR_DTLS    :De gemeenteraad staat bouwen boven boomniveau niet toe in dit park.
-
-<Roman Village>
-STR_SCNR    :Roman Village
-STR_PARK    :Roman Village
-STR_DTLS    :Ontwikkel dit Romeinse themapark door achtbanen en andere attracties toe te voegen.
-
-<Swamp Cove>
-STR_SCNR    :Swamp Cove
-STR_PARK    :Swamp Cove
-STR_DTLS    :Dit park is gedeeltelijk gebouwd op een serie kleine eilanden en heeft al een paar grote achtbanen als trekpleister.
-
-<Adrenaline Heights>
-STR_SCNR    :Adrenaline Heights
-STR_PARK    :Adrenaline Heights
-STR_DTLS    :Bouw een park dat de lokale bevolking, die op zoek is naar snelheid en spanning, aanspreekt.
-
-<Utopia Park>
-STR_SCNR    :Utopia Park
-STR_PARK    :Utopia
-STR_DTLS    :Een oase midden in de woestijn vormt een ongebruikelijke gelegenheid tot het bouwen van een pretpark.
-
-<Rotting Heights>
-STR_SCNR    :Rotting Heights
-STR_PARK    :Rotting Heights
-STR_DTLS    :Dit park is overwoekerd en vervallen. Kun je het weer in ere herstellen?
-
-<Fiasco Forest>
-STR_SCNR    :Fiasco Forest
-STR_PARK    :Fiasco Forest
-STR_DTLS    :Dit park staat vol met slecht ontworpen en gevaarlijke attracties. Je hebt een zeer beperkt budget en weinig tijd om het park weer op de rails te krijgen.
-
-<Pickle Park>
-STR_SCNR    :Pickle Park
-STR_PARK    :Pickle Park
-STR_DTLS    :De gemeenteraad staat geen enkele vorm van adverteren toe, dus dit park kan enkel slagen op basis van zijn reputatie.
-
-<Giggle Downs>
-STR_SCNR    :Giggle Downs
-STR_PARK    :Giggle Downs
-STR_DTLS    :De trekpleister van dit park is een duellerende Steeplechase met vier sporen naast elkaar.
-
-<Mineral Park>
-STR_SCNR    :Mineral Park
-STR_PARK    :Mineral Park
-STR_DTLS    :Verander deze verlaten steengroeve in een park dat sensatiezoekende toeristen aanspreekt.
-
-<Coaster Crazy>
-STR_SCNR    :Coaster Crazy
-STR_PARK    :Coaster Crazy
-STR_DTLS    :Je hebt een beperkt budget om dit berggebied in een groot park vol achtbanen te veranderen, maar tijd speelt geen rol.
-
-<Urban Park>
-STR_SCNR    :Urban Park
-STR_PARK    :Urban Park
-STR_DTLS    :Een piepklein park heeft een overeenkomst afgesloten met de gemeente om uit te breiden door de stad zelf.
-
-<Geoffrey Gardens>
-STR_SCNR    :Geoffrey Gardens
-STR_PARK    :Geoffrey Gardens
-STR_DTLS    :Een groot tuinpark moet worden veranderd in een bloeiend themapark.
-
-
-## Loopy Landscapes
-<Iceberg Islands>
-STR_SCNR    :Iceberg Islands
-STR_PARK    :Iceberg Islands
-STR_DTLS    :Een hele verzameling ijsbergen vormt de ijzige achtergrond van dit ambitieuze themapark.
-
-<Volcania>
-STR_SCNR    :Volcania
-STR_PARK    :Volcania
-STR_DTLS    :De achtergrond van deze vlammende achtbaanuitdaging is een slapende vulkaan.
-
-<Arid Heights>
-STR_SCNR    :Arid Heights
-STR_PARK    :Arid Heights
-STR_DTLS    :Het is je taak dit woestijnpark te ontwikkelen terwijl je de gasten tevreden houdt. Geld speelt geen rol!
-
-<Razor Rocks>
-STR_SCNR    :Razor Rocks
-STR_PARK    :Razor Rocks
-STR_DTLS    :Het is je taak een park vol met achtbanen te bouwen tussen de Razor Rocks.
-
-<Crater Lake>
-STR_SCNR    :Crater Lake
-STR_PARK    :Crater Lake
-STR_DTLS    :De achtergrond van dit park wordt gevormd door een groot meer in oude krater.
-
-<Vertigo Views>
-STR_SCNR    :Vertigo Views
-STR_PARK    :Vertigo Views
-STR_DTLS    :Dit park heeft al een uitstekende hypercoaster, maar je taak is om de winst flink te verhogen.
-
-<Paradise Pier 2>
-STR_SCNR    :Paradise Pier 2
-STR_PARK    :Paradise Pier 2
-STR_DTLS    :Paradise Pier heeft extra pieren bijgebouwd, en het is je taak om het park erlangs uit te breiden.
-
-<Dragon's Cove>
-STR_SCNR    :Dragon’s Cove
-STR_PARK    :Dragon’s Cove
-STR_DTLS    :Deze baai vormt de achtergrond van deze achtbaanuitdaging.
-
-<Good Knight Park>
-STR_SCNR    :Good Knight Park
-STR_PARK    :Good Knight Park
-STR_DTLS    :Een kasteel met twee achtbanen moet worden ontwikkeld tot een groot themapark.
-
-<Wacky Warren>
-STR_SCNR    :Wacky Warren
-STR_PARK    :Wacky Warren
-STR_DTLS    :Een park waarin de meeste voetpaden en achtbanen onder de grond liggen.
-
-<Grand Glacier>
-STR_SCNR    :Grand Glacier
-STR_PARK    :Grand Glacier
-STR_DTLS    :Je mag een vallei met een gletsjer ontwikkelen tot een themapark.
-
-<Crazy Craters>
-STR_SCNR    :Crazy Craters
-STR_PARK    :Crazy Craters
-STR_DTLS    :In een verre wereld waar geld geen rol speelt moet je een park bouwen om de mensen te vermaken.
-
-<Dusty Desert>
-STR_SCNR    :Dusty Desert
-STR_PARK    :Dusty Desert
-STR_DTLS    :In dit woestijnpark staan vijf achtbanen die moeten worden afgemaakt.
-
-<Woodworm Park>
-STR_SCNR    :Woodworm Park
-STR_PARK    :Woodworm Park
-STR_DTLS    :Dit historische park mag alleen oudere soorten attracties bouwen.
-
-<Icarus Park>
-STR_SCNR    :Icarus Park
-STR_PARK    :Icarus Park
-STR_DTLS    :Ontwikkel dit buitenaardse park om de winst zo groot mogelijk te maken.
-
-<Sunny Swamps>
-STR_SCNR    :Sunny Swamps
-STR_PARK    :Sunny Swamps
-STR_DTLS    :Dit goed gethematiseerde pretpark heeft al diverse attracties, maar nog voldoende ruimte voor uitbreiding.
-
-<Frightmare Hills>
-STR_SCNR    :Frightmare Hills
-STR_PARK    :Frightmare Hills
-STR_DTLS    :Een eng park met een grote achtbaan als trekpleister.
-
-<Thunder Rocks>
-STR_SCNR    :Thunder Rocks
-STR_PARK    :Thunder Rocks
-STR_DTLS    :Het fundament van dit themapark wordt gevormd door twee enorme rotsen die in het zand staan.
-
-<Octagon Park>
-STR_SCNR    :Octagon Park
-STR_PARK    :Octagon Park
-STR_DTLS    :In dit grote park moet je tien grote achtbanen ontwerpen en bouwen.
-
-<Pleasure Island>
-STR_SCNR    :Pleasure Island
-STR_PARK    :Pleasure Island
-STR_DTLS    :Dit lange, smalle eiland is een uitdagende locatie om een aantal achtbanen te bouwen.
-
-<Icicle Worlds>
-STR_SCNR    :Icicle Worlds
-STR_PARK    :Icicle Worlds
-STR_DTLS    :Een ijzig landschap moet worden veranderd in een bloeiend themapark.
-
-<Southern Sands>
-STR_SCNR    :Southern Sands
-STR_PARK    :Southern Sands
-STR_DTLS    :Je mag een woestijnpark met enkele slim ontwerpen achtbanen verder ontwikkelen.
-
-<Tiny Towers>
-STR_SCNR    :Tiny Towers
-STR_PARK    :Tiny Towers
-STR_DTLS    :In dit kleine park moet je de vijf bestaande achtbanen afmaken.
-
-<Nevermore Park>
-STR_SCNR    :Nevermore Park
-STR_PARK    :Nevermore Park
-STR_DTLS    :Een groot park dat omringd wordt door een bijzonder transportsysteem.
-
-<Pacifica>
-STR_SCNR    :Pacifica
-STR_PARK    :Pacifica
-STR_DTLS    :Je mag dit grote eiland ontwikkelen tot een pretpark.
-
-<Urban Jungle>
-STR_SCNR    :Urban Jungle
-STR_PARK    :Urban Jungle
-STR_DTLS    :Deze enorme verlaten wolkenkrabber is een unieke kans voor een pretparkontwikkelaar.
-
-<Terror Town>
-STR_SCNR    :Terror Town
-STR_PARK    :Terror Town
-STR_DTLS    :Je mag deze stedelijke omgeving ontwikkelen tot een pretpark.
-
-<Megaworld Park>
-STR_SCNR    :Megaworld Park
-STR_PARK    :Megaworld Park
-STR_DTLS    :Een enorm park dat al tjokvol attracties staat moet worden verbeterd.
-
-<Venus Ponds>
-STR_SCNR    :Venus Ponds
-STR_PARK    :Venus Ponds
-STR_DTLS    :Dit stuk land op een verre planet moet worden veranderd in een themapark.
-
-<Micro Park>
-STR_SCNR    :Micro Park
-STR_PARK    :Micro Park
-STR_DTLS    :Je moet proberen het kleinste winstgevende pretpark ter wereld te bouwen.
-
-## Real Parks from RCT1
-# None of them had details
-<Alton Towers>
-STR_SCNR    :Alton Towers
-STR_PARK    :Alton Towers
-STR_DTLS    :
-
-<Heide-Park>
-STR_SCNR    :Heide-Park
-STR_PARK    :Heide-Park
-STR_DTLS    :
-
-<Blackpool Pleasure Beach>
-STR_SCNR    :Blackpool Pleasure Beach
-STR_PARK    :Blackpool Pleasure Beach
-STR_DTLS    :
-
-## Misc parks from RCT1
-# Had no details
-<Fort Anachronism>
-STR_SCNR    :Fort Anachronism
-STR_PARK    :Fort Anachronism
-STR_DTLS    :
-
-## RCT2 Original
-<Alpine Adventures>
-STR_SCNR    :Alpine Adventures
-STR_PARK    :Alpine Adventures
-STR_DTLS    :Maak van een klein skistation in de bergen een amusementspark met een sneeuwthema.
-
-<Amity Airfield>
-STR_SCNR    :Amity Airfield
-STR_PARK    :Amity Airfield
-STR_DTLS    :Bouw een amusementspark met een luchtvaartthema op dit verlaten vliegveld.
-
-<Botany Breakers>
-STR_SCNR    :Botany Breakers
-STR_PARK    :Botany Breakers
-STR_DTLS    :Het is je uitdaging om een zeer winstgevend park te bouwen op dit paradijselijke eiland.
-
-<Bumbly Bazaar>
-STR_SCNR    :Bumbly Bazaar
-STR_PARK    :Bumbly Bazaar
-STR_DTLS    :Je begint met een kleine markt. Je opdracht is om de winst van je winkels en kraampjes te vergroten door attracties en achtbanen te bouwen en zo meer klanten te trekken.
-
-<Crazy Castle>
-STR_SCNR    :Crazy Castle
-STR_PARK    :Crazy Castle
-STR_DTLS    :Je hebt een groot kasteel geërfd. Het is je opdracht er een klein themapark van te maken.
-
-<Dusty Greens>
-STR_SCNR    :Dusty Greens
-STR_PARK    :Dusty Greens
-STR_DTLS    :Dusty Greens ligt aan een snelwegknooppunt in de woestijn. Het is een gelegenheid om van een kleine golfbaan een succesvol themapark te maken.
-
-<Electric Fields>
-STR_SCNR    :Electric Fields
-STR_PARK    :Electric Fields
-STR_DTLS    :Je hebt een kleine boerderij geërfd, en het is je uitdaging een klein themapark tussen de velden en de boerderijen te bouwen.
-
-<Extreme Heights>
-STR_SCNR    :Extreme Heights
-STR_PARK    :Extreme Heights
-STR_DTLS    :Het is de uitdaging om dit woestijnpark uit te breiden om mensen te trekken die op zoek zijn naar extreme sensatie. Geld speelt geen rol.
-
-<Factory Capers>
-STR_SCNR    :Factory Capers
-STR_PARK    :Factory Capers
-STR_DTLS    :Een verlaten fabriekscomplex is een gelegenheid om een amusementspark met een fabrieksthema te bouwen.
-
-<Fungus Woods>
-STR_SCNR    :Fungus Woods
-STR_PARK    :Fungus Woods
-STR_DTLS    :Het is je uitdaging om een succesvol themapark in Fungus Woods te bouwen, maar je bent beperkt tot ouderwetse houten attracties.
-
-<Ghost Town>
-STR_SCNR    :Ghost Town
-STR_PARK    :Ghost Town
-STR_DTLS    :Je bent aangenomen door een grote keten van amusementsparken. Het is je taak een gigantisch park met achtbanen te bouwen rond een verlaten mijnstadje.
-
-<Gravity Gardens>
-STR_SCNR    :Gravity Gardens
-STR_PARK    :Gravity Gardens
-STR_DTLS    :Het is je uitdaging een park met achtbanen in de prachtige Gravity Gardens te bouwen… geen andere attracties, alleen maar achtbanen!
-
-<Infernal Views>
-STR_SCNR    :Infernal Views
-STR_PARK    :Infernal Views
-STR_DTLS    :Een park dat op een hachelijke plaats is gevestigd: op een vulkaan, naast stromende lava.
-
-<Lucky Lake>
-STR_SCNR    :Lucky Lake
-STR_PARK    :Lucky Lake
-STR_DTLS    :Met een onbeperkt budget, maar gesitueerd op een veeleisende locatie is het een uitdaging dit park uit te breiden en te beheren.
-
-<Rainbow Summit>
-STR_SCNR    :Rainbow Summit
-STR_PARK    :Rainbow Summit
-STR_DTLS    :In dit park, gelegen op een heuvel, zijn hoge bouwwerken verboden. Kun je het park uitbreiden en het succesvol maken?
-
-<Six Flags Belgium>
-STR_SCNR    :Six Flags Belgium
-STR_PARK    :Six Flags Belgium
-STR_DTLS    :Probeer dit Six Flags-park op je eigen manier te beheren en te verbeteren.
-
-<Six Flags Great Adventure>
-STR_SCNR    :Six Flags Great Adventure
-STR_PARK    :Six Flags Great Adventure
-STR_DTLS    :Bouw de ontbrekende Six Flags-attracties, of maak je eigen ontwerpen om het park te verbeteren! Maar vergeet je uiteindelijke doel niet: meer bezoekers naar het park halen!
-
-<Six Flags Holland>
-STR_SCNR    :Six Flags Holland
-STR_PARK    :Six Flags Holland
-STR_DTLS    :Probeer dit Six Flags-park op je eigen manier te beheren en te verbeteren.
-
-<Six Flags Magic Mountain>
-STR_SCNR    :Six Flags Magic Mountain
-STR_PARK    :Six Flags Magic Mountain
-STR_DTLS    :Bouw de ontbrekende Six Flags-attracties, of maak je eigen ontwerpen om het park te verbeteren! Maar vergeet je uiteindelijke doel niet: je lening terugbetalen terwijl je de waarde van je park laat stijgen!
-
-<Six Flags over Texas>
-STR_SCNR    :Six Flags over Texas
-STR_PARK    :Six Flags over Texas
-STR_DTLS    :Bouw de ontbrekende Six Flags-attracties, of maak je eigen ontwerpen om het park te verbeteren! Maar vergeet je uiteindelijke doel niet: meer bezoekers naar het park halen!
-
-<Build your own Six Flags Belgium>
-STR_SCNR    :Bouw je eigen Six Flags Belgium
-STR_PARK    :Six Flags Belgium
-STR_DTLS    :Bouw je eigen versie van dit Europese Six Flags-park.
-
-<Build your own Six Flags Great Adventure>
-STR_SCNR    :Bouw je eigen Six Flags Great Adventure
-STR_PARK    :Six Flags Great Adventure
-STR_DTLS    :Gebruik je ontwerpvaardigheden om dit Six Flags-park opnieuw te maken.
-
-<Build your own Six Flags Holland>
-STR_SCNR    :Bouw je eigen Six Flags Holland
-STR_PARK    :Six Flags Holland
-STR_DTLS    :Bouw je eigen versie van dit Europese Six Flags-park.
-
-<Build your own Six Flags Magic Mountain>
-STR_SCNR    :Bouw je eigen Six Flags Magic Mountain
-STR_PARK    :Six Flags Magic Mountain
-STR_DTLS    :Maak je eigen versie van dit enorme Six Flags-park.
-
-<Build your own Six Flags over Texas>
-STR_SCNR    :Bouw je eigen Six Flags over Texas
-STR_PARK    :Six Flags over Texas
-STR_DTLS    :Maak je eigen versie van dit Six Flags-park.
-
-<Build your own Six Flags Park>
-STR_SCNR    :Bouw je eigen Six Flags-park
-STR_PARK    :Six Flags
-STR_DTLS    :Maak je eigen Six Flags-park, door gebruik te maken van attracties uit andere Six Flags-parken of door zelf nieuwe attracties te ontwerpen.
-
-## Wacky Worlds Scenarios
-<Africa - African Diamond Mine>
-STR_SCNR    :Afrika - Diamantmijn
-STR_PARK    :Mines of Africa
-STR_DTLS    :Je hebt een verlaten diamantmijn geërfd en een waardevolle diamant gevonden. Je besluit dit geld te investeren om een wereldberoemd themapark te bouwen.
-
-<Africa - Oasis>
-STR_SCNR    :Afrika - Oase
-STR_PARK    :Mirage Madness
-STR_DTLS    :Er is een oase in de woestijn gevonden die een prachtige locatie van een park zou vormen. Voor transport van en naar de oase is gezorgd.
-
-<Africa - Victoria Falls>
-STR_SCNR    :Afrika - Victoriawatervallen
-STR_PARK    :Over The Edge
-STR_DTLS    :Er is een stuwdam gebouwd die goedkope energie in overvloed levert voor je park. Je moet een hoge parkwaarde bereiken om de lening voor de dam terug te betalen.
-
-<Antarctic - Ecological Salvage>
-STR_SCNR    :Antarctica - Ecologische reddingsactie
-STR_PARK    :Icy Adventures
-STR_DTLS    :De milieuorganisatie heeft je gevraagd om een lelijke oude olieraffinaderij om te vormen tot een toeristische trekpleister. Land is goedkoop maar de rente op leningen is hoog. Je kunt de oude gebouwen verkopen als schroot.
-
-<Asia - Great Wall of China Tourism Enhancement>
-STR_SCNR    :Azië - Meer toeristen naar de Chinese Muur
-STR_PARK    :De Chinese Muur
-STR_DTLS    :De regering heeft besloten om meer toeristen naar de Chinese Muur door er een themapark naast te bouwen. Geld speelt geen rol!
-
-<Asia - Japanese Coastal Reclaim>
-STR_SCNR    :Azië - Polderen aan de kust
-STR_PARK    :Okinawa Coast
-STR_DTLS    :Een bestaand pretpark heeft geen ruimte meer. Je enige optie is om naar de zee uit te breiden, waarvoor je geld hebt geleend. Vanwege het aardbevingsgevaar zijn er hoogtebeperkingen van kracht.
-
-<Asia - Maharaja Palace>
-STR_SCNR    :Azië - Paleis van de Maharadja
-STR_PARK    :Park Maharadja
-STR_DTLS    :De Maharadja heeft jou aangewezen om de lokale bevolking te vermaken. Bouw een park dat is geïnspireerd door het paleis van de Maharadja.
-
-<Australasia - Ayers Rock>
-STR_SCNR    :Australië - Ayers Rock
-STR_PARK    :Ayers Adventure
-STR_DTLS    :Je helpt de Aboriginals om een park te bouwen om het bewustzijn voor hun cultuur te vergroten. Je moet een groot aantal bezoekers aantrekken om hen de unieke geschiedenis van de Aboriginals bij te brengen.
-
-<Australasia - Fun at the Beach>
-STR_SCNR    :Australië - Plezier op het strand
-STR_PARK    :Beach Barbecue Blast
-STR_DTLS    :Het themapark van een lokale ondernemer is over de kop gegaan. Je bezit zelf al een klein park en hebt het andere park overgenomen. Combineer beide parken tot één groot park.
-
-<Europe - European Cultural Festival>
-STR_SCNR    :Europa - Europees Cultureel Festival
-STR_PARK    :European Extravaganza
-STR_DTLS    :Je bent aangesteld om het beheer over een attractiepark over de Europese cultuur over te nemen. Je moet het aantal bezoekers verhogen om de EU-subsidie terug te betalen voor het einde van de huidige termijn van het Europees Parlement.
-
-<Europe - Renovation>
-STR_SCNR    :Europa - Renovatie
-STR_PARK    :From The Ashes
-STR_DTLS    :Een oud park is vervallen. Je hebt een lening van de Europese Unie gekregen om het troosteloze terrein weer in oude luister te herstellen! Je moet het park renoveren en de lening terugbetalen.
-
-<N. America - Extreme Hawaiian Island>
-STR_SCNR    :Noord-Amerika - Extreem Hawaiiaans eiland
-STR_PARK    :Wacky Waikiki
-STR_DTLS    :De bevolking van Hawaii wil wel eens iets spannenders dan surfen. Houd dit in het achterhoofd bij het bouwen van een park om zoveel mogelijk mogelijk toeristen aan te trekken.
-
-<North America - Grand Canyon>
-STR_SCNR    :Noord-Amerika - Grand Canyon
-STR_PARK    :Canyon Calamities
-STR_DTLS    :Je moet een park bouwen op de beperkte ruimte aan weerszijden van dit natuurschoon. Hierbij heb je de mogelijkheid om land te kopen van de indianen.
-
-<North America - Rollercoaster Heaven>
-STR_SCNR    :Noord-Amerika - Rollercoaster Heaven
-STR_PARK    :Rollercoaster Heaven
-STR_DTLS    :Je bent een succesvol zakenman op een lange sabbatical. Die wil je gebruiken om het stadspark om te toveren in een achtbanenparadijs. Geld speelt geen rol!
-
-<South America - Inca Lost City>
-STR_SCNR    :Zuid-Amerika - Verloren Incastad
-STR_PARK    :Lost City Founder
-STR_DTLS    :Om nog meer toeristen te trekken moet je een park bouwen dat past bij de omgeving. Dat betekent ook dat er hoogtebeperkingen zijn.
-
-<South America - Rain Forest Plateau>
-STR_SCNR    :Zuid-Amerika - Regenwoudplateau
-STR_PARK    :Rainforest Romp
-STR_DTLS    :In het regenwoud is er niet veel plek. Je moet zo veel mogelijk in de open plek zien te persen om een goed alternatief voor de lokale houtindustrie te vormen.
-
-<South America - Rio Carnival>
-STR_SCNR    :Zuid-Amerika - Carnival van Rio
-STR_PARK    :Sugarloaf Shores
-STR_DTLS    :Je hebt een klein park in de buurt van Rio, maar de bank wil haar lening terug. Je moet je winst zien te verhogen om je schuld terug te betalen.
-
-## Time Twister
-<Dark Age - Castle>
-STR_SCNR    :Middeleeuwen - Kasteel
-STR_PARK    :Cliffside Castle
-STR_DTLS    :De leden van de lokale vereniging die oude veldslagen naspeelt nemen hun hobby serieus. Ze hebben jou de klus toevertrouwd om van Cliffside Castle een middeleeuws themapark te maken.
-
-<Dark Age - Robin Hood>
-STR_SCNR    :Middeleeuwen - Robin Hood
-STR_PARK    :Sherwood Forest
-STR_DTLS    :Om geld van de rijken naar de armen te brengen hebben jij en je Merry Men besloten een themapark te bouwen in Sherwood Forest.
-
-<Future - First Encounters>
-STR_SCNR    :Toekomst - Eerste ontmoeting
-STR_PARK    :Extraterrestrial Extravaganza
-STR_DTLS    :Er is leven ontdekt op een verre planeet! Bouw een buitenaards themapark om munt te slaan uit de onverwachte golf van interesse.
-
-<Future - Future World>
-STR_SCNR    :Toekomst - Stad van de toekomst
-STR_PARK    :Gemini City
-STR_DTLS    :Laat je inventieve, utopische visie van de toekomst zien! Bedenk een furistisch ontwerp met state-of-the-art attracties.
-
-<Mythological - Animatronic Film Set>
-STR_SCNR    :Mythologie - Animatronic-filmset
-STR_PARK    :Animatronic Antics
-STR_DTLS    :Je moet een bestaand pretpark, gebouwd op een oude filmset, beheren en verbeteren. Bouw een eerbetoon aan de pioniers van de stop-motionanimatie, die de wezens uit de mythologie tot leven brachten op het witte doek.
-
-<Mythological - Cradle of Civilisation>
-STR_SCNR    :Mythologie - Wieg van de beschaving
-STR_PARK    :Mythological Madness
-STR_DTLS    :Je bezit een eiland van grote archeologische waarde, dat je voor het nageslacht wilt beschermen. Dit wil je bekostigen door een park te bouwen met de mythologische geschiedenis van je eiland als thema.
-
-<Prehistoric - After the Asteroid>
-STR_SCNR    :Prehistorie - Na de meteoriet
-STR_PARK    :Crater Carnage
-STR_DTLS    :Je bezig een stoffige oude meteorietkrater. Als echte ondernemer heb je besloten om er een themapark van te maken en zo munt te slaan uit je (op het eerste gezicht) waardeloze land.
-
-<Prehistoric - Jurassic Safari>
-STR_SCNR    :Prehistorie - Jurasafari
-STR_PARK    :Coastersaurus
-STR_DTLS    :Je moet een themapark bouwen in Jurastijl. Om de bezoekers zo dicht mogelijk bij de exotische planten en dieren te laten komen, moeten je attracties over en door de vallei gaan lopen.
-
-<Prehistoric - Stone Age>
-STR_SCNR    :Prehistorie - Steentijd
-STR_PARK    :Rocky Rambles
-STR_DTLS    :Om te voorkomen dat er een snelweg wordt aangelegd en zo de mysterieuze prehistorische steencirkels te beschermen, moet je een winstgevend themapark bouwen. Het kan echter lastig worden om bezoekers aan te trekken, aangezien het terrein vrij ruw is.
-
-<Roaring Twenties - Prison Island>
-STR_SCNR    :Roaring Twenties - Alcatraz
-STR_PARK    :Alcatraz
-STR_DTLS    :Het beruchte gevangeniseiland, dat ooit volzat met illegale drankstokers en gangsters, is nu te koop. Je hebt besloten het te veranderen in een toeristentrekpleister. Geld speelt geen rol!
-
-<Roaring Twenties - Schneider Cup>
-STR_SCNR    :Roaring Twenties - Schneider Cup
-STR_PARK    :Schneider Shores
-STR_DTLS    :Het is al bijna 75 jaar geleden dat je grootvader de Schneider Cup won. Je hebt besloten zijn prestatie te eren met een themapark dat is geïnspireerd door de beroemde watervliegtuigenrace.
-
-<Roaring Twenties - Skyscrapers>
-STR_SCNR    :Roaring Twenties - Wolkenkrabbers
-STR_PARK    :Metropolis
-STR_DTLS    :Je bezit een lege kavel in de stad, tussen de laagbouw. Bouw een themapark van wolkenkrabbers, geïnspireerd door de artdecostijl van de jaren twintig.
-
-<Rock 'n' Roll - Flower Power>
-STR_SCNR    :Rock-’n-roll - Flower Power
-STR_PARK    :Woodstock
-STR_DTLS    :Een groot jaarlijks muziekfestival vindt plaats op jouw terrein. Bouw een hip themapark om het publiek van vrije geesten te vermaken.
-
-<Rock 'n' Roll - Rock 'n' Roll>
-STR_SCNR    :Rock-’n-roll - Rock-’n-roll
-STR_PARK    :Rock ’n’ Roll Revival
-STR_DTLS    :Dit verouderde themapark heeft betere tijden gekend. Geef het park een rock-’n-roll-makeover en verander het in een succesvolle onderneming.
-
-#OCC
-<Panda World>
-STR_SCNR    :Panda World
-STR_PARK    :Panda World
-STR_DTLS    :Voeg meer attracties toe aan dit park met pandathema, en trek meer bezoekers aan.
-
-##################################
-# Rides/attractions / Attracties #
-##################################
-
-# Boat Ride / Bootverhuur
-#CC
-[AE-SWIM]
-STR_NAME    :Zwembad
-STR_DESC    :Een steiger waarvan bezoekers het water in kunnen om een stukje te zwemmen. Door ‘The Amazing Earl’.
-STR_CPTY    :1 bezoeker per ‘boot’
-# End of Boat Ride / Bootverhuur
-
-# Space rings / Ruimteringen
-#CC
-[RIDE7MKY]
-STR_NAME    :Springkussens
-STR_DESC    :Bezoekers springen op en neer op met lucht gevulde kussens.
-STR_CPTY    :1 bezoeker per kussen
-# End of Space rings / Ruimteringen
-
-# Looping RC / Stalen achtbaan
-#CC
-[AE-MTRHN]
-STR_NAME    :Matterhorntrein
-STR_DESC    :Achtbaantrein in de stijl van de beroemde Matterhorn voor de 50e verjaardag van Disneyland. Door ‘The Amazing Earl’.
-STR_CPTY    :4 passagiers per karretje
-# End of Looping RC / Stalen achtbaan
-
-# Steeplechase (Single Rail RC)
-#CC
-[AE-REIND]
-STR_NAME    :Runaway Reindeer
-STR_DESC    :Passagiers zitten in paren op rendiervormige karretjes - compleet met knipperende rode neuzen. Door ‘The Amazing Earl’.
-STR_CPTY    :2 passagiers per rendier
-# End of Steeplechase (Single Rail RC)
-
-# Twist
-#CC
-[RIDE4MKY]
-STR_NAME    :Zweefmolen
-STR_DESC    :Passagiers zitten in stoeltjes die onder een molen hangen en naar buiten vliegen als deze gaat draaien.
-STR_CPTY    :18 passagiers
-
-#CC
-[AE-SWING]
-STR_NAME    :Zweefmolen
-STR_DESC    :Passagiers zitten in stoeltjes die onder een molen hangen en naar buiten vliegen als deze gaat draaien. Door ‘The Amazing Earl’.
-STR_CPTY    :18 passagiers
-# End of Twist
-
-####################################
-# Shops/stalls / Winkels/kraampjes #
-####################################
-
-# Information Kiosks
-#CC
-[INFO1MKY]
-STR_NAME    :Informatiekiosk
-STR_DESC    :Een kiosk waar bezoekers kaarten van het park en paraplu’s kunnen kopen.
-
-# End of Information Kiosks
-
-#################
-# Small objects #
-#################
-
-## Start CC
-# TT Glass Roofs
-[TTRFGL01]
-STR_NAME    :Glazen dak
-
-[TTRFGL02]
-STR_NAME    :Glazen dak
-
-[TTRFGL03]
-STR_NAME    :Glazen dak
-
-## TT Pirate roofs and eaves
-[TTPIRF02]
-STR_NAME    :Dak
-
-[TTPIRF03]
-STR_NAME    :Dak
-
-[TTPIRF04]
-STR_NAME    :Dak
-
-[TTPIRF05]
-STR_NAME    :Dak
-
-[TTPIRF07]
-STR_NAME    :Dak
-
-[TTPIRF08]
-STR_NAME    :Dak
-
-[TTPRF09]
-STR_NAME    :Dak
-
-[TTPRF10]
-STR_NAME    :Dak
-
-[TTPRF11]
-STR_NAME    :Dak
-
-# TT wooden (Mine) roofs
-[TTRFWD01]
-STR_NAME    :Dak
-
-[TTRFWD02]
-STR_NAME    :Dak
-
-[TTRFWD03]
-STR_NAME    :Dak
-
-[TTRFWD04]
-STR_NAME    :Dak
-
-[TTRFWD05]
-STR_NAME    :Dak
-
-[TTRFWD06]
-STR_NAME    :Dak
-
-[TTRFWD07]
-STR_NAME    :Dak
-
-[TTRFWD08]
-STR_NAME    :Dak
-
-[ACWW33]
-STR_NAME    :Muur van houten palen
-
-[ACWWF32]
-STR_NAME    :Hek van houten palen
-
-## End CC
-
-
+STR_6462    :Plezier
+STR_6463    :Plezier: {COMMA2DP32}
+STR_6464    :Intensiteit
+STR_6465    :Intensiteit: {COMMA2DP32}
+STR_6466    :Misselijkheid
+STR_6467    :Misselijkheid: {COMMA2DP32}
+STR_6468    :Nog onbekend
+STR_6469    :Kleiner werkgebied aanpassen
+STR_6470    :Groter werkgebied aanpassen
+STR_6471    :Doorzichtige beplanting
+STR_6472    :Doorzichtige voertuigen
+STR_6473    :Doorzichtige ondersteuningen
+STR_6474    :Onzichtbare bezoekers
+STR_6475    :Onzichtbare werknemers
+STR_6476    :Onzichtbare beplanting
+STR_6477    :Onzichtbaar decor
+STR_6478    :Onzichtbare paden
+STR_6479    :Onzichtbare attracties
+STR_6480    :Onzichtbare voertuigen
+STR_6481    :Transparantie-opties
+STR_6482    :Transparantie-opties
+STR_6483    :Transparantie-opties openen
+STR_6484    :Doorzichtigheid beplanting wisselen
+STR_6485    :Doorzichtigheid voertuigen wisselen
+STR_6486    :Zichtbaarheid bezoekers wisselen
+STR_6487    :Zichtbaarheid werknemers wisselen
+STR_6488    :{RED}De bezoekers klagen over de lange wachttijden in je park.{NEWLINE}Overweeg het verkorten van wachtgebieden of het verlagen van doorlooptijden.
+STR_6489    :Fout: parkversie niet compatibel
+STR_6490    :Waarschuwing: Park-versie is deels compatibel
+STR_6491    :Dit park is opgeslagen in een latere versie van OpenRCT2. Het park is opgeslagen in v{INT32} en vereist minimaal v{INT32}. Je huidige versie is v{INT32}.
+STR_6492    :Dit park is opgeslagen in een vorige versie van OpenRCT2 en kan niet worden geopend met deze versie van OpenRCT2. Parkversie is v{INT32}.
+STR_6493    :Dit park is opgeslagen in een latere versie van OpenRCT2, sommige gegevens kunnen verloren gaan. Parkversie is v{INT32}, je huidige versie is v{INT32}.
+STR_6494    :Groeperen op baantype
+STR_6495    :Groepeert attracties per baantype. Schakel dit uit om elk voertuig apart te tonen.
+STR_6496    :{WINDOW_COLOUR_2}{STRINGID}
+STR_6497    :Klik op een vakje om de elementen erop te tonen.{NEWLINE}Om direct een element op de kaart te selecteren klik je erop terwijl je Ctrl indrukt houdt.
+STR_6498    :Schakel dit in om de kaart vierkant te houden.
+STR_6499    :Voertuigtype niet ondersteund door bestandsindeling voor baanontwerpen.
+STR_6500    :Baanelementen niet ondersteund door bestandsindeling voor baanontwerpen.
+STR_6501    :Willekeurig
+STR_6502    :Voer een waarde in tussen {COMMA16} en {COMMA16}
+STR_6503    :Er moet minstens één stationstype geselecteerd zijn.
+STR_6504    :Er moet minstens één terreinoppervlak geselecteerd zijn.
+STR_6505    :Er moet minstens één terreinzijkant geselecteerd zijn.
+STR_6506    :Grote halve schroef (links)
+STR_6507    :Grote halve schroef (rechts)
+STR_6508    :Middelgrote halve looping (links)
+STR_6509    :Middelgrote halve looping (rechts)
+STR_6510    :0 g-rol (links)
+STR_6511    :0 g-rol (rechts)
+STR_6512    :Grote 0 g-rol (links)
+STR_6513    :Grote 0 g-rol (rechts)
+STR_6514    :Ongeldige hoogte!
+STR_6515    :{BLACK}RollerCoaster Tycoon 1 is niet gekoppeld, OpenRCT2 zal terugvallen op alternatieve afbeeldingen.
+STR_6516    :Eén of meer toegevoegde objecten vereist een koppeling met RollerCoaster Tycoon 1 voor een juiste weergave. OpenRCT2 zal terugvallen op alternatieve afbeeldingen.
+STR_6517    :Eén of meer objecten in dit park vereist een koppeling met RollerCoaster Tycoon 1 voor een juiste weergave. OpenRCT2 zal terugvallen op alternatieve afbeeldingen.
+STR_6518    :{BLACK}Beweeg de aanwijzer over een scenario om de beschrijving en doelstelling weer te geven. Klik erop om een spel te starten.
+STR_6519    :Extra’s
+STR_6520    :Assetpacks
+STR_6521    :Lage prioriteit
+STR_6522    :Hoge prioriteit
+STR_6523    :Prioriteit van het geselecteerde assetpack verlagen.
+STR_6524    :Prioriteit van het geselecteerde assetpack verhogen.
+STR_6525    :Assets in het spel opnieuw laden, op basis van de geselecteerde assetpacks.
+STR_6526    :(basisgraphics, -muziek en -geluidseffecten)
+STR_6527    :Wedstrijden
+STR_6528    :Ongeldige baanparameters!
+STR_6529    :Ongeldige parameter voor kleurenschema!
+STR_6530    :User Created Expansion Set
+STR_6531    :The Time Machine
+STR_6532    :Katy’s Dreamworld
+STR_6533    :{WINDOW_COLOUR_2}Plezierfactor: {BLACK}-{COMMA16}%
+STR_6534    :{WINDOW_COLOUR_2}Intensiteitsfactor: {BLACK}-{COMMA16}%
+STR_6535    :{WINDOW_COLOUR_2}Misselijkheidsfactor: {BLACK}-{COMMA16}%
+STR_6536    :Dit park is opgeslagen in een latere versie van OpenRCT2. Het park is opgeslagen in v{INT32}, je huidige versie is v{INT32}.
+STR_6537    :Gewone paden als wachtrij bruikbaar maken
+STR_6538    :Zorgt ervoor dat je wachtrijen kunt bouwen met paden die daar niet voor bedoeld zijn.
+STR_6539    :Rem is gesloten
+STR_6540    :{WINDOW_COLOUR_2}Onze dank gaat uit naar de volgende bedrijven voor hun toestemming om voertuigen op hun ontwerpen te baseren:
+STR_6541    :{WINDOW_COLOUR_2}Rocky Mountain Construction Group, Josef Wiegand GmbH & Co. KG, Intamin Amusement Rides Int. Corp. Est.
+STR_6542    :Deelnemers
+STR_6543    :Deelnemers…
+STR_6544    :Lening kan niet negatief zijn!
+STR_6545    :Renteberekening van RCT1 gebruiken
+STR_6546    :Gebruik de renteberekening van RollerCoaster Tycoon 1, dat een vast rentepercentage van ongeveer 1,33% hanteerde.
+STR_6547    :Alle decorobjecten
+STR_6548    :Leuningen tonen op splitsingen/kruisingen
+STR_6549    :Compatibility-objecten kunnen niet worden geselecteerd!
+STR_6550    :Dit onderdeel is aanwezig voor backwards compatibility met verouderde of beschadigde objecten. Het kan enkel worden gedeselecteerd. 
+STR_6551    :Legergroen
+STR_6552    :Meloengroen
+STR_6553    :Eiken
+STR_6554    :Roodbruin
+STR_6555    :Koraalroze
+STR_6556    :Bosgroen
+STR_6557    :Chartreuse
+STR_6558    :Jachtgroen
+STR_6559    :Celadon
+STR_6560    :Limoengroen
+STR_6561    :Sepia
+STR_6562    :Perzik
+STR_6563    :Pastelpaars
+STR_6564    :Vert émeraude
+STR_6565    :Zeegroen
+STR_6566    :Violet
+STR_6567    :Lavendel
+STR_6568    :Pasteloranje
+STR_6569    :Diep water
+STR_6570    :Pastelroze
+STR_6571    :Omber
+STR_6572    :Beige
+STR_6573    :Doorzichtig
+STR_6574    :Leegte
+STR_6575    :Speciale kleuren tonen
+STR_6576    :Toont speciale kleuren (zoals doorzichtig en leegte) in de kleurenkiezer.
+STR_6577    :Snelh. blokremmen
+STR_6578    :Stelt de doorlaatsnelheid van de blokrem in. Deze snelheid geldt ook voor de remmen die voor deze blokrem geplaatst zijn (als de blokrem open staat).
+STR_6579    :De snelheden van de blokremmen zullen niet worden opgeslagen in het baanontwerp.
+STR_6580    :Toetsen herstellen
+STR_6581    :Weet je zeker dat je alle sneltoetsen op dit tabblad weer wilt terugzetten op de standaardwaarden?
+STR_6582    :Sneltoetsen openen
+STR_6583    :{WINDOW_COLOUR_2}Achterstevoren
+STR_6584    :Keert de trein om, zodat hij achterstevoren over de baan rijdt.
+STR_6585    :Kan dit niet wijzigen…
+STR_6586    :OpenRCT2
+STR_6587    :De titelmuziek van OpenRCT2 is gemaakt door Allister Brimble,{NEWLINE}en beschikbaar gemaakt onder de CC BY-SA 4.0-licentie.
+STR_6588    :Met dank aan Herman Riddering, die ons toestemming gaf om zijn 35er Voigt op te nemen.
+STR_6589    :Vensterknoppen aan de linkerkant
+STR_6590    :Verplaatst de vensterknoppen (o.a. voor het sluiten van het venster), die normaal gesproken rechts staan, naar de linkerkant van de titelbalk.
+STR_6591    :Deze werknemer is momenteel bezig met het repareren van een attractie en kan daarom niet worden ontslagen.
+STR_6592    :Deze werknemer is momenteel bezig met het inspecteren van een attractie en kan daarom niet worden ontslagen.
+STR_6593    :Parkafscheiding verwijderen
+STR_6594    :Vakinspecteur: Helling muur instellen
+STR_6595    :{WINDOW_COLOUR_2}Auteur: {BLACK}{STRING}
+STR_6596    :{WINDOW_COLOUR_2}Auteurs: {BLACK}{STRING}
+STR_6597    :Ongeldige parameter.
+STR_6598    :Waarde valt buiten bereik.
+STR_6599    :Spookelement niet gevonden.
+STR_6600    :Ballon niet gevonden.
+STR_6601    :Personeelslid niet gevonden.
+STR_6602    :Attractie niet gevonden.
+STR_6603    :Attractie-object niet gevonden.
+STR_6604    :Speler niet gevonden.
+STR_6605    :Ingangselement niet gevonden.
+STR_6606    :Oppervlakte-element niet gevonden.
+STR_6607    :Kaartelement niet gevonden.
+STR_6608    :Baanelement niet gevonden.
+STR_6609    :Baanblok niet gevonden.
+STR_6610    :Padelement niet gevonden.
+STR_6611    :Muurelement niet gevonden.
+STR_6612    :Lichtkrantelement niet gevonden.
+STR_6613    :Object opnieuw laden
+STR_6614    :Kan de toegangsprijs niet aanpassen
+STR_6615    :Dit baantype vereist water
+STR_6616    :Ongeldige actie voor dit type werknemer
+STR_6617    :Kan een kaartelement niet met zichzelf verwisselen
+STR_6618    :Kan de beperkingen van dit object niet aanpassen…
+STR_6619    :Dit objecttype kan niet worden beperkt!
+STR_6620    :Object niet gevonden!
+STR_6621    :Beperken
+STR_6622    :Maakt het object enkel beschikbaar in de scenariobewerker en zandbakmodus.
+STR_6623    :Voer ‘help’ in voor een lijst met beschikbare commando’s. Voer ‘hide’ in om de console te verbergen.
+STR_6624    :Vakinspecteur: Elementen sorteren
+STR_6625    :Ongeldige kleur
+STR_6626    :Animatie is in spiegelbeeld
+STR_6627    :Snelheid is te hoog!
+STR_6628    :Kan alleen op de rand geplaatst worden!
+STR_6629    :Werkbalkknoppen horizontaal centreren
+STR_6630    :Hiermee worden de knoppen van de bovenste werkbalk in het midden geplaatst, in plaats van aan weerszijden.
+STR_6631    :Bezig met laden…
+STR_6632    :Objecten checken…
+STR_6633    :Scenario’s checken…
+STR_6634    :Baanontwerpen checken…
+STR_6635    :Assetpacks checken…
+STR_6636    :Titelpresentaties checken…
+STR_6637    :Titelpresentatie wordt geladen…
+STR_6638    :Grote UI
+STR_6639    :Voert een aantal veranderingen door om het spel gemakkelijker te kunnen bedienen met een touchscreen.
+STR_6640    :Assetpacks instellen…
+STR_6641    :Laadscherm
+STR_6642    :{STRING} ({COMMA32} / {COMMA32})
+STR_6643    :{STRING} ({COMMA32} / {COMMA32} KiB)
+STR_6644    :Touch-verbeteringen
+STR_6645    :Maakt sommige UI-elementen groter zodat ze gemakkelijker aan te klikken/tikken zijn.
+STR_6646    :Gemaakt door: {STRING}
+STR_6647    :Gemaakt door: {STRING}
+STR_6648    :Plugin-engine laden…
+STR_6649    :Scenario laden…
+STR_6650    :Opgeslagen park laden…
+STR_6651    :{STRING} ({COMMA32}%)
+STR_6652    :Foutmeldingen
+STR_6653    :Alle bronnen
+STR_6654    :{POP16}{UINT16} bronnen
+STR_6655    :Enkel ‘{POP16}{STRINGID}’
+STR_6656    :Verwijdert alle parkafscheidingen.
+STR_6657    :Niet in bezit
+STR_6658    :Land dat niet bij het park hoort en ook niet te koop is.
+STR_6659    :Bezoekers negeren prijzen
+STR_6660    :Als deze optie is ingeschakeld zijn bezoekers bereid om elke prijs te betalen voor attracties en kraampjes.
+STR_6661    :Alles willek.
+STR_6662    :Geeft elk voertuig een willekeurige kleur.
+STR_6663    :Datumcheats
+STR_6664    :Datumcheats tonen
+STR_6665    :Natuur- en weercheats
+STR_6666    :Natuur- en weercheats tonen
+STR_6667    :Fauna
+STR_6668    :Werknemerscheats
+STR_6669    :Werknemerscheats tonen
+STR_6670    :Gedrag bezoekers
+STR_6671    :‘Echte’ namen van werknemers tonen
+STR_6672    :Wissel tussen het tonen van ‘echte’ namen van werknemers en werknemersnummers.
+STR_6673    :Doorschijnend
+STR_6674    :{MONTH}, jaar {COMMA16}
+STR_6675    :Bezoekersnamen
+STR_6676    :Er moet tenminste één object voor bezoekersnamen zijn geselecteerd.
+STR_6677    :Stranden toevoegen aan meer- en rivieroevers
+STR_6678    :Bronbestand:
+STR_6679    :Vlak land
+STR_6680    :Simplex-ruis
+STR_6681    :Hoogtekaart
+STR_6682    :Mapgenerator - Generator
+STR_6683    :Mapgenerator - Terrein
+STR_6684    :Mapgenerator - Water
+STR_6685    :Mapgenerator - Bossen
+STR_6686    :Ratio bomen/land:
+STR_6687    :Minimale boomhoogte:
+STR_6688    :Maximale boomhoogte:
+STR_6689    :{UINT16}%
+STR_6690    :Minimumlandhoogte
+STR_6691    :Voeg een minimumhoogte in tussen {COMMA16} en {COMMA16}
+STR_6692    :Maximumlandhoogte
+STR_6693    :Voeg een maximumhoogte in tussenn {COMMA16} en {COMMA16}
+STR_6694    :Minimale boomhoogte
+STR_6695    :Voeg een minimumhoogte in tussen {COMMA16} en {COMMA16}
+STR_6696    :Maximale boomhoogte
+STR_6697    :Voeg een maximumhoogte in tussenn {COMMA16} en {COMMA16}
+STR_6698    :Ratio bomen/land
+STR_6699    :Voer een ratio in tussen {COMMA16} en {COMMA16}
+STR_6700    :Basisfrequentie simplex-ruis
+STR_6701    :Voer een basisfrequentie in tussen {COMMA2DP32} en {COMMA2DP32}
+STR_6702    :Simplex-octaven
+STR_6703    :Voeg een aantal octaven in tussen {COMMA16} and {COMMA16}
+STR_6704    :{COMMA2DP32}
+STR_6705    :Bladeren…
+STR_6706    :{WINDOW_COLOUR_2}Geselecteerd bestand: {BLACK}{STRING}
+STR_6707    :(n.v.t.)
+STR_6708    :Afrondsterkte
+STR_6709    :Voer een afrondsterkte in tussen {COMMA16} en {COMMA16}
+STR_6710    :Stabiel sorteren
+STR_6711    :Bestandsnaam:
+STR_6712    :Opslaan
+STR_6713    :{COMMA32} {STRINGID}
+STR_6714    :Naam
+STR_6715    :Gewijzigd
+STR_6716    :Grootte
+STR_6717    :Grootte {STRINGID}

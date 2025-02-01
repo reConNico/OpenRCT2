@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,47 +9,78 @@
 
 #pragma once
 
-#include "../common.h"
+#include "../core/StringTypes.h"
 
+#include <cstdint>
 #include <string_view>
+
+using colour_t = uint8_t;
+using PaletteIndex = uint8_t;
 
 /**
  * Colour IDs as used by the colour dropdown, NOT palette indices.
  */
 enum : colour_t
 {
-    COLOUR_BLACK,
-    COLOUR_GREY,
-    COLOUR_WHITE,
-    COLOUR_DARK_PURPLE,
-    COLOUR_LIGHT_PURPLE,
-    COLOUR_BRIGHT_PURPLE,
-    COLOUR_DARK_BLUE,
-    COLOUR_LIGHT_BLUE,
-    COLOUR_ICY_BLUE,
-    COLOUR_TEAL,
-    COLOUR_AQUAMARINE,
-    COLOUR_SATURATED_GREEN,
-    COLOUR_DARK_GREEN,
-    COLOUR_MOSS_GREEN,
-    COLOUR_BRIGHT_GREEN,
-    COLOUR_OLIVE_GREEN,
-    COLOUR_DARK_OLIVE_GREEN,
-    COLOUR_BRIGHT_YELLOW,
-    COLOUR_YELLOW,
-    COLOUR_DARK_YELLOW,
-    COLOUR_LIGHT_ORANGE,
-    COLOUR_DARK_ORANGE,
-    COLOUR_LIGHT_BROWN,
-    COLOUR_SATURATED_BROWN,
-    COLOUR_DARK_BROWN,
-    COLOUR_SALMON_PINK,
-    COLOUR_BORDEAUX_RED,
-    COLOUR_SATURATED_RED,
-    COLOUR_BRIGHT_RED,
-    COLOUR_DARK_PINK,
-    COLOUR_BRIGHT_PINK,
-    COLOUR_LIGHT_PINK,
+    // Original Colours
+    COLOUR_BLACK,            // Black
+    COLOUR_GREY,             // Grey
+    COLOUR_WHITE,            // White
+    COLOUR_DARK_PURPLE,      // Dark purple
+    COLOUR_LIGHT_PURPLE,     // Light purple
+    COLOUR_BRIGHT_PURPLE,    // Bright purple
+    COLOUR_DARK_BLUE,        // Dark blue
+    COLOUR_LIGHT_BLUE,       // Light blue
+    COLOUR_ICY_BLUE,         // Icy blue
+    COLOUR_TEAL,             // Dark water
+    COLOUR_AQUAMARINE,       // Light water
+    COLOUR_SATURATED_GREEN,  // Saturated green
+    COLOUR_DARK_GREEN,       // Dark green
+    COLOUR_MOSS_GREEN,       // Moss green
+    COLOUR_BRIGHT_GREEN,     // Bright green
+    COLOUR_OLIVE_GREEN,      // Olive green
+    COLOUR_DARK_OLIVE_GREEN, // Dark olive green
+    COLOUR_BRIGHT_YELLOW,    // Bright yellow
+    COLOUR_YELLOW,           // Yellow
+    COLOUR_DARK_YELLOW,      // Dark yellow
+    COLOUR_LIGHT_ORANGE,     // Light orange
+    COLOUR_DARK_ORANGE,      // Dark orange
+    COLOUR_LIGHT_BROWN,      // Light brown
+    COLOUR_SATURATED_BROWN,  // Saturated brown
+    COLOUR_DARK_BROWN,       // Dark brown
+    COLOUR_SALMON_PINK,      // Salmon pink
+    COLOUR_BORDEAUX_RED,     // Bordeaux red
+    COLOUR_SATURATED_RED,    // Saturated red
+    COLOUR_BRIGHT_RED,       // Bright red
+    COLOUR_DARK_PINK,        // Dark pink
+    COLOUR_BRIGHT_PINK,      // Bright pink
+    COLOUR_LIGHT_PINK,       // Light pink
+
+    // Extended Colour Set
+    COLOUR_DARK_OLIVE_DARK,        // Army green
+    COLOUR_DARK_OLIVE_LIGHT,       // Honeydew
+    COLOUR_SATURATED_BROWN_LIGHT,  // Tan
+    COLOUR_BORDEAUX_RED_DARK,      // Maroon
+    COLOUR_BORDEAUX_RED_LIGHT,     // Coral pink
+    COLOUR_GRASS_GREEN_DARK,       // Forest green
+    COLOUR_GRASS_GREEN_LIGHT,      // Chartreuse
+    COLOUR_OLIVE_DARK,             // Hunter green
+    COLOUR_OLIVE_LIGHT,            // Celadon
+    COLOUR_SATURATED_GREEN_LIGHT,  // Lime green
+    COLOUR_TAN_DARK,               // Sepia
+    COLOUR_TAN_LIGHT,              // Peach
+    COLOUR_DULL_PURPLE_LIGHT,      // Periwinkle
+    COLOUR_DULL_GREEN_DARK,        // Viridian
+    COLOUR_DULL_GREEN_LIGHT,       // Seafoam green
+    COLOUR_SATURATED_PURPLE_DARK,  // Violet
+    COLOUR_SATURATED_PURPLE_LIGHT, // Lavender
+    COLOUR_ORANGE_LIGHT,           // Pastel orange
+    COLOUR_AQUA_DARK,              // Deep water
+    COLOUR_MAGENTA_LIGHT,          // Pastel pink
+    COLOUR_DULL_BROWN_DARK,        // Umber
+    COLOUR_DULL_BROWN_LIGHT,       // Beige
+    COLOUR_INVISIBLE,              // Invisible
+    COLOUR_VOID,                   // Void
 
     COLOUR_COUNT,
 
@@ -62,10 +93,11 @@ enum : colour_t
 enum
 {
     COLOUR_DARK_WATER = 9,
-    COLOUR_LIGHT_WATER = 10
+    COLOUR_LIGHT_WATER = 10,
+    COLOUR_DEEP_WATER = 50
 };
 
-enum : uint8_t
+enum : PaletteIndex
 {
     PALETTE_INDEX_0 = 0,     // Transparent
     PALETTE_INDEX_10 = 10,   // Black (0-dark), Dark grey (0)
@@ -155,67 +187,87 @@ enum : uint8_t
     PALETTE_INDEX_254 = 254, // Primary remap 11
 };
 
-constexpr size_t PALETTE_COUNT = 256;
+constexpr size_t kPaletteCount = 256;
 
-constexpr uint8_t PALETTE_OFFSET_DYNAMIC = PALETTE_INDEX_10;
-constexpr uint8_t PALETTE_LENGTH_DYNAMIC = 236;
+constexpr uint8_t kPaletteOffsetDynamic = PALETTE_INDEX_10;
+constexpr uint8_t kPaletteLengthDynamic = 236;
 
-constexpr uint8_t PALETTE_OFFSET_WATER_WAVES = PALETTE_INDEX_230;
-constexpr uint8_t PALETTE_OFFSET_WATER_SPARKLES = PALETTE_INDEX_235;
-constexpr uint8_t PALETTE_LENGTH_WATER_WAVES = 5;
-constexpr uint8_t PALETTE_LENGTH_WATER_SPARKLES = 5;
+constexpr uint8_t kPaletteOffsetWaterWaves = PALETTE_INDEX_230;
+constexpr uint8_t kPaletteOffsetWaterSparkles = PALETTE_INDEX_235;
+constexpr uint8_t kPaletteLengthWaterWaves = 5;
+constexpr uint8_t kPaletteLengthWaterSparkles = 5;
 
-constexpr uint8_t PALETTE_OFFSET_TRACK_RAILS = PALETTE_INDEX_240;
-constexpr uint8_t PALETTE_LENGTH_TRACK_RAILS = 3;
+constexpr uint8_t kPaletteOffsetTrackRails = PALETTE_INDEX_240;
+constexpr uint8_t kPaletteLengthTrackRails = 3;
 
-constexpr uint8_t PALETTE_OFFSET_REMAP_PRIMARY = PALETTE_INDEX_243;
-constexpr uint8_t PALETTE_OFFSET_REMAP_SECONDARY = PALETTE_INDEX_202;
-constexpr uint8_t PALETTE_OFFSET_REMAP_TERTIARY = PALETTE_INDEX_46;
-constexpr uint8_t PALETTE_LENGTH_REMAP = 12;
+constexpr uint8_t kPaletteOffsetRemapPrimary = PALETTE_INDEX_243;
+constexpr uint8_t kPaletteOffsetRemapSecondary = PALETTE_INDEX_202;
+constexpr uint8_t kPaletteOffsetRemapTertiary = PALETTE_INDEX_46;
+constexpr uint8_t kPaletteLengthRemap = 12;
 
-constexpr uint8_t PALETTE_OFFSET_ANIMATED = PALETTE_INDEX_230;
-constexpr uint8_t PALETTE_LENGTH_ANIMATED = 16;
+constexpr uint8_t kPaletteOffsetAnimated = PALETTE_INDEX_230;
+constexpr uint8_t kPaletteLengthAnimated = 16;
 
-#define TEXT_COLOUR_254 (254)
-#define TEXT_COLOUR_255 (255)
+constexpr uint8_t kColourNumOriginal = 32;
+constexpr uint8_t kColourNumNormal = 54;
 
-enum
+static constexpr uint8_t kLegacyColourFlagTranslucent = (1 << 7);
+
+constexpr colour_t kTextColour254 = 254;
+constexpr colour_t kTextColour255 = 255;
+
+enum class ColourFlag : uint8_t
 {
-    COLOUR_FLAG_OUTLINE = (1 << 5),
-    COLOUR_FLAG_INSET = (1 << 6), // 64, 0x40
-    COLOUR_FLAG_TRANSLUCENT = (1 << 7),
-    COLOUR_FLAG_8 = (1 << 8)
+    translucent,
+    inset,
+    withOutline,
 };
 
-#define TRANSLUCENT(x) ((x) | COLOUR_FLAG_TRANSLUCENT)
-#define NOT_TRANSLUCENT(x) ((x) & ~COLOUR_FLAG_TRANSLUCENT)
-#define BASE_COLOUR(x) ((x)&0x1F)
-
-struct rct_colour_map
+struct ColourWithFlags
 {
-    uint8_t colour_0;
-    uint8_t colour_1;
-    uint8_t darkest;
-    uint8_t darker;
-    uint8_t dark;
-    uint8_t mid_dark;
-    uint8_t mid_light;
-    uint8_t light;
-    uint8_t lighter;
-    uint8_t lightest;
-    uint8_t colour_10;
-    uint8_t colour_11;
+    colour_t colour{};
+    uint8_t flags{};
+
+    bool hasFlag(ColourFlag flag) const;
+
+    void setFlag(ColourFlag flag, bool on);
+
+    ColourWithFlags withFlag(ColourFlag flag, bool on) const;
+
+    static ColourWithFlags fromLegacy(uint8_t legacy);
+
+    ColourWithFlags& operator=(colour_t rhs);
 };
 
-extern rct_colour_map ColourMapA[COLOUR_COUNT];
+struct ColourShadeMap
+{
+    PaletteIndex colour_0;
+    PaletteIndex colour_1;
+    PaletteIndex darkest;
+    PaletteIndex darker;
+    PaletteIndex dark;
+    PaletteIndex mid_dark;
+    PaletteIndex mid_light;
+    PaletteIndex light;
+    PaletteIndex lighter;
+    PaletteIndex lightest;
+    PaletteIndex colour_10;
+    PaletteIndex colour_11;
+};
 
-void colours_init_maps();
+extern ColourShadeMap ColourMapA[COLOUR_COUNT];
 
-namespace Colour
+void ColoursInitMaps();
+
+namespace OpenRCT2::Colour
 {
     colour_t FromString(std::string_view s, colour_t defaultValue = COLOUR_BLACK);
-}
+    u8string ToString(colour_t colour);
+} // namespace OpenRCT2::Colour
 
 #ifndef NO_TTF
-uint8_t blendColours(const uint8_t paletteIndex1, const uint8_t paletteIndex2);
+uint8_t BlendColours(const uint8_t paletteIndex1, const uint8_t paletteIndex2);
 #endif
+
+typedef uint8_t BlendColourMapType[kPaletteCount][kPaletteCount];
+BlendColourMapType* GetBlendColourMap();

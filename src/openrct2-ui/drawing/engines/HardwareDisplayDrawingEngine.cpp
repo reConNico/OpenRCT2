@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,9 +11,11 @@
 
 #include <SDL.h>
 #include <cmath>
+#include <memory>
+#include <openrct2/Diagnostic.h>
 #include <openrct2/Game.h>
-#include <openrct2/common.h>
 #include <openrct2/config/Config.h>
+#include <openrct2/core/Guard.hpp>
 #include <openrct2/drawing/IDrawingEngine.h>
 #include <openrct2/drawing/LightFX.h>
 #include <openrct2/drawing/X8DrawingEngine.h>
@@ -28,7 +30,7 @@ using namespace OpenRCT2::Ui;
 class HardwareDisplayDrawingEngine final : public X8DrawingEngine
 {
 private:
-    constexpr static uint32_t DIRTY_VISUAL_TIME = 32;
+    constexpr static uint32_t kDirtyVisualTime = 32;
 
     std::shared_ptr<IUiContext> const _uiContext;
     SDL_Window* _window = nullptr;
@@ -37,9 +39,7 @@ private:
     SDL_Texture* _scaledScreenTexture = nullptr;
     SDL_PixelFormat* _screenTextureFormat = nullptr;
     uint32_t _paletteHWMapped[256] = { 0 };
-#ifdef __ENABLE_LIGHTFX__
     uint32_t _lightPaletteHWMapped[256] = { 0 };
-#endif
 
     // Steam overlay checking
     uint32_t _pixelBeforeOverlay = 0;
@@ -62,6 +62,14 @@ public:
 
     ~HardwareDisplayDrawingEngine() override
     {
+        if (_screenTexture != nullptr)
+        {
+            SDL_DestroyTexture(_screenTexture);
+        }
+        if (_scaledScreenTexture != nullptr)
+        {
+            SDL_DestroyTexture(_scaledScreenTexture);
+        }
         SDL_FreeFormat(_screenTextureFormat);
         SDL_DestroyRenderer(_sdlRenderer);
     }
@@ -76,11 +84,15 @@ public:
         if (_useVsync != vsync)
         {
             _useVsync = vsync;
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+            SDL_RenderSetVSync(_sdlRenderer, vsync ? 1 : 0);
+#else
             SDL_DestroyRenderer(_sdlRenderer);
             _screenTexture = nullptr;
             _scaledScreenTexture = nullptr;
             Initialise();
             Resize(_uiContext->GetWidth(), _uiContext->GetHeight());
+#endif
         }
     }
 
@@ -101,7 +113,7 @@ public:
         int32_t result = SDL_GetRendererInfo(_sdlRenderer, &rendererInfo);
         if (result < 0)
         {
-            log_warning("HWDisplayDrawingEngine::Resize error: %s", SDL_GetError());
+            LOG_WARNING("HWDisplayDrawingEngine::Resize error: %s", SDL_GetError());
             return;
         }
         uint32_t pixelFormat = SDL_PIXELFORMAT_UNKNOWN;
@@ -136,16 +148,29 @@ public:
             char scaleQualityBuffer[4];
             snprintf(scaleQualityBuffer, sizeof(scaleQualityBuffer), "%d", static_cast<int32_t>(scaleQuality));
             SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+
             _screenTexture = SDL_CreateTexture(_sdlRenderer, pixelFormat, SDL_TEXTUREACCESS_STREAMING, width, height);
+            Guard::Assert(
+                _screenTexture != nullptr, "Failed to create unscaled screen texture (%ux%u, pixelFormat = %u): %s", width,
+                height, pixelFormat, SDL_GetError());
+
             SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, scaleQualityBuffer);
 
-            uint32_t scale = std::ceil(gConfigGeneral.window_scale);
+            uint32_t scale = std::ceil(Config::Get().general.WindowScale);
             _scaledScreenTexture = SDL_CreateTexture(
                 _sdlRenderer, pixelFormat, SDL_TEXTUREACCESS_TARGET, width * scale, height * scale);
+
+            Guard::Assert(
+                _scaledScreenTexture != nullptr,
+                "Failed to create scaled screen texture (%ux%u, scale = %u, pixelFormat = %u): %s", width, height, scale,
+                pixelFormat, SDL_GetError());
         }
         else
         {
             _screenTexture = SDL_CreateTexture(_sdlRenderer, pixelFormat, SDL_TEXTUREACCESS_STREAMING, width, height);
+            Guard::Assert(
+                _screenTexture != nullptr, "Failed to create screen texture (%ux%u, pixelFormat = %u): %s", width, height,
+                pixelFormat, SDL_GetError());
         }
 
         uint32_t format;
@@ -153,6 +178,8 @@ public:
         _screenTextureFormat = SDL_AllocFormat(format);
 
         ConfigureBits(width, height, width);
+
+        _drawingContext->Clear(_bitsDPI, PALETTE_INDEX_10);
     }
 
     void SetPalette(const GamePalette& palette) override
@@ -164,17 +191,15 @@ public:
                 _paletteHWMapped[i] = SDL_MapRGB(_screenTextureFormat, palette[i].Red, palette[i].Green, palette[i].Blue);
             }
 
-#ifdef __ENABLE_LIGHTFX__
-            if (gConfigGeneral.enable_light_fx)
+            if (Config::Get().general.EnableLightFx)
             {
-                auto& lightPalette = lightfx_get_palette();
+                auto& lightPalette = LightFx::GetPalette();
                 for (int32_t i = 0; i < 256; i++)
                 {
                     const auto& src = lightPalette[i];
                     _lightPaletteHWMapped[i] = SDL_MapRGBA(_screenTextureFormat, src.Red, src.Green, src.Blue, src.Alpha);
                 }
             }
-#endif
         }
     }
 
@@ -198,7 +223,7 @@ protected:
             {
                 for (uint32_t y = top; y < bottom; y++)
                 {
-                    SetDirtyVisualTime(x, y, DIRTY_VISUAL_TIME);
+                    SetDirtyVisualTime(x, y, kDirtyVisualTime);
                 }
             }
         }
@@ -207,19 +232,17 @@ protected:
 private:
     void Display()
     {
-#ifdef __ENABLE_LIGHTFX__
-        if (gConfigGeneral.enable_light_fx)
+        if (Config::Get().general.EnableLightFx)
         {
             void* pixels;
             int32_t pitch;
             if (SDL_LockTexture(_screenTexture, nullptr, &pixels, &pitch) == 0)
             {
-                lightfx_render_to_texture(pixels, pitch, _bits, _width, _height, _paletteHWMapped, _lightPaletteHWMapped);
+                LightFx::RenderToTexture(pixels, pitch, _bits, _width, _height, _paletteHWMapped, _lightPaletteHWMapped);
                 SDL_UnlockTexture(_screenTexture);
             }
         }
         else
-#endif
         {
             CopyBitsToTexture(
                 _screenTexture, _bits, static_cast<int32_t>(_width), static_cast<int32_t>(_height), _paletteHWMapped);
@@ -243,14 +266,14 @@ private:
         }
 
         bool isSteamOverlayActive = GetContext()->GetUiContext()->IsSteamOverlayActive();
-        if (isSteamOverlayActive && gConfigGeneral.steam_overlay_pause)
+        if (isSteamOverlayActive && Config::Get().general.SteamOverlayPause)
         {
             OverlayPreRenderCheck();
         }
 
         SDL_RenderPresent(_sdlRenderer);
 
-        if (isSteamOverlayActive && gConfigGeneral.steam_overlay_pause)
+        if (isSteamOverlayActive && Config::Get().general.SteamOverlayPause)
         {
             OverlayPostRenderCheck();
         }
@@ -342,8 +365,8 @@ private:
 
     void RenderDirtyVisuals()
     {
-        float scaleX = gConfigGeneral.window_scale;
-        float scaleY = gConfigGeneral.window_scale;
+        float scaleX = Config::Get().general.WindowScale;
+        float scaleY = Config::Get().general.WindowScale;
 
         SDL_SetRenderDrawBlendMode(_sdlRenderer, SDL_BLENDMODE_BLEND);
         for (uint32_t y = 0; y < _dirtyGrid.BlockRows; y++)
@@ -395,12 +418,12 @@ private:
             _pausedBeforeOverlay = gGamePaused & GAME_PAUSED_NORMAL;
             if (!_pausedBeforeOverlay)
             {
-                pause_toggle();
+                PauseToggle();
             }
         }
         else if (_overlayActive && !newOverlayActive && !_pausedBeforeOverlay)
         {
-            pause_toggle();
+            PauseToggle();
         }
 
         _overlayActive = newOverlayActive;

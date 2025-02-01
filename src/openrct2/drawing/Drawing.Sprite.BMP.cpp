@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,33 +9,34 @@
 
 #include "Drawing.h"
 
-template<DrawBlendOp TBlendOp> static void FASTCALL DrawBMPSpriteMagnify(rct_drawpixelinfo& dpi, const DrawSpriteArgs& args)
+template<DrawBlendOp TBlendOp>
+static void FASTCALL DrawBMPSpriteMagnify(DrawPixelInfo& dpi, const DrawSpriteArgs& args)
 {
-    auto& g1 = args.SourceImage;
-    auto src = g1.offset + ((static_cast<size_t>(g1.width) * args.SrcY) + args.SrcX);
-    auto dst = args.DestinationBits;
     auto& paletteMap = args.PalMap;
-    auto zoomLevel = dpi.zoom_level;
-    size_t srcLineWidth = g1.width;
-    size_t dstLineWidth = (static_cast<size_t>(dpi.width) / zoomLevel) + dpi.pitch;
-    uint8_t zoom = 1 / zoomLevel;
-    auto width = args.Width / zoomLevel;
-    auto height = args.Height / zoomLevel;
-    for (; height > 0; height -= zoom)
+    auto src0 = args.SourceImage.offset;
+    auto dst = args.DestinationBits;
+    auto srcX = args.SrcX;
+    auto srcY = args.SrcY;
+    auto width = args.Width;
+    auto height = args.Height;
+    auto zoom = dpi.zoom_level;
+    auto dstLineWidth = dpi.LineStride();
+    auto srcLineWidth = args.SourceImage.width;
+
+    for (int32_t y = 0; y < height; y++)
     {
-        auto nextSrc = src + srcLineWidth;
-        auto nextDst = dst + (dstLineWidth * zoom);
-        for (int32_t widthRemaining = width; widthRemaining > 0; widthRemaining -= zoom, src++, dst += zoom)
+        auto nextDst = dst + dstLineWidth;
+        for (int32_t x = 0; x < width; x++, dst++)
         {
-            // Copy src to a block of zoom * zoom on dst
-            BlitPixels<TBlendOp>(src, dst, paletteMap, zoom, dstLineWidth);
+            auto src = src0 + (srcLineWidth * zoom.ApplyTo(srcY + y) + zoom.ApplyTo(srcX + x));
+            BlitPixel<TBlendOp>(src, dst, paletteMap);
         }
-        src = nextSrc;
         dst = nextDst;
     }
 }
 
-template<DrawBlendOp TBlendOp> static void FASTCALL DrawBMPSpriteMinify(rct_drawpixelinfo& dpi, const DrawSpriteArgs& args)
+template<DrawBlendOp TBlendOp>
+static void FASTCALL DrawBMPSpriteMinify(DrawPixelInfo& dpi, const DrawSpriteArgs& args)
 {
     auto& g1 = args.SourceImage;
     auto src = g1.offset + ((static_cast<size_t>(g1.width) * args.SrcY) + args.SrcX);
@@ -44,9 +45,9 @@ template<DrawBlendOp TBlendOp> static void FASTCALL DrawBMPSpriteMinify(rct_draw
     auto width = args.Width;
     auto height = args.Height;
     auto zoomLevel = dpi.zoom_level;
-    size_t srcLineWidth = g1.width * zoomLevel;
-    size_t dstLineWidth = (static_cast<size_t>(dpi.width) / zoomLevel) + dpi.pitch;
-    uint8_t zoom = 1 * zoomLevel;
+    size_t srcLineWidth = zoomLevel.ApplyTo(g1.width);
+    size_t dstLineWidth = dpi.LineStride();
+    uint8_t zoom = zoomLevel.ApplyTo(1);
     for (; height > 0; height -= zoom)
     {
         auto nextSrc = src + srcLineWidth;
@@ -60,7 +61,8 @@ template<DrawBlendOp TBlendOp> static void FASTCALL DrawBMPSpriteMinify(rct_draw
     }
 }
 
-template<DrawBlendOp TBlendOp> static void FASTCALL DrawBMPSprite(rct_drawpixelinfo& dpi, const DrawSpriteArgs& args)
+template<DrawBlendOp TBlendOp>
+static void FASTCALL DrawBMPSprite(DrawPixelInfo& dpi, const DrawSpriteArgs& args)
 {
     if (dpi.zoom_level < ZoomLevel{ 0 })
     {
@@ -78,7 +80,7 @@ template<DrawBlendOp TBlendOp> static void FASTCALL DrawBMPSprite(rct_drawpixeli
  *  rct2: 0x0067A690
  * @param imageId Only flags are used.
  */
-void FASTCALL gfx_bmp_sprite_to_buffer(rct_drawpixelinfo& dpi, const DrawSpriteArgs& args)
+void FASTCALL GfxBmpSpriteToBuffer(DrawPixelInfo& dpi, const DrawSpriteArgs& args)
 {
     auto imageId = args.Image;
 
@@ -88,28 +90,28 @@ void FASTCALL gfx_bmp_sprite_to_buffer(rct_drawpixelinfo& dpi, const DrawSpriteA
         if (imageId.IsBlended())
         {
             // Copy non-transparent bitmap data but blend src and dst pixel using the palette map.
-            DrawBMPSprite<BLEND_TRANSPARENT | BLEND_SRC | BLEND_DST>(dpi, args);
+            DrawBMPSprite<kBlendTransparent | kBlendSrc | kBlendDst>(dpi, args);
         }
         else
         {
             // Copy non-transparent bitmap data but re-colour using the palette map.
-            DrawBMPSprite<BLEND_TRANSPARENT | BLEND_SRC>(dpi, args);
+            DrawBMPSprite<kBlendTransparent | kBlendSrc>(dpi, args);
         }
     }
     else if (imageId.IsBlended())
     {
         // Image is only a transparency mask. Just colour the pixels using the palette map.
         // Used for glass.
-        DrawBMPSprite<BLEND_TRANSPARENT | BLEND_DST>(dpi, args);
+        DrawBMPSprite<kBlendTransparent | kBlendDst>(dpi, args);
     }
-    else if (!(args.SourceImage.flags & G1_FLAG_BMP))
+    else if (!(args.SourceImage.flags & G1_FLAG_HAS_TRANSPARENCY))
     {
         // Copy raw bitmap data to target
-        DrawBMPSprite<BLEND_NONE>(dpi, args);
+        DrawBMPSprite<kBlendNone>(dpi, args);
     }
     else
     {
         // Copy raw bitmap data to target but exclude transparent pixels
-        DrawBMPSprite<BLEND_TRANSPARENT>(dpi, args);
+        DrawBMPSprite<kBlendTransparent>(dpi, args);
     }
 }

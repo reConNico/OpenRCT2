@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,204 +10,128 @@
 #include "Path.hpp"
 
 #include "../localisation/Language.h"
-#include "../platform/Platform2.h"
-#include "../platform/platform.h"
-#include "../util/Util.h"
+#include "../platform/Platform.h"
 #include "File.h"
 #include "FileSystem.hpp"
 #include "Memory.hpp"
 #include "String.hpp"
 
-#include <algorithm>
 #include <iterator>
 
-namespace Path
+namespace OpenRCT2::Path
 {
-    utf8* Append(utf8* buffer, size_t bufferSize, const utf8* src)
-    {
-        return safe_strcat_path(buffer, src, bufferSize);
-    }
-
-    std::string Combine(std::string_view a, std::string_view b)
+    u8string Combine(u8string_view a, u8string_view b)
     {
         if (a.empty())
-            return std::string(b);
+            return u8string(b);
         if (b.empty())
-            return std::string(a);
+            return u8string(a);
         auto aEnd = a.back();
         auto bBegin = b.front();
         if (Platform::IsPathSeparator(aEnd))
         {
             if (Platform::IsPathSeparator(bBegin))
             {
-                return std::string(a) + std::string(b.substr(1));
+                return u8string(a) + u8string(b.substr(1));
             }
 
-            return std::string(a) + std::string(b);
+            return u8string(a) + u8string(b);
         }
 
         if (Platform::IsPathSeparator(bBegin))
         {
-            return std::string(a) + std::string(b);
+            return u8string(a) + u8string(b);
         }
 
-        return std::string(a) + PATH_SEPARATOR + std::string(b);
+        return u8string(a) + PATH_SEPARATOR + u8string(b);
     }
 
-    std::string GetDirectory(const std::string& path)
+    u8string GetDirectory(u8string_view path)
     {
-        const utf8* directory = GetDirectory(path.c_str());
-        std::string result(directory);
-        Memory::Free(directory);
-        return result;
+        return fs::u8path(path).parent_path().u8string();
     }
 
-    utf8* GetDirectory(const utf8* path)
+    bool CreateDirectory(u8string_view path)
     {
-        size_t maxSize = String::SizeOf(path) + 1;
-        utf8* result = Memory::Allocate<utf8>(maxSize);
-        GetDirectory(result, maxSize, path);
-        size_t reducedSize = String::SizeOf(path) + 1;
-        result = Memory::Reallocate(result, reducedSize);
-        return result;
+        std::error_code ec;
+        fs::create_directories(fs::u8path(path), ec);
+        // create_directories returns false if the directory already exists, but the error code is zero.
+        return ec.value() == 0;
     }
 
-    utf8* GetDirectory(utf8* buffer, size_t bufferSize, const utf8* path)
+    bool DirectoryExists(u8string_view path)
     {
-        auto lastPathSepIndex = std::max(String::LastIndexOf(path, *PATH_SEPARATOR), String::LastIndexOf(path, '/'));
-        if (lastPathSepIndex < 0)
+        std::error_code ec;
+        const auto result = fs::is_directory(fs::u8path(path), ec);
+        return result && ec.value() == 0;
+    }
+
+    u8string GetFileName(u8string_view path)
+    {
+        return fs::u8path(path).filename().u8string();
+    }
+
+    u8string GetFileNameWithoutExtension(u8string_view path)
+    {
+        return fs::u8path(path).stem().u8string();
+    }
+
+    u8string GetExtension(u8string_view path)
+    {
+        return fs::u8path(path).extension().u8string();
+    }
+
+    u8string WithExtension(u8string_view path, u8string_view newExtension)
+    {
+        auto p = fs::u8path(path);
+
+        fs::path extensionWithDot;
+        if (!newExtension.empty() && newExtension.front() != '.')
         {
-            return String::Set(buffer, bufferSize, String::Empty);
+            extensionWithDot += ".";
         }
+        extensionWithDot += fs::u8path(newExtension);
 
-        size_t copyLength = std::min(lastPathSepIndex, static_cast<ptrdiff_t>(bufferSize - 1));
-        std::copy_n(path, copyLength, buffer);
-        buffer[copyLength] = '\0';
-        return buffer;
-    }
-
-    void CreateDirectory(const std::string& path)
-    {
-        platform_ensure_directory_exists(path.c_str());
-    }
-
-    bool DirectoryExists(const std::string& path)
-    {
-        return platform_directory_exists(path.c_str());
-    }
-
-    std::string GetFileName(const std::string& path)
-    {
-        return GetFileName(path.c_str());
-    }
-
-    const utf8* GetFileName(const utf8* path)
-    {
-        const utf8* lastPathSeparator = nullptr;
-        for (const utf8* ch = path; *ch != '\0'; ch++)
+        if (p.extension() != extensionWithDot)
         {
-            if (*ch == *PATH_SEPARATOR || *ch == '/')
-            {
-                lastPathSeparator = ch;
-            }
+            p += extensionWithDot;
         }
 
-        return lastPathSeparator == nullptr ? path : lastPathSeparator + 1;
+        return p.u8string();
     }
 
-    std::string GetFileNameWithoutExtension(const std::string& path)
+    bool IsAbsolute(u8string_view path)
     {
-        utf8* cstr = GetFileNameWithoutExtension(path.c_str());
-        std::string result = String::ToStd(cstr);
-        Memory::Free(cstr);
-        return result;
+        auto p = fs::u8path(path);
+        return p.is_absolute();
     }
 
-    utf8* GetFileNameWithoutExtension(const utf8* path)
+    u8string GetAbsolute(u8string_view relative)
     {
-        size_t maxSize = String::SizeOf(path) + 1;
-        utf8* result = Memory::Allocate<utf8>(maxSize);
-        GetFileNameWithoutExtension(result, maxSize, path);
-        size_t reducedSize = String::SizeOf(path) + 1;
-        result = Memory::Reallocate(result, reducedSize);
-        return result;
+        std::error_code ec;
+        return fs::absolute(fs::u8path(relative), ec).u8string();
     }
 
-    utf8* GetFileNameWithoutExtension(utf8* buffer, size_t bufferSize, const utf8* path)
+    u8string GetRelative(u8string_view path, u8string_view base)
     {
-        path = GetFileName(path);
-
-        const utf8* lastDot = nullptr;
-        const utf8* ch = path;
-        for (; *ch != '\0'; ch++)
-        {
-            if (*ch == '.')
-            {
-                lastDot = ch;
-            }
-        }
-
-        if (lastDot == nullptr)
-        {
-            return String::Set(buffer, bufferSize, path);
-        }
-
-        size_t truncatedLength = std::min<size_t>(bufferSize - 1, lastDot - path);
-        std::copy_n(path, truncatedLength, buffer);
-        buffer[truncatedLength] = '\0';
-        return buffer;
+        std::error_code ec;
+        return fs::relative(fs::u8path(path), fs::u8path(base), ec).u8string();
     }
 
-    const std::string GetExtension(const std::string& path)
+    bool Equals(u8string_view a, u8string_view b)
     {
-        return fs::u8path(path).extension().string();
+        return Platform::ShouldIgnoreCase() ? String::iequals(a, b) : String::equals(a, b);
     }
 
-    const utf8* GetExtension(const utf8* path)
-    {
-        const utf8* lastDot = nullptr;
-        const utf8* ch = GetFileName(path);
-        for (; *ch != '\0'; ch++)
-        {
-            if (*ch == '.')
-            {
-                lastDot = ch;
-            }
-        }
-
-        if (lastDot == nullptr)
-        {
-            // Return the null terminator, i.e. a blank extension
-            return ch;
-        }
-
-        // Return the extension including the dot
-        return lastDot;
-    }
-
-    utf8* GetAbsolute(utf8* buffer, size_t bufferSize, const utf8* relativePath)
-    {
-        return Platform::GetAbsolutePath(buffer, bufferSize, relativePath);
-    }
-
-    std::string GetAbsolute(const std::string& relative)
-    {
-        utf8 absolute[MAX_PATH];
-        return GetAbsolute(absolute, sizeof(absolute), relative.c_str());
-    }
-
-    bool Equals(const std::string& a, const std::string& b)
-    {
-        return String::Equals(a.c_str(), b.c_str());
-    }
-
-    bool Equals(const utf8* a, const utf8* b)
-    {
-        return String::Equals(a, b, Platform::ShouldIgnoreCase());
-    }
-
-    std::string ResolveCasing(const std::string& path)
+    u8string ResolveCasing(u8string_view path)
     {
         return Platform::ResolveCasing(path, File::Exists(path));
     }
-} // namespace Path
+
+    bool DeleteDirectory(u8string_view path)
+    {
+        std::error_code ec;
+        const auto result = fs::remove_all(fs::u8path(path), ec);
+        return (result > 0) && ec.value() == 0;
+    }
+} // namespace OpenRCT2::Path

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,11 +9,11 @@
 
 #pragma once
 
-#include "../common.h"
 #include "../world/Map.h"
 #include "EntityBase.h"
 
 class DataSerialiser;
+struct PaintSession;
 
 enum class JumpingFountainType : uint8_t
 {
@@ -35,7 +35,7 @@ struct JumpingFountain : EntityBase
     void Update();
     static void StartAnimation(JumpingFountainType newType, const CoordsXY& newLoc, const TileElement* tileElement);
     void Serialise(DataSerialiser& stream);
-    void Paint(paint_session* session, int32_t imageDirection) const;
+    void Paint(PaintSession& session, int32_t imageDirection) const;
 
 private:
     JumpingFountainType GetType() const;
@@ -50,7 +50,7 @@ private:
     static bool IsJumpingFountain(JumpingFountainType newType, const CoordsXYZ& newLoc);
 };
 
-namespace FOUNTAIN_FLAG
+namespace OpenRCT2::FOUNTAIN_FLAG
 {
     const uint32_t FAST = 1 << 0;
     const uint32_t GOTO_EDGE = 1 << 1;
@@ -58,4 +58,4 @@ namespace FOUNTAIN_FLAG
     const uint32_t TERMINATE = 1 << 3;
     const uint32_t BOUNCE = 1 << 4;
     const uint32_t DIRECTION = 1 << 7;
-}; // namespace FOUNTAIN_FLAG
+}; // namespace OpenRCT2::FOUNTAIN_FLAG

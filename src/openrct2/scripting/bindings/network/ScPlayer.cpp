@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,12 +9,12 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "ScPlayer.hpp"
+    #include "ScPlayer.hpp"
 
-#    include "../../../Context.h"
-#    include "../../../actions/PlayerSetGroupAction.h"
-#    include "../../../network/NetworkAction.h"
-#    include "../../../network/network.h"
+    #include "../../../Context.h"
+    #include "../../../actions/PlayerSetGroupAction.h"
+    #include "../../../network/NetworkAction.h"
+    #include "../../../network/network.h"
 
 namespace OpenRCT2::Scripting
 {
@@ -30,79 +30,79 @@ namespace OpenRCT2::Scripting
 
     std::string ScPlayer::name_get() const
     {
-#    ifndef DISABLE_NETWORK
-        auto index = network_get_player_index(_id);
+    #ifndef DISABLE_NETWORK
+        auto index = NetworkGetPlayerIndex(_id);
         if (index == -1)
             return {};
-        return network_get_player_name(index);
-#    else
+        return NetworkGetPlayerName(index);
+    #else
         return {};
-#    endif
+    #endif
     }
 
     int32_t ScPlayer::group_get() const
     {
-#    ifndef DISABLE_NETWORK
-        auto index = network_get_player_index(_id);
+    #ifndef DISABLE_NETWORK
+        auto index = NetworkGetPlayerIndex(_id);
         if (index == -1)
             return {};
-        return network_get_player_group(index);
-#    else
+        return NetworkGetPlayerGroup(index);
+    #else
         return 0;
-#    endif
+    #endif
     }
     void ScPlayer::group_set(int32_t value)
     {
-#    ifndef DISABLE_NETWORK
+    #ifndef DISABLE_NETWORK
         auto playerSetGroupAction = PlayerSetGroupAction(_id, value);
         GameActions::Execute(&playerSetGroupAction);
-#    endif
+    #endif
     }
 
     int32_t ScPlayer::ping_get() const
     {
-#    ifndef DISABLE_NETWORK
-        auto index = network_get_player_index(_id);
+    #ifndef DISABLE_NETWORK
+        auto index = NetworkGetPlayerIndex(_id);
         if (index == -1)
             return {};
-        return network_get_player_ping(index);
-#    else
+        return NetworkGetPlayerPing(index);
+    #else
         return 0;
-#    endif
+    #endif
     }
 
     int32_t ScPlayer::commandsRan_get() const
     {
-#    ifndef DISABLE_NETWORK
-        auto index = network_get_player_index(_id);
+    #ifndef DISABLE_NETWORK
+        auto index = NetworkGetPlayerIndex(_id);
         if (index == -1)
             return {};
-        return network_get_player_commands_ran(index);
-#    else
+        return NetworkGetPlayerCommandsRan(index);
+    #else
         return 0;
-#    endif
+    #endif
     }
 
     int32_t ScPlayer::moneySpent_get() const
     {
-#    ifndef DISABLE_NETWORK
-        auto index = network_get_player_index(_id);
+    #ifndef DISABLE_NETWORK
+        auto index = NetworkGetPlayerIndex(_id);
         if (index == -1)
             return {};
-        return network_get_player_money_spent(index);
-#    else
+        return NetworkGetPlayerMoneySpent(index);
+    #else
         return 0;
-#    endif
+    #endif
     }
 
     std::string ScPlayer::ipAddress_get() const
     {
-        return network_get_player_ip_address(_id);
+        return NetworkGetPlayerIPAddress(_id);
     }
 
     std::string ScPlayer::publicKeyHash_get() const
     {
-        return network_get_player_public_key_hash(_id);
+        return NetworkGetPlayerPublicKeyHash(_id);
     }
 
     void ScPlayer::Register(duk_context* ctx)

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,8 +9,11 @@
 
 #pragma once
 
-#include "../../common.h"
+#include "../../interface/Colour.h"
 #include "../../sprites.h"
+#include "../../world/Location.hpp"
+
+#include <optional>
 
 enum
 {
@@ -102,3 +105,5 @@ enum
     SPR_RCT1_WATER_MASK = SPR_CSG_BEGIN + 46787,
     SPR_RCT1_WATER_OVERLAY = SPR_CSG_BEGIN + 46792,
 };
+
+std::optional<colour_t> GetPatrolAreaTileColour(const CoordsXY& pos);

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,9 +11,7 @@
 
 #include "../core/EnumMap.hpp"
 
-#include <mutex>
 #include <string>
-#include <vector>
 
 // clang-format off
 static const EnumMap<FormatToken> FormatTokenMap = {
@@ -37,9 +35,10 @@ static const EnumMap<FormatToken> FormatTokenMap = {
     { "UINT16",               FormatToken::UInt16,              },
     { "CURRENCY2DP",          FormatToken::Currency2dp,         },
     { "CURRENCY",             FormatToken::Currency,            },
-    { "STRINGID",             FormatToken::StringId,            },
+    { "STRINGID",             FormatToken::StringById,          },
     { "STRING",               FormatToken::String,              },
     { "MONTHYEAR",            FormatToken::MonthYear,           },
+    { "MONTHYEAR_SENTENCE",   FormatToken::MonthYearSentence,   },
     { "MONTH",                FormatToken::Month,               },
     { "VELOCITY",             FormatToken::Velocity,            },
     { "POP16",                FormatToken::Pop16,               },
@@ -47,6 +46,7 @@ static const EnumMap<FormatToken> FormatTokenMap = {
     { "DURATION",             FormatToken::DurationShort,       },
     { "REALTIME",             FormatToken::DurationLong,        },
     { "LENGTH",               FormatToken::Length,              },
+    { "HEIGHT",               FormatToken::Height,              },
     { "SPRITE",               FormatToken::Sprite,              },
     { "BLACK",                FormatToken::ColourBlack,         },
     { "GREY",                 FormatToken::ColourGrey,          },
@@ -65,43 +65,24 @@ static const EnumMap<FormatToken> FormatTokenMap = {
 };
 // clang-format on
 
-std::string_view GetFormatTokenStringWithBraces(FormatToken token)
-{
-    // Ensure cache is thread safe
-    static std::mutex mutex;
-    std::lock_guard<std::mutex> guard(mutex);
-
-    static std::vector<std::string> cache;
-    auto index = static_cast<size_t>(token);
-    if (cache.size() <= index)
-    {
-        cache.resize(index + 1);
-    }
-    if (cache[index].empty())
-    {
-        cache[index] = "{" + std::string(FormatTokenToString(token)) + "}";
-    }
-    return cache[index];
-}
-
 FormatToken FormatTokenFromString(std::string_view token)
 {
     auto result = FormatTokenMap.find(token);
     return result != std::end(FormatTokenMap) ? result->second : FormatToken::Unknown;
 }
 
-std::string_view FormatTokenToString(FormatToken token, bool withBraces)
+std::string FormatTokenToString(FormatToken token)
 {
-    if (withBraces)
-    {
-        return GetFormatTokenStringWithBraces(token);
-    }
-
     auto it = FormatTokenMap.find(token);
     if (it != FormatTokenMap.end())
-        return it->first;
+        return std::string(it->first);
 
     return {};
+}
+
+std::string FormatTokenToStringWithBraces(FormatToken token)
+{
+    return "{" + FormatTokenToString(token) + "}";
 }
 
 bool FormatTokenTakesArgument(FormatToken token)
@@ -116,14 +97,16 @@ bool FormatTokenTakesArgument(FormatToken token)
         case FormatToken::UInt16:
         case FormatToken::Currency2dp:
         case FormatToken::Currency:
-        case FormatToken::StringId:
+        case FormatToken::StringById:
         case FormatToken::String:
         case FormatToken::MonthYear:
+        case FormatToken::MonthYearSentence:
         case FormatToken::Month:
         case FormatToken::Velocity:
         case FormatToken::DurationShort:
         case FormatToken::DurationLong:
         case FormatToken::Length:
+        case FormatToken::Height:
         case FormatToken::Sprite:
             return true;
         default:
@@ -194,14 +177,14 @@ size_t FormatTokenGetTextColourIndex(FormatToken token)
 
 FormatToken FormatTokenFromTextColour(size_t textColour)
 {
-    static constexpr const FormatToken tokens[] = {
+    static constexpr FormatToken tokens[] = {
         FormatToken::ColourBlack,        FormatToken::ColourGrey,       FormatToken::ColourWhite,
         FormatToken::ColourRed,          FormatToken::ColourGreen,      FormatToken::ColourYellow,
         FormatToken::ColourTopaz,        FormatToken::ColourCeladon,    FormatToken::ColourBabyBlue,
         FormatToken::ColourPaleLavender, FormatToken::ColourPaleGold,   FormatToken::ColourLightPink,
         FormatToken::ColourPearlAqua,    FormatToken::ColourPaleSilver,
     };
-    if (textColour > std::size(tokens))
+    if (textColour >= std::size(tokens))
         return FormatToken::ColourBlack;
     return tokens[textColour];
 }

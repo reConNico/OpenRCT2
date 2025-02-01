@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,13 +9,23 @@
 
 #include "WaterRaiseAction.h"
 
+#include "../GameState.h"
 #include "../OpenRCT2.h"
 #include "../audio/audio.h"
+#include "../ride/RideConstruction.h"
+#include "../world/tile_element/SurfaceElement.h"
 #include "WaterSetHeightAction.h"
+
+using namespace OpenRCT2;
 
 WaterRaiseAction::WaterRaiseAction(MapRange range)
     : _range(range)
 {
+}
+
+void WaterRaiseAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit(_range);
 }
 
 uint16_t WaterRaiseAction::GetActionFlags() const
@@ -44,18 +54,11 @@ GameActions::Result WaterRaiseAction::QueryExecute(bool isExecuting) const
 {
     auto res = GameActions::Result();
 
-    // Keep big coordinates within map boundaries
-    auto aX = std::max<decltype(_range.GetLeft())>(32, _range.GetLeft());
-    auto bX = std::min<decltype(_range.GetRight())>(GetMapSizeMaxXY(), _range.GetRight());
-    auto aY = std::max<decltype(_range.GetTop())>(32, _range.GetTop());
-    auto bY = std::min<decltype(_range.GetBottom())>(GetMapSizeMaxXY(), _range.GetBottom());
-
-    MapRange validRange = MapRange{ aX, aY, bX, bY };
-
+    auto validRange = ClampRangeWithinMap(_range);
     res.Position.x = ((validRange.GetLeft() + validRange.GetRight()) / 2) + 16;
     res.Position.y = ((validRange.GetTop() + validRange.GetBottom()) / 2) + 16;
-    int32_t z = tile_element_height(res.Position);
-    int16_t waterHeight = tile_element_water_height(res.Position);
+    int32_t z = TileElementHeight(res.Position);
+    int16_t waterHeight = TileElementWaterHeight(res.Position);
     if (waterHeight != 0)
     {
         z = waterHeight;
@@ -63,43 +66,50 @@ GameActions::Result WaterRaiseAction::QueryExecute(bool isExecuting) const
     res.Position.z = z;
     res.Expenditure = ExpenditureType::Landscaping;
 
-    auto maxHeight = GetHighestHeight(validRange) / COORDS_Z_STEP;
+    auto maxHeight = GetHighestHeight(validRange) / kCoordsZStep;
     bool hasChanged = false;
     bool withinOwnership = false;
-    for (int32_t y = validRange.GetTop(); y <= validRange.GetBottom(); y += COORDS_XY_STEP)
+    for (int32_t y = validRange.GetTop(); y <= validRange.GetBottom(); y += kCoordsXYStep)
     {
-        for (int32_t x = validRange.GetLeft(); x <= validRange.GetRight(); x += COORDS_XY_STEP)
+        for (int32_t x = validRange.GetLeft(); x <= validRange.GetRight(); x += kCoordsXYStep)
         {
             if (!LocationValid({ x, y }))
                 continue;
 
-            auto surfaceElement = map_get_surface_element_at(CoordsXY{ x, y });
+            auto surfaceElement = MapGetSurfaceElementAt(CoordsXY{ x, y });
             if (surfaceElement == nullptr)
                 continue;
 
-            if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !gCheatsSandboxMode)
+            if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !GetGameState().Cheats.sandboxMode)
             {
-                if (!map_is_location_in_park(CoordsXY{ x, y }))
+                if (!MapIsLocationInPark(CoordsXY{ x, y }))
                 {
                     continue;
                 }
             }
             withinOwnership = true;
 
-            uint8_t height = surfaceElement->GetWaterHeight() / COORDS_Z_STEP;
+            uint8_t height = surfaceElement->GetWaterHeight() / kCoordsZStep;
 
-            if (surfaceElement->base_height > maxHeight)
+            if (surfaceElement->BaseHeight > maxHeight)
                 continue;
 
             if (height != 0)
             {
                 if (height > maxHeight)
                     continue;
-                height += 2;
+                if (height + 2 > UINT8_MAX)
+                {
+                    height = UINT8_MAX;
+                }
+                else
+                {
+                    height += 2;
+                }
             }
             else
             {
-                height = surfaceElement->base_height + 2;
+                height = surfaceElement->BaseHeight + 2;
             }
             auto waterSetHeightAction = WaterSetHeightAction({ x, y }, height);
             waterSetHeightAction.SetFlags(GetFlags());
@@ -134,23 +144,23 @@ GameActions::Result WaterRaiseAction::QueryExecute(bool isExecuting) const
     return res;
 }
 
-uint16_t WaterRaiseAction::GetHighestHeight(MapRange validRange) const
+uint16_t WaterRaiseAction::GetHighestHeight(const MapRange& validRange) const
 {
     // The highest height to raise the water to is the lowest water level in the selection
-    uint16_t maxHeight = 255 * COORDS_Z_STEP;
-    for (int32_t y = validRange.GetTop(); y <= validRange.GetBottom(); y += COORDS_XY_STEP)
+    uint16_t maxHeight = 255 * kCoordsZStep;
+    for (int32_t y = validRange.GetTop(); y <= validRange.GetBottom(); y += kCoordsXYStep)
     {
-        for (int32_t x = validRange.GetLeft(); x <= validRange.GetRight(); x += COORDS_XY_STEP)
+        for (int32_t x = validRange.GetLeft(); x <= validRange.GetRight(); x += kCoordsXYStep)
         {
-            if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !gCheatsSandboxMode)
+            if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !GetGameState().Cheats.sandboxMode)
             {
-                if (!map_is_location_in_park(CoordsXY{ x, y }))
+                if (!MapIsLocationInPark(CoordsXY{ x, y }))
                 {
                     continue;
                 }
             }
 
-            auto* surfaceElement = map_get_surface_element_at(CoordsXY{ x, y });
+            auto* surfaceElement = MapGetSurfaceElementAt(CoordsXY{ x, y });
             if (surfaceElement == nullptr)
                 continue;
 

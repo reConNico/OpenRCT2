@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,7 +9,6 @@
 
 #include "IniReader.hpp"
 
-#include "../common.h"
 #include "../core/IStream.hpp"
 #include "../core/String.hpp"
 #include "../core/StringBuilder.h"
@@ -19,6 +18,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+using namespace OpenRCT2;
 
 /**
  * Simple tuple (start, length) representing a text span in a buffer.
@@ -133,7 +134,7 @@ public:
         std::string value;
         if (TryGetString(name, &value))
         {
-            result = String::Equals(value, "true", true);
+            result = String::iequals(value, "true");
         }
         return result;
     }
@@ -219,7 +220,7 @@ private:
             return;
         }
         utf8* file = reinterpret_cast<utf8*>(_buffer.data());
-        utf8* content = String::SkipBOM(file);
+        utf8* content = String::skipBOM(file);
         if (file != content)
         {
             size_t skipLength = content - file;
@@ -259,7 +260,7 @@ private:
         for (size_t i = 0; i < _lines.size(); i++)
         {
             std::string line = GetLine(i);
-            line = String::Trim(line);
+            line = String::trim(line);
             if (line.size() > 3 && line[0] == '[')
             {
                 size_t endIndex = line.find_first_of(']');
@@ -287,7 +288,7 @@ private:
         }
     }
 
-    void ParseSectionValues(LineRange range)
+    void ParseSectionValues(const LineRange& range)
     {
         for (size_t i = range.Start + 1; i <= range.End; i++)
         {
@@ -308,12 +309,12 @@ private:
         }
 
         // Get the key and value
-        std::string key = String::Trim(line.substr(0, equalsIndex));
-        std::string value = String::Trim(line.substr(equalsIndex + 1));
+        std::string key = String::trim(line.substr(0, equalsIndex));
+        std::string value = String::trim(line.substr(equalsIndex + 1));
 
         value = UnquoteValue(value);
         value = UnescapeValue(value);
-        _values[key] = value;
+        _values[key] = std::move(value);
     }
 
     std::string TrimComment(const std::string& s)
@@ -426,17 +427,6 @@ public:
         return false;
     }
 };
-
-utf8* IIniReader::GetCString(const std::string& name, const utf8* defaultValue) const
-{
-    std::string szValue;
-    if (!TryGetString(name, &szValue))
-    {
-        return String::Duplicate(defaultValue);
-    }
-
-    return String::Duplicate(szValue.c_str());
-}
 
 std::unique_ptr<IIniReader> CreateIniReader(OpenRCT2::IStream* stream)
 {

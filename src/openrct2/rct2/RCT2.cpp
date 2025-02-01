@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -19,30 +19,30 @@
 
 #include <cstdint>
 
-namespace RCT2
+namespace OpenRCT2::RCT2
 {
-    ObjectEntryIndex RCT2RideTypeToOpenRCT2RideType(uint8_t rct2RideType, const rct_ride_entry* rideEntry)
+    ObjectEntryIndex RCT2RideTypeToOpenRCT2RideType(uint8_t rct2RideType, const RideObjectEntry& rideEntry)
     {
         switch (rct2RideType)
         {
             case RIDE_TYPE_CORKSCREW_ROLLER_COASTER:
-                if (rideEntry != nullptr && !(ride_entry_get_supported_track_pieces(rideEntry) & (1ULL << TRACK_VERTICAL_LOOP)))
+                if (!RideEntryGetSupportedTrackPieces(rideEntry).get(EnumValue(TrackGroup::verticalLoop)))
                     return RIDE_TYPE_HYPERCOASTER;
                 return RIDE_TYPE_CORKSCREW_ROLLER_COASTER;
             case RIDE_TYPE_JUNIOR_ROLLER_COASTER:
-                if (rideEntry != nullptr && ride_entry_get_supported_track_pieces(rideEntry) & (1ULL << TRACK_SLOPE_STEEP))
+                if (RideEntryGetSupportedTrackPieces(rideEntry).get(EnumValue(TrackGroup::slopeSteepDown)))
                     return RIDE_TYPE_CLASSIC_MINI_ROLLER_COASTER;
                 return RIDE_TYPE_JUNIOR_ROLLER_COASTER;
             case RIDE_TYPE_CAR_RIDE:
-                if (rideEntry != nullptr && ride_entry_get_supported_track_pieces(rideEntry) & (1ULL << TRACK_SLOPE_STEEP))
+                if (RideEntryGetSupportedTrackPieces(rideEntry).get(EnumValue(TrackGroup::slopeSteepDown)))
                     return RIDE_TYPE_MONSTER_TRUCKS;
                 return RIDE_TYPE_CAR_RIDE;
             case RIDE_TYPE_TWISTER_ROLLER_COASTER:
-                if (rideEntry != nullptr && rideEntry->flags & RIDE_ENTRY_FLAG_NO_INVERSIONS)
+                if (rideEntry.flags & RIDE_ENTRY_FLAG_NO_INVERSIONS)
                     return RIDE_TYPE_HYPER_TWISTER;
                 return RIDE_TYPE_TWISTER_ROLLER_COASTER;
             case RIDE_TYPE_STEEL_WILD_MOUSE:
-                if (rideEntry != nullptr && !(ride_entry_get_supported_track_pieces(rideEntry) & (1ULL << TRACK_SLOPE_STEEP)))
+                if (!RideEntryGetSupportedTrackPieces(rideEntry).get(EnumValue(TrackGroup::slopeSteepDown)))
                     return RIDE_TYPE_SPINNING_WILD_MOUSE;
                 return RIDE_TYPE_STEEL_WILD_MOUSE;
 
@@ -87,78 +87,50 @@ namespace RCT2
         }
     }
 
-    size_t GetRCT2StringBufferLen(const char* buffer, size_t maxBufferLen)
-    {
-        constexpr char MULTIBYTE = static_cast<char>(255);
-        size_t len = 0;
-        for (size_t i = 0; i < maxBufferLen; i++)
-        {
-            auto ch = buffer[i];
-            if (ch == MULTIBYTE)
-            {
-                i += 2;
-
-                // Check if reading two more bytes exceeds max buffer len
-                if (i < maxBufferLen)
-                {
-                    len += 3;
-                }
-            }
-            else if (ch == '\0')
-            {
-                break;
-            }
-            else
-            {
-                len++;
-            }
-        }
-        return len;
-    }
-
     uint8_t Ride::GetMinCarsPerTrain() const
     {
-        return min_max_cars_per_train >> 4;
+        return MinMaxCarsPerTrain >> 4;
     }
 
     uint8_t Ride::GetMaxCarsPerTrain() const
     {
-        return min_max_cars_per_train & 0xF;
+        return MinMaxCarsPerTrain & 0xF;
     }
 
-    void Ride::SetMinCarsPerTrain(uint8_t newValue)
+    OpenRCT2::TrackElemType RCT2TrackTypeToOpenRCT2(
+        OpenRCT2::RCT12::TrackElemType origTrackType, ride_type_t rideType, bool isFlatRide)
     {
-        min_max_cars_per_train &= ~0xF0;
-        min_max_cars_per_train |= (newValue << 4);
+        auto originalClass = OriginalRideClass::Regular;
+        if (rideType == RIDE_TYPE_STEEL_WILD_MOUSE || rideType == RIDE_TYPE_SPINNING_WILD_MOUSE)
+            originalClass = OriginalRideClass::WildMouse;
+        if (isFlatRide)
+            originalClass = OriginalRideClass::FlatRide;
+
+        return RCT2TrackTypeToOpenRCT2(origTrackType, originalClass);
     }
 
-    void Ride::SetMaxCarsPerTrain(uint8_t newValue)
+    OpenRCT2::TrackElemType RCT2TrackTypeToOpenRCT2(
+        OpenRCT2::RCT12::TrackElemType origTrackType, OriginalRideClass originalClass)
     {
-        min_max_cars_per_train &= ~0x0F;
-        min_max_cars_per_train |= newValue & 0x0F;
+        switch (originalClass)
+        {
+            case OriginalRideClass::FlatRide:
+                return RCT12FlatTrackTypeToOpenRCT2(origTrackType);
+            case OriginalRideClass::WildMouse:
+                // Boosters share their ID with the Spinning Control track.
+                if (origTrackType == OpenRCT2::RCT12::TrackElemType::RotationControlToggleAlias)
+                    return OpenRCT2::TrackElemType::RotationControlToggle;
+                return static_cast<OpenRCT2::TrackElemType>(origTrackType);
+            case OriginalRideClass::Regular:
+            default:
+                return static_cast<OpenRCT2::TrackElemType>(origTrackType);
+        }
     }
 
-    bool RCT2TrackTypeIsBooster(uint8_t rideType, uint16_t trackType)
-    {
-        // Boosters share their ID with the Spinning Control track.
-        return rideType != RIDE_TYPE_SPINNING_WILD_MOUSE && rideType != RIDE_TYPE_STEEL_WILD_MOUSE
-            && trackType == TrackElemType::Booster;
-    }
-
-    track_type_t RCT2TrackTypeToOpenRCT2(RCT12TrackType origTrackType, uint8_t rideType, bool convertFlat)
-    {
-        if (convertFlat && GetRideTypeDescriptor(rideType).HasFlag(RIDE_TYPE_FLAG_FLAT_RIDE))
-            return RCT12FlatTrackTypeToOpenRCT2(origTrackType);
-        if (origTrackType == TrackElemType::RotationControlToggleAlias && !RCT2TrackTypeIsBooster(rideType, origTrackType))
-            return TrackElemType::RotationControlToggle;
-
-        return origTrackType;
-    }
-
-    RCT12TrackType OpenRCT2TrackTypeToRCT2(track_type_t origTrackType)
+    OpenRCT2::RCT12::TrackElemType OpenRCT2TrackTypeToRCT2(OpenRCT2::TrackElemType origTrackType)
     {
         if (origTrackType == TrackElemType::RotationControlToggle)
-            return TrackElemType::RotationControlToggleAlias;
+            return OpenRCT2::RCT12::TrackElemType::RotationControlToggleAlias;
 
         // This function is safe to run this way round.
         return OpenRCT2FlatTrackTypeToRCT12(origTrackType);
@@ -201,7 +173,7 @@ namespace RCT2
           "rct2.footpath_railings.concrete" },
         { "PATHDIRT", "rct1.footpath_surface.dirt", "rct1aa.footpath_surface.queue_yellow",
           "rct2.footpath_railings.bamboo_brown" },
-        { "PATHSPCE", "rct1aa.footpath_surface.tarmac_red", "rct1.footpath_surface.queue_red",
+        { "PATHSPCE", "rct1aa.footpath_surface.tarmac_red", "rct1aa.footpath_surface.queue_red",
           "rct1ll.footpath_railings.space" },
         { "TARMACB ", "rct1aa.footpath_surface.tarmac_brown", "rct1aa.footpath_surface.queue_yellow",
           "rct2.footpath_railings.concrete" },
@@ -212,10 +184,29 @@ namespace RCT2
           "rct2.footpath_railings.concrete" },
         { "PATHCRZY", "rct1aa.footpath_surface.tiles_grey", "rct1.footpath_surface.queue_blue",
           "rct2.footpath_railings.concrete" },
-        { "PATHCRZY", "rct1ll.footpath_surface.tiles_red", "rct1.footpath_surface.queue_red",
+        { "PATHCRZY", "rct1ll.footpath_surface.tiles_red", "rct1aa.footpath_surface.queue_red",
           "rct2.footpath_railings.concrete" },
         { "PATHCRZY", "rct1ll.footpath_surface.tiles_green", "rct1aa.footpath_surface.queue_green",
           "rct2.footpath_railings.concrete" },
+        { "ROAD    ", "rct1.footpath_surface.road", "rct1.footpath_surface.queue_blue", "rct2.footpath_railings.wood" },
+
+        // Custom path mapping
+        { "PATHINVS", "openrct2.footpath_surface.invisible", "openrct2.footpath_surface.queue_invisible",
+          "openrct2.footpath_railings.invisible" },
+        { "PATHCLR ", "openrct2.footpath_surface.invisible", "openrct2.footpath_surface.queue_invisible",
+          "openrct2.footpath_railings.invisible" },
+        { "PAT25MKY", "openrct2.footpath_surface.invisible", "openrct2.footpath_surface.queue_invisible",
+          "openrct2.footpath_railings.invisible" },
+        { "JAINVSFP", "openrct2.footpath_surface.invisible", "openrct2.footpath_surface.queue_invisible",
+          "openrct2.footpath_railings.invisible" },
+
+        // Some test objects were temporarily released to the public
+        { "#RCT1PTS", "rct1aa.footpath_surface.tiles_grey", "rct1.footpath_surface.queue_blue", "rct2.footpath_railings.wood" },
+        { "#RCT1PTG", "rct1ll.footpath_surface.tiles_green", "rct1aa.footpath_surface.queue_green",
+          "rct2.footpath_railings.wood" },
+        { "#RCT1PTR", "rct1ll.footpath_surface.tiles_red", "rct1aa.footpath_surface.queue_red", "rct2.footpath_railings.wood" },
+        { "#RCT1PTB", "rct1.footpath_surface.tiles_brown", "rct1aa.footpath_surface.queue_yellow",
+          "rct2.footpath_railings.wood" },
     };
 
     const FootpathMapping* GetFootpathSurfaceId(const ObjectEntryDescriptor& desc, bool ideallyLoaded, bool isQueue)
@@ -240,9 +231,9 @@ namespace RCT2
         return nullptr;
     }
 
-    std::optional<rct_object_entry> GetBestObjectEntryForSurface(std::string_view surface, std::string_view railings)
+    std::optional<RCTObjectEntry> GetBestObjectEntryForSurface(std::string_view surface, std::string_view railings)
     {
-        rct_object_entry result;
+        RCTObjectEntry result;
         std::memset(&result, 0, sizeof(result));
 
         result.SetType(ObjectType::Paths);
@@ -273,4 +264,9 @@ namespace RCT2
             return result;
         return {};
     }
-} // namespace RCT2
+
+    colour_t TD6SceneryElement::getTertiaryWallColour() const
+    {
+        return (Flags & 0xFC) >> 2;
+    }
+} // namespace OpenRCT2::RCT2

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,12 +9,13 @@
 
 #pragma once
 
+#include "../localisation/StringIdType.h"
 #include "EntityBase.h"
 
 class DataSerialiser;
 struct CoordsXYZ;
 struct CoordsXYZD;
-struct paint_session;
+struct PaintSession;
 
 struct Litter : EntityBase
 {
@@ -40,7 +41,7 @@ struct Litter : EntityBase
     static void Create(const CoordsXYZD& litterPos, Type type);
     static void RemoveAt(const CoordsXYZ& litterPos);
     void Serialise(DataSerialiser& stream);
-    rct_string_id GetName() const;
+    StringId GetName() const;
     uint32_t GetAge() const;
-    void Paint(paint_session* session, int32_t imageDirection) const;
+    void Paint(PaintSession& session, int32_t imageDirection) const;
 };

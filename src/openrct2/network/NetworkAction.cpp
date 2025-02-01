@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,12 +9,12 @@
 
 #ifndef DISABLE_NETWORK
 
-#    include "NetworkAction.h"
+    #include "NetworkAction.h"
 
-#    include "../Game.h"
-#    include "../localisation/StringIds.h"
+    #include "../Game.h"
+    #include "../localisation/StringIds.h"
 
-#    include <algorithm>
+    #include <algorithm>
 
 NetworkPermission NetworkActions::FindCommand(GameCommand command)
 {
@@ -149,7 +149,7 @@ const std::array<NetworkAction, static_cast<size_t>(NetworkPermission::Count)> N
         "PERMISSION_PATH",
         {
             GameCommand::PlacePath,
-            GameCommand::PlacePathFromTrack,
+            GameCommand::PlacePathLayout,
             GameCommand::RemovePath,
             GameCommand::PlaceFootpathAddition,
             GameCommand::RemoveFootpathAddition,
@@ -237,6 +237,7 @@ const std::array<NetworkAction, static_cast<size_t>(NetworkPermission::Count)> N
         {
             GameCommand::Cheat,
             GameCommand::SetDate,
+            GameCommand::FreezeRideRating,
         },
     },
     NetworkAction{

@@ -26,6 +26,7 @@ libversion
 data/g2.dat
 data/sequence
 data/object
+data/assetpack
 
 #################
 ## Eclipse
@@ -303,7 +304,7 @@ discord-rpc
 #########################
 .vscode/*
 .vscode/settings.json
-!.vscode/tasks.json
+.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
 

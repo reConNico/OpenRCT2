@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,7 +9,11 @@
 
 #include "ObjectFactory.h"
 
+#include "../Context.h"
+#include "../Diagnostic.h"
 #include "../OpenRCT2.h"
+#include "../PlatformEnvironment.h"
+#include "../audio/audio.h"
 #include "../core/Console.hpp"
 #include "../core/File.h"
 #include "../core/FileStream.h"
@@ -20,9 +24,9 @@
 #include "../core/String.hpp"
 #include "../core/Zip.h"
 #include "../rct12/SawyerChunkReader.h"
+#include "AudioObject.h"
 #include "BannerObject.h"
 #include "EntranceObject.h"
-#include "FootpathItemObject.h"
 #include "FootpathObject.h"
 #include "FootpathRailingsObject.h"
 #include "FootpathSurfaceObject.h"
@@ -31,7 +35,11 @@
 #include "Object.h"
 #include "ObjectLimits.h"
 #include "ObjectList.h"
+#include "PathAdditionObject.h"
+#include "PeepAnimationsObject.h"
+#include "PeepNamesObject.h"
 #include "RideObject.h"
+#include "ScenarioTextObject.h"
 #include "SceneryGroupObject.h"
 #include "SmallSceneryObject.h"
 #include "StationObject.h"
@@ -40,14 +48,16 @@
 #include "WallObject.h"
 #include "WaterObject.h"
 
-#include <algorithm>
+#include <memory>
 #include <unordered_map>
+
+using namespace OpenRCT2;
 
 struct IFileDataRetriever
 {
     virtual ~IFileDataRetriever() = default;
-    virtual std::vector<uint8_t> GetData(std::string_view path) const abstract;
-    virtual ObjectAsset GetAsset(std::string_view path) const abstract;
+    virtual std::vector<uint8_t> GetData(std::string_view path) const = 0;
+    virtual ObjectAsset GetAsset(std::string_view path) const = 0;
 };
 
 class FileSystemDataRetriever : public IFileDataRetriever
@@ -69,8 +79,15 @@ public:
 
     ObjectAsset GetAsset(std::string_view path) const override
     {
-        auto absolutePath = Path::Combine(_basePath, path);
-        return ObjectAsset(absolutePath);
+        if (Path::IsAbsolute(path))
+        {
+            return ObjectAsset(path);
+        }
+        else
+        {
+            auto absolutePath = Path::Combine(_basePath, path);
+            return ObjectAsset(absolutePath);
+        }
     }
 };
 
@@ -172,9 +189,9 @@ public:
     {
         _wasVerbose = true;
 
-        if (!String::IsNullOrEmpty(text))
+        if (!String::isNullOrEmpty(text))
         {
-            log_verbose("[%s] Info (%d): %s", _identifier.c_str(), code, text);
+            LOG_VERBOSE("[%s] Info (%d): %s", _identifier.c_str(), code, text);
         }
     }
 
@@ -182,7 +199,7 @@ public:
     {
         _wasWarning = true;
 
-        if (!String::IsNullOrEmpty(text))
+        if (!String::isNullOrEmpty(text))
         {
             Console::Error::WriteLine("[%s] Warning (%d): %s", _identifier.c_str(), code, text);
         }
@@ -192,21 +209,21 @@ public:
     {
         _wasError = true;
 
-        if (!String::IsNullOrEmpty(text))
+        if (!String::isNullOrEmpty(text))
         {
             Console::Error::WriteLine("[%s] Error (%d): %s", _identifier.c_str(), code, text);
         }
     }
 };
 
-namespace ObjectFactory
+namespace OpenRCT2::ObjectFactory
 {
     /**
      * @param jRoot Must be JSON node of type object
      * @note jRoot is deliberately left non-const: json_t behaviour changes when const
      */
     static std::unique_ptr<Object> CreateObjectFromJson(
-        IObjectRepository& objectRepository, json_t& jRoot, const IFileDataRetriever* fileRetriever);
+        IObjectRepository& objectRepository, json_t& jRoot, const IFileDataRetriever* fileRetriever, bool loadImageTable);
 
     static ObjectSourceGame ParseSourceGame(const std::string& s)
     {
@@ -241,9 +258,9 @@ namespace ObjectFactory
         }
     }
 
-    std::unique_ptr<Object> CreateObjectFromLegacyFile(IObjectRepository& objectRepository, const utf8* path)
+    std::unique_ptr<Object> CreateObjectFromLegacyFile(IObjectRepository& objectRepository, const utf8* path, bool loadImages)
     {
-        log_verbose("CreateObjectFromLegacyFile(..., \"%s\")", path);
+        LOG_VERBOSE("CreateObjectFromLegacyFile(..., \"%s\")", path);
 
         std::unique_ptr<Object> result;
         try
@@ -251,22 +268,22 @@ namespace ObjectFactory
             auto fs = OpenRCT2::FileStream(path, OpenRCT2::FILE_MODE_OPEN);
             auto chunkReader = SawyerChunkReader(&fs);
 
-            rct_object_entry entry = fs.ReadValue<rct_object_entry>();
+            RCTObjectEntry entry = fs.ReadValue<RCTObjectEntry>();
 
             if (entry.GetType() != ObjectType::ScenarioText)
             {
                 result = CreateObject(entry.GetType());
                 result->SetDescriptor(ObjectEntryDescriptor(entry));
 
-                utf8 objectName[DAT_NAME_LENGTH + 1] = { 0 };
-                object_entry_get_name_fixed(objectName, sizeof(objectName), &entry);
-                log_verbose("  entry: { 0x%08X, \"%s\", 0x%08X }", entry.flags, objectName, entry.checksum);
+                utf8 objectName[kDatNameLength + 1] = { 0 };
+                ObjectEntryGetNameFixed(objectName, sizeof(objectName), &entry);
+                LOG_VERBOSE("  entry: { 0x%08X, \"%s\", 0x%08X }", entry.flags, objectName, entry.checksum);
 
                 auto chunk = chunkReader.ReadChunk();
-                log_verbose("  size: %zu", chunk->GetLength());
+                LOG_VERBOSE("  size: %zu", chunk->GetLength());
 
                 auto chunkStream = OpenRCT2::MemoryStream(chunk->GetData(), chunk->GetLength());
-                auto readContext = ReadObjectContext(objectRepository, objectName, !gOpenRCT2NoGraphics, nullptr);
+                auto readContext = ReadObjectContext(objectRepository, objectName, loadImages, nullptr);
                 ReadObjectLegacy(*result, &readContext, &chunkStream);
                 if (readContext.WasError())
                 {
@@ -277,13 +294,13 @@ namespace ObjectFactory
         }
         catch (const std::exception& e)
         {
-            log_error("Error: %s when processing object %s", e.what(), path);
+            LOG_ERROR("Error: %s when processing object %s", e.what(), path);
         }
         return result;
     }
 
     std::unique_ptr<Object> CreateObjectFromLegacyData(
-        IObjectRepository& objectRepository, const rct_object_entry* entry, const void* data, size_t dataSize)
+        IObjectRepository& objectRepository, const RCTObjectEntry* entry, const void* data, size_t dataSize)
     {
         Guard::ArgumentNotNull(entry, GUARD_LINE);
         Guard::ArgumentNotNull(data, GUARD_LINE);
@@ -293,8 +310,8 @@ namespace ObjectFactory
         {
             result->SetDescriptor(ObjectEntryDescriptor(*entry));
 
-            utf8 objectName[DAT_NAME_LENGTH + 1];
-            object_entry_get_name_fixed(objectName, sizeof(objectName), entry);
+            utf8 objectName[kDatNameLength + 1];
+            ObjectEntryGetNameFixed(objectName, sizeof(objectName), entry);
 
             auto readContext = ReadObjectContext(objectRepository, objectName, !gOpenRCT2NoGraphics, nullptr);
             auto chunkStream = OpenRCT2::MemoryStream(data, dataSize);
@@ -302,7 +319,7 @@ namespace ObjectFactory
 
             if (readContext.WasError())
             {
-                log_error("Error when processing object.");
+                LOG_ERROR("Error when processing object.");
             }
             else
             {
@@ -335,8 +352,8 @@ namespace ObjectFactory
             case ObjectType::Paths:
                 result = std::make_unique<FootpathObject>();
                 break;
-            case ObjectType::PathBits:
-                result = std::make_unique<FootpathItemObject>();
+            case ObjectType::PathAdditions:
+                result = std::make_unique<PathAdditionObject>();
                 break;
             case ObjectType::SceneryGroup:
                 result = std::make_unique<SceneryGroupObject>();
@@ -348,6 +365,7 @@ namespace ObjectFactory
                 result = std::make_unique<WaterObject>();
                 break;
             case ObjectType::ScenarioText:
+                result = std::make_unique<ScenarioTextObject>();
                 break;
             case ObjectType::TerrainSurface:
                 result = std::make_unique<TerrainSurfaceObject>();
@@ -367,6 +385,15 @@ namespace ObjectFactory
             case ObjectType::FootpathRailings:
                 result = std::make_unique<FootpathRailingsObject>();
                 break;
+            case ObjectType::Audio:
+                result = std::make_unique<AudioObject>();
+                break;
+            case ObjectType::PeepNames:
+                result = std::make_unique<PeepNamesObject>();
+                break;
+            case ObjectType::PeepAnimations:
+                result = std::make_unique<PeepAnimationsObject>();
+                break;
             default:
                 throw std::runtime_error("Invalid object type");
         }
@@ -380,7 +407,7 @@ namespace ObjectFactory
         if (s == "footpath_banner")
             return ObjectType::Banners;
         if (s == "footpath_item")
-            return ObjectType::PathBits;
+            return ObjectType::PathAdditions;
         if (s == "scenery_small")
             return ObjectType::SmallScenery;
         if (s == "scenery_large")
@@ -393,6 +420,8 @@ namespace ObjectFactory
             return ObjectType::ParkEntrance;
         if (s == "water")
             return ObjectType::Water;
+        if (s == "scenario_text")
+            return ObjectType::ScenarioText;
         if (s == "terrain_surface")
             return ObjectType::TerrainSurface;
         if (s == "terrain_edge")
@@ -405,10 +434,16 @@ namespace ObjectFactory
             return ObjectType::FootpathSurface;
         if (s == "footpath_railings")
             return ObjectType::FootpathRailings;
+        if (s == "audio")
+            return ObjectType::Audio;
+        if (s == "peep_names")
+            return ObjectType::PeepNames;
+        if (s == "peep_animations")
+            return ObjectType::PeepAnimations;
         return ObjectType::None;
     }
 
-    std::unique_ptr<Object> CreateObjectFromZipFile(IObjectRepository& objectRepository, std::string_view path)
+    std::unique_ptr<Object> CreateObjectFromZipFile(IObjectRepository& objectRepository, std::string_view path, bool loadImages)
     {
         try
         {
@@ -424,7 +459,7 @@ namespace ObjectFactory
             if (jRoot.is_object())
             {
                 auto fileDataRetriever = ZipDataRetriever(path, *archive);
-                return CreateObjectFromJson(objectRepository, jRoot, &fileDataRetriever);
+                return CreateObjectFromJson(objectRepository, jRoot, &fileDataRetriever, loadImages);
             }
         }
         catch (const std::exception& e)
@@ -434,15 +469,16 @@ namespace ObjectFactory
         return nullptr;
     }
 
-    std::unique_ptr<Object> CreateObjectFromJsonFile(IObjectRepository& objectRepository, const std::string& path)
+    std::unique_ptr<Object> CreateObjectFromJsonFile(
+        IObjectRepository& objectRepository, const std::string& path, bool loadImages)
     {
-        log_verbose("CreateObjectFromJsonFile(\"%s\")", path.c_str());
+        LOG_VERBOSE("CreateObjectFromJsonFile(\"%s\")", path.c_str());
 
         try
         {
             json_t jRoot = Json::ReadFromFile(path.c_str());
             auto fileDataRetriever = FileSystemDataRetriever(Path::GetDirectory(path));
-            return CreateObjectFromJson(objectRepository, jRoot, &fileDataRetriever);
+            return CreateObjectFromJson(objectRepository, jRoot, &fileDataRetriever, loadImages);
         }
         catch (const std::runtime_error& err)
         {
@@ -468,7 +504,7 @@ namespace ObjectFactory
             }
             else
             {
-                log_error("Object %s has an incorrect sourceGame parameter.", id.c_str());
+                LOG_ERROR("Object %s has an incorrect sourceGame parameter.", id.c_str());
                 result.SetSourceGames({ ObjectSourceGame::Custom });
             }
         }
@@ -479,17 +515,26 @@ namespace ObjectFactory
         }
         else
         {
-            log_error("Object %s has an incorrect sourceGame parameter.", id.c_str());
+            LOG_ERROR("Object %s has an incorrect sourceGame parameter.", id.c_str());
             result.SetSourceGames({ ObjectSourceGame::Custom });
         }
     }
 
-    std::unique_ptr<Object> CreateObjectFromJson(
-        IObjectRepository& objectRepository, json_t& jRoot, const IFileDataRetriever* fileRetriever)
+    static bool isUsingClassic()
     {
-        Guard::Assert(jRoot.is_object(), "ObjectFactory::CreateObjectFromJson expects parameter jRoot to be object");
+        auto env = OpenRCT2::GetContext()->GetPlatformEnvironment();
+        return env->IsUsingClassic();
+    }
 
-        log_verbose("CreateObjectFromJson(...)");
+    std::unique_ptr<Object> CreateObjectFromJson(
+        IObjectRepository& objectRepository, json_t& jRoot, const IFileDataRetriever* fileRetriever, bool loadImageTable)
+    {
+        if (!jRoot.is_object())
+        {
+            throw std::runtime_error("Object JSON root was not an object");
+        }
+
+        LOG_VERBOSE("CreateObjectFromJson(...)");
 
         std::unique_ptr<Object> result;
 
@@ -498,30 +543,50 @@ namespace ObjectFactory
         {
             auto id = Json::GetString(jRoot["id"]);
 
+            // Base audio files are renamed to a common, virtual name so asset packs can override it correctly.
+            const bool isRCT2BaseAudio = id == OpenRCT2::Audio::AudioObjectIdentifiers::kRCT2Base && !isUsingClassic();
+            const bool isRCTCBaseAudio = id == OpenRCT2::Audio::AudioObjectIdentifiers::kRCTCBase && isUsingClassic();
+            if (isRCT2BaseAudio || isRCTCBaseAudio)
+            {
+                id = OpenRCT2::Audio::AudioObjectIdentifiers::kRCT2;
+            }
+
+            auto version = VersionTuple(Json::GetString(jRoot["version"]));
             ObjectEntryDescriptor descriptor;
             auto originalId = Json::GetString(jRoot["originalId"]);
             if (originalId.length() == 8 + 1 + 8 + 1 + 8)
             {
                 auto originalName = originalId.substr(9, 8);
 
-                rct_object_entry entry = {};
+                RCTObjectEntry entry = {};
                 entry.flags = std::stoul(originalId.substr(0, 8), nullptr, 16);
                 entry.checksum = std::stoul(originalId.substr(18, 8), nullptr, 16);
-                entry.SetType(objectType);
                 auto minLength = std::min<size_t>(8, originalName.length());
                 std::memcpy(entry.name, originalName.c_str(), minLength);
-                descriptor = ObjectEntryDescriptor(entry);
+
+                // Some bad objects try to override different types
+                if (entry.GetType() != objectType)
+                {
+                    LOG_ERROR(
+                        "Object \"%s\" has invalid originalId set \"%s\". Ignoring override.", id.c_str(), originalId.c_str());
+                    descriptor = ObjectEntryDescriptor(objectType, id);
+                }
+                else
+                {
+                    descriptor = ObjectEntryDescriptor(entry);
+                }
             }
             else
             {
                 descriptor = ObjectEntryDescriptor(objectType, id);
             }
-
+            descriptor.Version = version;
             result = CreateObject(objectType);
+            result->SetVersion(version);
             result->SetIdentifier(id);
             result->SetDescriptor(descriptor);
             result->MarkAsJsonObject();
-            auto readContext = ReadObjectContext(objectRepository, id, !gOpenRCT2NoGraphics, fileRetriever);
+            auto readContext = ReadObjectContext(objectRepository, id, loadImageTable, fileRetriever);
             result->ReadJson(&readContext, jRoot);
             if (readContext.WasError())
             {
@@ -538,9 +603,10 @@ namespace ObjectFactory
                 }
             }
             result->SetAuthors(std::move(authorVector));
+            result->SetIsCompatibilityObject(Json::GetBoolean(jRoot["isCompatibilityObject"]));
 
             ExtractSourceGames(id, jRoot, *result);
         }
         return result;
     }
-} // namespace ObjectFactory
+} // namespace OpenRCT2::ObjectFactory

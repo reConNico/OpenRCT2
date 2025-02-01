@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,9 +9,7 @@
 
 #pragma once
 
-#include "../common.h"
-#include "../drawing/Drawing.h"
-#include "../util/Util.h"
+#include <cstdint>
 
 enum class ClimateType : uint8_t
 {
@@ -52,15 +50,6 @@ enum class WeatherLevel
     Heavy,
 };
 
-struct WeatherState
-{
-    int8_t TemperatureDelta;
-    WeatherEffectType EffectLevel;
-    int8_t GloomLevel;
-    WeatherLevel Level;
-    uint32_t SpriteId;
-};
-
 struct ClimateState
 {
     WeatherType Weather;
@@ -70,20 +59,20 @@ struct ClimateState
     WeatherLevel Level;
 };
 
-extern ClimateType gClimate;
-extern ClimateState gClimateCurrent;
-extern ClimateState gClimateNext;
-extern uint16_t gClimateUpdateTimer;
 extern uint16_t gClimateLightningFlash;
 
-int32_t climate_celsius_to_fahrenheit(int32_t celsius);
-void climate_reset(ClimateType climate);
-void climate_update();
-void climate_update_sound();
-void climate_force_weather(WeatherType weather);
+int32_t ClimateCelsiusToFahrenheit(int32_t celsius);
+void ClimateReset(ClimateType climate);
+void ClimateUpdate();
+void ClimateUpdateSound();
+void ClimateStopWeatherSound();
+void ClimateForceWeather(WeatherType weather);
 
-bool climate_is_raining();
-bool climate_is_snowing();
+enum class FilterPaletteID : int32_t;
+
+bool ClimateIsRaining();
+bool ClimateIsSnowing();
+bool ClimateIsSnowingHeavily();
 bool WeatherIsDry(WeatherType);
-FilterPaletteID climate_get_weather_gloom_palette_id(const ClimateState& state);
-uint32_t climate_get_weather_sprite_id(const ClimateState& state);
+FilterPaletteID ClimateGetWeatherGloomPaletteId(const ClimateState& state);
+uint32_t ClimateGetWeatherSpriteId(const ClimateState& state);

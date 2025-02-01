@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,37 +11,39 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "../../../Context.h"
-#    include "../../../common.h"
-#    include "../../../entity/EntityList.h"
-#    include "../../../entity/EntityRegistry.h"
-#    include "../../../entity/Peep.h"
-#    include "../../../util/Util.h"
-#    include "../../Duktape.hpp"
-#    include "../../ScriptEngine.h"
+    #include "../../../Context.h"
+    #include "../../../entity/EntityList.h"
+    #include "../../../entity/EntityRegistry.h"
+    #include "../../../entity/Peep.h"
+    #include "../../Duktape.hpp"
+    #include "../../ScriptEngine.h"
 
-#    include <algorithm>
-#    include <string_view>
-#    include <unordered_map>
+    #include <string_view>
+    #include <unordered_map>
 
 namespace OpenRCT2::Scripting
 {
     class ScEntity
     {
     protected:
-        uint16_t _id = SPRITE_INDEX_NULL;
+        EntityId _id{ EntityId::GetNull() };
 
     public:
-        ScEntity(uint16_t id)
+        ScEntity(EntityId id)
             : _id(id)
         {
         }
 
     private:
-        int32_t id_get() const
+        DukValue id_get() const
         {
+            auto ctx = GetContext()->GetScriptEngine().GetContext();
+
             auto entity = GetEntity();
-            return entity != nullptr ? entity->sprite_index : 0;
+            if (entity == nullptr)
+                return ToDuk(ctx, nullptr);
+
+            return ToDuk(ctx, entity->Id.ToUnderlying());
         }
 
         std::string type_get() const
@@ -56,11 +58,11 @@ namespace OpenRCT2::Scripting
                     case EntityType::Vehicle:
                         return "car";
                     case EntityType::Guest:
-                        if (targetApiVersion <= API_VERSION_33_PEEP_DEPRECATION)
+                        if (targetApiVersion <= kApiVersionPeepDeprecation)
                             return "peep";
                         return "guest";
                     case EntityType::Staff:
-                        if (targetApiVersion <= API_VERSION_33_PEEP_DEPRECATION)
+                        if (targetApiVersion <= kApiVersionPeepDeprecation)
                             return "peep";
                         return "staff";
                     case EntityType::SteamParticle:

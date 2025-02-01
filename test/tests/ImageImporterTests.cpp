@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2018 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -14,6 +14,7 @@
 #include <openrct2/drawing/ImageImporter.h>
 #include <string_view>
 
+using namespace OpenRCT2;
 using namespace OpenRCT2::Drawing;
 
 class ImageImporterTests : public testing::Test
@@ -21,7 +22,7 @@ class ImageImporterTests : public testing::Test
 public:
     static std::string GetImagePath(const std::string& name)
     {
-        return Path::Combine(TestData::GetBasePath(), "images", name.c_str());
+        return Path::Combine(TestData::GetBasePath(), u8"images", name.c_str());
     }
 
     static uint32_t GetHash(void* buffer, size_t bufferLength)
@@ -41,7 +42,8 @@ TEST_F(ImageImporterTests, Import_Logo)
 
     ImageImporter importer;
     auto image = Imaging::ReadFromFile(logoPath, IMAGE_FORMAT::PNG_32);
-    auto result = importer.Import(image, 3, 5, ImageImporter::IMPORT_FLAGS::RLE);
+    auto meta = ImageImportMeta{ .offset = { 3, 5 } };
+    auto result = importer.Import(image, meta);
 
     ASSERT_EQ(result.Buffer.data(), result.Element.offset);
     ASSERT_EQ(128, result.Element.width);
@@ -54,5 +56,5 @@ TEST_F(ImageImporterTests, Import_Logo)
     // Update expected hash if change is expected.
     ASSERT_NE(nullptr, result.Buffer.data());
     auto hash = GetHash(result.Buffer.data(), result.Buffer.size());
-    ASSERT_EQ(0xCEF27C7D, hash);
+    ASSERT_EQ(uint32_t(0x212A99BC), hash);
 }

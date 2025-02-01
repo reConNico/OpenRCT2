@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,14 +11,13 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "../common.h"
-#    include "Duktape.hpp"
+    #include "Duktape.hpp"
 
-#    include <any>
-#    include <memory>
-#    include <string>
-#    include <tuple>
-#    include <vector>
+    #include <any>
+    #include <memory>
+    #include <string>
+    #include <tuple>
+    #include <vector>
 
 namespace OpenRCT2::Scripting
 {
@@ -40,6 +39,10 @@ namespace OpenRCT2::Scripting
         ACTION_LOCATION,
         GUEST_GENERATION,
         VEHICLE_CRASH,
+        MAP_CHANGE,
+        MAP_CHANGED,
+        MAP_SAVE,
+        PARK_CALCULATE_GUEST_CAP,
         COUNT,
         UNDEFINED = -1,
     };
@@ -86,6 +89,7 @@ namespace OpenRCT2::Scripting
         void UnsubscribeAll(std::shared_ptr<const Plugin> owner);
         void UnsubscribeAll();
         bool HasSubscriptions(HOOK_TYPE type) const;
+        bool IsValidHookForPlugin(HOOK_TYPE type, Plugin& plugin) const;
         void Call(HOOK_TYPE type, bool isGameStateMutable);
         void Call(HOOK_TYPE type, const DukValue& arg, bool isGameStateMutable);
         void Call(

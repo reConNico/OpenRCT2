@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -7,8 +7,8 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
+#include "../Diagnostic.h"
 #include "../TrackImporter.h"
-#include "../config/Config.h"
 #include "../core/FileStream.h"
 #include "../core/MemoryStream.h"
 #include "../core/Path.hpp"
@@ -16,7 +16,7 @@
 #include "../object/ObjectRepository.h"
 #include "../object/RideObject.h"
 #include "../rct12/SawyerChunkReader.h"
-#include "../rct12/SawyerEncoding.h"
+#include "../rct2/RCT2.h"
 #include "../ride/Ride.h"
 #include "../ride/RideData.h"
 #include "../ride/TrackDesign.h"
@@ -24,7 +24,9 @@
 
 #include <mutex>
 
-namespace RCT2
+using namespace OpenRCT2;
+
+namespace OpenRCT2::RCT2
 {
     static std::mutex _objectLookupMutex;
 
@@ -44,8 +46,8 @@ namespace RCT2
 
         bool Load(const utf8* path) override
         {
-            const utf8* extension = Path::GetExtension(path);
-            if (String::Equals(extension, ".td6", true))
+            const auto extension = Path::GetExtension(path);
+            if (String::iequals(extension, ".td6"))
             {
                 _name = GetNameFromTrackPath(path);
                 auto fs = OpenRCT2::FileStream(path, OpenRCT2::FILE_MODE_OPEN);
@@ -57,12 +59,6 @@ namespace RCT2
 
         bool LoadFromStream(OpenRCT2::IStream* stream) override
         {
-            if (!gConfigGeneral.allow_loading_with_incorrect_checksum
-                && SawyerEncoding::ValidateTrackChecksum(stream) != RCT12TrackDesignVersion::TD6)
-            {
-                throw IOException("Invalid checksum.");
-            }
-
             auto chunkReader = SawyerChunkReader(stream);
             auto data = chunkReader.ReadChunkTrack();
             _stream.WriteArray<const uint8_t>(reinterpret_cast<const uint8_t*>(data->GetData()), data->GetLength());
@@ -78,107 +74,101 @@ namespace RCT2
             // Rework td6 so that it is just the fields
             _stream.Read(&td6, 0xA3);
 
-            td->type = td6.type; // 0x00
-            td->vehicle_type = td6.vehicle_type;
+            td->trackAndVehicle.rtdIndex = td6.Type; // 0x00
 
-            td->cost = 0;
-            td->flags = td6.flags;
-            td->ride_mode = static_cast<RideMode>(td6.ride_mode);
-            td->track_flags = 0;
-            td->colour_scheme = td6.version_and_colour_scheme & 0x3;
-            for (auto i = 0; i < Limits::MaxTrainsPerRide; ++i)
+            td->operation.rideMode = static_cast<RideMode>(td6.RideMode);
+            td->appearance.vehicleColourSettings = static_cast<VehicleColourSettings>(td6.VersionAndColourScheme & 0x3);
+            for (auto i = 0; i < Limits::kMaxVehicleColours; ++i)
             {
-                td->vehicle_colours[i] = td6.vehicle_colours[i];
-                td->vehicle_additional_colour[i] = td6.vehicle_additional_colour[i];
+                td->appearance.vehicleColours[i].Body = td6.VehicleColours[i].BodyColour;
+                td->appearance.vehicleColours[i].Trim = td6.VehicleColours[i].TrimColour;
+                td->appearance.vehicleColours[i].Tertiary = td6.VehicleAdditionalColour[i];
             }
-            td->entrance_style = td6.entrance_style;
-            td->total_air_time = td6.total_air_time;
-            td->depart_flags = td6.depart_flags;
-            td->number_of_trains = td6.number_of_trains;
-            td->number_of_cars_per_train = td6.number_of_cars_per_train;
-            td->min_waiting_time = td6.min_waiting_time;
-            td->max_waiting_time = td6.max_waiting_time;
-            td->operation_setting = td6.operation_setting;
-            td->max_speed = td6.max_speed;
-            td->average_speed = td6.average_speed;
-            td->ride_length = td6.ride_length;
-            td->max_positive_vertical_g = td6.max_positive_vertical_g;
-            td->max_negative_vertical_g = td6.max_negative_vertical_g;
-            td->max_lateral_g = td6.max_lateral_g;
+            td->appearance.stationObjectIdentifier = GetStationIdentifierFromStyle(td6.EntranceStyle);
+            td->statistics.totalAirTime = (td6.TotalAirTime * 1024) / 123;
+            td->operation.departFlags = td6.DepartFlags;
+            td->trackAndVehicle.numberOfTrains = td6.NumberOfTrains;
+            td->trackAndVehicle.numberOfCarsPerTrain = td6.NumberOfCarsPerTrain;
+            td->operation.minWaitingTime = td6.MinWaitingTime;
+            td->operation.maxWaitingTime = td6.MaxWaitingTime;
+            td->operation.operationSetting = td6.OperationSetting;
+            td->statistics.maxSpeed = td6.MaxSpeed;
+            td->statistics.averageSpeed = td6.AverageSpeed;
+            td->statistics.rideLength = td6.RideLength;
+            td->statistics.maxPositiveVerticalG = td6.MaxPositiveVerticalG * kTD46GForcesMultiplier;
+            td->statistics.maxNegativeVerticalG = td6.MaxNegativeVerticalG * kTD46GForcesMultiplier;
+            td->statistics.maxLateralG = td6.MaxLateralG * kTD46GForcesMultiplier;
 
-            if (td->type == RIDE_TYPE_MINI_GOLF)
-            {
-                td->holes = td6.holes;
-            }
+            if (td6.Type == RIDE_TYPE_MINI_GOLF)
+                td->statistics.holes = td6.Holes & kRCT12InversionAndHoleMask;
             else
-            {
-                td->inversions = td6.inversions;
-            }
+                td->statistics.inversions = td6.Inversions & kRCT12InversionAndHoleMask;
 
-            td->drops = td6.drops;
-            td->highest_drop_height = td6.highest_drop_height;
-            td->excitement = td6.excitement;
-            td->intensity = td6.intensity;
-            td->nausea = td6.nausea;
-            td->upkeep_cost = td6.upkeep_cost;
-            for (auto i = 0; i < Limits::NumColourSchemes; ++i)
+            td->statistics.drops = td6.Drops & kRCT12RideNumDropsMask;
+            td->statistics.highestDropHeight = td6.HighestDropHeight;
+            td->statistics.ratings.excitement = td6.Excitement * kTD46RatingsMultiplier;
+            td->statistics.ratings.intensity = td6.Intensity * kTD46RatingsMultiplier;
+            td->statistics.ratings.nausea = td6.Nausea * kTD46RatingsMultiplier;
+            td->statistics.upkeepCost = ToMoney64(td6.UpkeepCost);
+            for (auto i = 0; i < Limits::kNumColourSchemes; ++i)
             {
-                td->track_spine_colour[i] = td6.track_spine_colour[i];
-                td->track_rail_colour[i] = td6.track_rail_colour[i];
-                td->track_support_colour[i] = td6.track_support_colour[i];
+                td->appearance.trackColours[i].main = td6.TrackSpineColour[i];
+                td->appearance.trackColours[i].additional = td6.TrackRailColour[i];
+                td->appearance.trackColours[i].supports = td6.TrackSupportColour[i];
             }
-            td->flags2 = td6.flags2;
-            td->vehicle_object = ObjectEntryDescriptor(td6.vehicle_object);
-            td->space_required_x = td6.space_required_x;
-            td->space_required_y = td6.space_required_y;
-            td->lift_hill_speed = td6.lift_hill_speed_num_circuits & 0b00011111;
-            td->num_circuits = td6.lift_hill_speed_num_circuits >> 5;
+            td->trackAndVehicle.vehicleObject = ObjectEntryDescriptor(td6.VehicleObject);
+            td->statistics.spaceRequired = { td6.SpaceRequiredX, td6.SpaceRequiredY };
+            td->operation.liftHillSpeed = td6.LiftHillSpeedNumCircuits & 0b00011111;
+            td->operation.numCircuits = td6.LiftHillSpeedNumCircuits >> 5;
 
-            auto version = static_cast<RCT12TrackDesignVersion>((td6.version_and_colour_scheme >> 2) & 3);
+            auto version = static_cast<RCT12TrackDesignVersion>((td6.VersionAndColourScheme >> 2) & 3);
             if (version != RCT12TrackDesignVersion::TD6)
             {
-                log_error("Unsupported track design.");
+                LOG_ERROR("Unsupported track design.");
                 return nullptr;
             }
 
-            td->operation_setting = std::min(td->operation_setting, GetRideTypeDescriptor(td->type).OperatingSettings.MaxValue);
+            td->operation.operationSetting = std::min(
+                td->operation.operationSetting, GetRideTypeDescriptor(td->trackAndVehicle.rtdIndex).OperatingSettings.MaxValue);
 
-            if (td->type == RIDE_TYPE_MAZE)
+            const auto& rtd = GetRideTypeDescriptor(td->trackAndVehicle.rtdIndex);
+            if (rtd.specialType == RtdSpecialType::maze)
             {
-                rct_td46_maze_element t6MazeElement{};
-                t6MazeElement.all = !0;
-                while (t6MazeElement.all != 0)
+                TD46MazeElement t6MazeElement{};
+                t6MazeElement.All = !0;
+                while (t6MazeElement.All != 0)
                 {
-                    _stream.Read(&t6MazeElement, sizeof(rct_td46_maze_element));
-                    if (t6MazeElement.all != 0)
+                    _stream.Read(&t6MazeElement, sizeof(TD46MazeElement));
+                    if (t6MazeElement.All != 0)
                     {
-                        TrackDesignMazeElement mazeElement{};
-                        mazeElement.x = t6MazeElement.x;
-                        mazeElement.y = t6MazeElement.y;
-                        mazeElement.direction = t6MazeElement.direction;
-                        mazeElement.type = t6MazeElement.type;
-                        td->maze_elements.push_back(mazeElement);
+                        ImportMazeElement(*td, t6MazeElement);
                     }
                 }
             }
             else
             {
-                rct_td46_track_element t6TrackElement{};
+                TD46TrackElement t6TrackElement{};
                 for (uint8_t endFlag = _stream.ReadValue<uint8_t>(); endFlag != 0xFF; endFlag = _stream.ReadValue<uint8_t>())
                 {
                     _stream.SetPosition(_stream.GetPosition() - 1);
-                    _stream.Read(&t6TrackElement, sizeof(rct_td46_track_element));
+                    _stream.Read(&t6TrackElement, sizeof(TD46TrackElement));
                     TrackDesignTrackElement trackElement{};
 
-                    track_type_t trackType = RCT2TrackTypeToOpenRCT2(t6TrackElement.type, td->type, true);
-                    if (trackType == TrackElemType::InvertedUp90ToFlatQuarterLoopAlias)
+                    OpenRCT2::TrackElemType trackType;
+                    if (t6TrackElement.Type == OpenRCT2::RCT12::TrackElemType::InvertedUp90ToFlatQuarterLoopAlias)
                     {
                         trackType = TrackElemType::MultiDimInvertedUp90ToFlatQuarterLoop;
                     }
+                    else
+                    {
+                        auto rideType = td->trackAndVehicle.rtdIndex;
+                        const bool isFlatRide = GetRideTypeDescriptor(rideType).HasFlag(RtdFlag::isFlatRide);
+                        trackType = RCT2TrackTypeToOpenRCT2(t6TrackElement.Type, rideType, isFlatRide);
+                    }
 
                     trackElement.type = trackType;
-                    trackElement.flags = t6TrackElement.flags;
-                    td->track_elements.push_back(trackElement);
+                    ConvertFromTD46Flags(trackElement, t6TrackElement.Flags);
+                    td->trackElements.push_back(trackElement);
                 }
 
                 TD6EntranceElement t6EntranceElement{};
@@ -187,12 +177,11 @@ namespace RCT2
                     _stream.SetPosition(_stream.GetPosition() - 1);
                     _stream.Read(&t6EntranceElement, sizeof(TD6EntranceElement));
                     TrackDesignEntranceElement entranceElement{};
-                    entranceElement.z = (t6EntranceElement.z == -128) ? -1 : t6EntranceElement.z;
-                    entranceElement.direction = t6EntranceElement.direction & 0x7F;
-                    entranceElement.x = t6EntranceElement.x;
-                    entranceElement.y = t6EntranceElement.y;
-                    entranceElement.isExit = t6EntranceElement.direction >> 7;
-                    td->entrance_elements.push_back(entranceElement);
+                    auto xy = CoordsXY(t6EntranceElement.x, t6EntranceElement.y);
+                    auto z = (t6EntranceElement.z == -128) ? -1 : t6EntranceElement.z;
+                    entranceElement.location = TileCoordsXYZD(TileCoordsXY(xy), z, t6EntranceElement.GetDirection());
+                    entranceElement.isExit = t6EntranceElement.IsExit();
+                    td->entranceElements.push_back(entranceElement);
                 }
             }
 
@@ -202,17 +191,19 @@ namespace RCT2
                 TD6SceneryElement t6SceneryElement{};
                 _stream.Read(&t6SceneryElement, sizeof(TD6SceneryElement));
                 TrackDesignSceneryElement sceneryElement{};
-                sceneryElement.scenery_object = ObjectEntryDescriptor(t6SceneryElement.scenery_object);
-                sceneryElement.loc.x = t6SceneryElement.x * COORDS_XY_STEP;
-                sceneryElement.loc.y = t6SceneryElement.y * COORDS_XY_STEP;
-                sceneryElement.loc.z = t6SceneryElement.z * COORDS_Z_STEP;
-                sceneryElement.flags = t6SceneryElement.flags;
-                sceneryElement.primary_colour = t6SceneryElement.primary_colour;
-                sceneryElement.secondary_colour = t6SceneryElement.secondary_colour;
-                td->scenery_elements.push_back(std::move(sceneryElement));
+                sceneryElement.sceneryObject = ObjectEntryDescriptor(t6SceneryElement.SceneryObject);
+                TileCoordsXYZ tileCoords = { t6SceneryElement.x, t6SceneryElement.y, t6SceneryElement.z };
+                sceneryElement.loc = tileCoords.ToCoordsXYZ();
+                sceneryElement.flags = t6SceneryElement.Flags;
+                sceneryElement.primaryColour = t6SceneryElement.PrimaryColour;
+                sceneryElement.secondaryColour = t6SceneryElement.SecondaryColour;
+                if (t6SceneryElement.SceneryObject.GetType() == ObjectType::Walls)
+                    sceneryElement.tertiaryColour = t6SceneryElement.getTertiaryWallColour();
+
+                td->sceneryElements.push_back(std::move(sceneryElement));
             }
 
-            td->name = _name;
+            td->gameStateData.name = _name;
 
             UpdateRideType(td);
 
@@ -221,24 +212,21 @@ namespace RCT2
 
         void UpdateRideType(std::unique_ptr<TrackDesign>& td)
         {
-            if (RCT2RideTypeNeedsConversion(td->type))
+            if (RCT2RideTypeNeedsConversion(td->trackAndVehicle.rtdIndex))
             {
                 std::scoped_lock<std::mutex> lock(_objectLookupMutex);
-                auto rawObject = object_repository_load_object(&td->vehicle_object.Entry);
+                auto rawObject = ObjectRepositoryLoadObject(&td->trackAndVehicle.vehicleObject.Entry);
                 if (rawObject != nullptr)
                 {
-                    const auto* rideEntry = static_cast<const rct_ride_entry*>(
-                        static_cast<RideObject*>(rawObject.get())->GetLegacyData());
-                    if (rideEntry != nullptr)
-                    {
-                        td->type = RCT2RideTypeToOpenRCT2RideType(td->type, rideEntry);
-                    }
+                    const auto& rideEntry = static_cast<RideObject*>(rawObject.get())->GetEntry();
+
+                    td->trackAndVehicle.rtdIndex = RCT2RideTypeToOpenRCT2RideType(td->trackAndVehicle.rtdIndex, rideEntry);
                     rawObject->Unload();
                 }
             }
         }
     };
-} // namespace RCT2
+} // namespace OpenRCT2::RCT2
 
 std::unique_ptr<ITrackImporter> TrackImporter::CreateTD6()
 {

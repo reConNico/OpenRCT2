@@ -11,17 +11,17 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "../../../Context.h"
-#    include "../../../common.h"
-#    include "../../../ride/Ride.h"
-#    include "../../Duktape.hpp"
-#    include "../../ScriptEngine.h"
-#    include "../object/ScObject.hpp"
-#    include "ScRideStation.hpp"
+    #include "../../../Context.h"
+    #include "../../../ride/Ride.h"
+    #include "../../Duktape.hpp"
+    #include "../../ScriptEngine.h"
+    #include "../object/ScObject.hpp"
+    #include "ScRideStation.hpp"
 
 namespace OpenRCT2::Scripting
 {
-    template<> inline DukValue ToDuk(duk_context* ctx, const TrackColour& value)
+    template<>
+    inline DukValue ToDuk(duk_context* ctx, const TrackColour& value)
     {
         DukObject obj(ctx);
         obj.Set("main", value.main);
@@ -30,7 +30,8 @@ namespace OpenRCT2::Scripting
         return obj.Take();
     }
 
-    template<> inline TrackColour FromDuk(const DukValue& s)
+    template<>
+    inline TrackColour FromDuk(const DukValue& s)
     {
         TrackColour result{};
         result.main = AsOrDefault(s["main"], 0);
@@ -39,31 +40,35 @@ namespace OpenRCT2::Scripting
         return result;
     }
 
-    template<> inline DukValue ToDuk(duk_context* ctx, const VehicleColour& value)
+    template<>
+    inline DukValue ToDuk(duk_context* ctx, const VehicleColour& value)
     {
         DukObject obj(ctx);
         obj.Set("body", value.Body);
         obj.Set("trim", value.Trim);
-        obj.Set("ternary", value.Ternary);
+        obj.Set("ternary", value.Tertiary);
+        obj.Set("tertiary", value.Tertiary);
         return obj.Take();
     }
 
-    template<> inline VehicleColour FromDuk(const DukValue& s)
+    template<>
+    inline VehicleColour FromDuk(const DukValue& s)
     {
         VehicleColour result{};
         result.Body = AsOrDefault(s["body"], 0);
         result.Trim = AsOrDefault(s["trim"], 0);
-        result.Ternary = AsOrDefault(s["ternary"], 0);
+        result.Tertiary = AsOrDefault(s["ternary"], 0);
+        result.Tertiary = AsOrDefault<int32_t>(s["tertiary"], result.Tertiary);
         return result;
     }
 
     class ScRide
     {
     private:
-        ride_id_t _rideId = RIDE_ID_NULL;
+        RideId _rideId = RideId::GetNull();
 
     public:
-        ScRide(ride_id_t rideId);
+        ScRide(RideId rideId);
 
     private:
         int32_t id_get() const;
@@ -140,8 +145,8 @@ namespace OpenRCT2::Scripting
 
         int32_t age_get() const;
 
-        int16_t runningCost_get() const;
-        void runningCost_set(int16_t value);
+        money64 runningCost_get() const;
+        void runningCost_set(money64 value);
 
         int32_t totalProfit_get() const;
         void totalProfit_set(int32_t value);
@@ -154,6 +159,36 @@ namespace OpenRCT2::Scripting
         void value_set(const DukValue& value);
 
         uint8_t downtime_get() const;
+
+        uint8_t liftHillSpeed_get() const;
+        void lifthillSpeed_set(uint8_t value);
+
+        uint8_t maxLiftHillSpeed_get() const;
+        uint8_t minLiftHillSpeed_get() const;
+
+        uint8_t satisfaction_get() const;
+
+        double maxSpeed_get() const;
+
+        double averageSpeed_get() const;
+
+        int32_t rideTime_get() const;
+
+        double rideLength_get() const;
+
+        double maxPositiveVerticalGs_get() const;
+
+        double maxNegativeVerticalGs_get() const;
+
+        double maxLateralGs_get() const;
+
+        double totalAirTime_get() const;
+
+        uint8_t numDrops_get() const;
+
+        uint8_t numLiftHills_get() const;
+
+        double highestDropHeight_get() const;
 
         Ride* GetRide() const;
 

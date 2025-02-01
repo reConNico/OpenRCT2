@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,7 +9,9 @@
 
 #pragma once
 
-#include "../common.h"
+#include "../Identifiers.h"
+#include "../core/StringTypes.h"
+#include "../localisation/StringIdType.h"
 
 #include <algorithm>
 #include <array>
@@ -20,7 +22,7 @@
 struct CoordsXYZ;
 class Formatter;
 
-namespace News
+namespace OpenRCT2::News
 {
     enum class ItemType : uint8_t
     {
@@ -34,6 +36,7 @@ namespace News
         Peeps,
         Award,
         Graph,
+        Campaign,
         Count
     };
 
@@ -79,6 +82,7 @@ namespace News
                 case News::ItemType::Peeps:
                 case News::ItemType::Award:
                 case News::ItemType::Graph:
+                case News::ItemType::Campaign:
                     return News::ItemTypeProperty::HasSubject;
                 case News::ItemType::Ride:
                 case News::ItemType::PeepOnRide:
@@ -116,7 +120,8 @@ namespace News
     constexpr int32_t MaxItemsArchive = 50;
     constexpr int32_t MaxItems = News::ItemHistoryStart + News::MaxItemsArchive;
 
-    template<std::size_t N> class ItemQueue
+    template<std::size_t N>
+    class ItemQueue
     {
     public:
         static_assert(N > 0, "Cannot instantiate News::ItemQueue with size=0");
@@ -260,7 +265,8 @@ namespace News
             return Archived;
         }
 
-        template<typename Predicate> void ForeachRecentNews(Predicate&& p)
+        template<typename Predicate>
+        void ForeachRecentNews(Predicate&& p)
         {
             for (auto& newsItem : Recent)
             {
@@ -268,7 +274,8 @@ namespace News
             }
         }
 
-        template<typename Predicate> void ForeachArchivedNews(Predicate&& p)
+        template<typename Predicate>
+        void ForeachArchivedNews(Predicate&& p)
         {
             for (auto& newsItem : Archived)
             {
@@ -290,7 +297,8 @@ namespace News
 
     std::optional<CoordsXYZ> GetSubjectLocation(News::ItemType type, int32_t subject);
 
-    News::Item* AddItemToQueue(News::ItemType type, rct_string_id string_id, uint32_t assoc, const Formatter& formatter);
+    News::Item* AddItemToQueue(News::ItemType type, StringId string_id, uint32_t assoc, const Formatter& formatter);
+    News::Item* AddItemToQueue(News::ItemType type, StringId string_id, EntityId assoc, const Formatter& formatter);
     News::Item* AddItemToQueue(News::ItemType type, const utf8* text, uint32_t assoc);
 
     bool CheckIfItemRequiresAssoc(News::ItemType type);
@@ -307,6 +315,4 @@ namespace News
 
     void AddItemToQueue(News::Item* newNewsItem);
     void RemoveItem(int32_t index);
-} // namespace News
-
-extern News::ItemQueues gNewsItems;
+} // namespace OpenRCT2::News

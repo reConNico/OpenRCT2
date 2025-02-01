@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,36 +9,30 @@
 
 #pragma once
 
-#include "../common.h"
+#include "../core/StringTypes.h"
 
-#include <string>
-
-namespace Path
+namespace OpenRCT2::Path
 {
-    utf8* Append(utf8* buffer, size_t bufferSize, const utf8* src);
-    std::string Combine(std::string_view a, std::string_view b);
+    [[nodiscard]] u8string Combine(u8string_view a, u8string_view b);
 
-    template<typename... Args> static std::string Combine(std::string_view a, std::string_view b, Args... args)
+    template<typename... Args>
+    static u8string Combine(u8string_view a, u8string_view b, Args... args)
     {
         return Combine(a, Combine(b, args...));
     }
 
-    std::string GetDirectory(const std::string& path);
-    utf8* GetDirectory(const utf8* path);
-    utf8* GetDirectory(utf8* buffer, size_t bufferSize, const utf8* path);
-    void CreateDirectory(const std::string& path);
-    bool DirectoryExists(const std::string& path);
-    std::string GetFileName(const std::string& path);
-    const utf8* GetFileName(const utf8* path);
-    std::string GetFileNameWithoutExtension(const std::string& path);
-    utf8* GetFileNameWithoutExtension(const utf8* path);
-    utf8* GetFileNameWithoutExtension(utf8* buffer, size_t bufferSize, const utf8* path);
-    const std::string GetExtension(const std::string& path);
-    const utf8* GetExtension(const utf8* path);
-    utf8* GetAbsolute(utf8* buffer, size_t bufferSize, const utf8* relativePath);
-    std::string GetAbsolute(const std::string& relative);
-    bool Equals(const std::string& a, const std::string& b);
-    bool Equals(const utf8* a, const utf8* b);
+    u8string GetDirectory(u8string_view path);
+    bool CreateDirectory(u8string_view path);
+    bool DirectoryExists(u8string_view path);
+    bool DeleteDirectory(u8string_view path);
+    u8string GetFileName(u8string_view origPath);
+    u8string GetFileNameWithoutExtension(u8string_view path);
+    u8string GetExtension(u8string_view path);
+    u8string WithExtension(u8string_view path, u8string_view newExtension);
+    bool IsAbsolute(u8string_view path);
+    u8string GetAbsolute(u8string_view relative);
+    u8string GetRelative(u8string_view path, u8string_view base);
+    bool Equals(u8string_view a, u8string_view b);
 
     /**
      * Checks if the given path is a file. If not, checks to see if
@@ -46,5 +40,5 @@ namespace Path
      * one found based on a straight forward character sort.
      * Note: This will not resolve the case for Windows.
      */
-    std::string ResolveCasing(const std::string& path);
-} // namespace Path
+    u8string ResolveCasing(u8string_view path);
+} // namespace OpenRCT2::Path

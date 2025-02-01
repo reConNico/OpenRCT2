@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,36 +10,26 @@
 #include "StaffSetCostumeAction.h"
 
 #include "../Context.h"
+#include "../Diagnostic.h"
 #include "../entity/EntityRegistry.h"
-#include "../interface/Window.h"
-#include "../localisation/Localisation.h"
 #include "../localisation/StringIds.h"
+#include "../object/ObjectManager.h"
+#include "../object/PeepAnimationsObject.h"
+#include "../ui/WindowManager.h"
 #include "../windows/Intent.h"
 
-/** rct2: 0x00982134 */
-constexpr const bool peep_slow_walking_types[] = {
-    false, // PeepSpriteType::Normal
-    false, // PeepSpriteType::Handyman
-    false, // PeepSpriteType::Mechanic
-    false, // PeepSpriteType::Security
-    false, // PeepSpriteType::EntertainerPanda
-    false, // PeepSpriteType::EntertainerTiger
-    false, // PeepSpriteType::EntertainerElephant
-    false, // PeepSpriteType::EntertainerRoman
-    false, // PeepSpriteType::EntertainerGorilla
-    false, // PeepSpriteType::EntertainerSnowman
-    false, // PeepSpriteType::EntertainerKnight
-    true,  // PeepSpriteType::EntertainerAstronaut
-    false, // PeepSpriteType::EntertainerBandit
-    false, // PeepSpriteType::EntertainerSheriff
-    true,  // PeepSpriteType::EntertainerPirate
-    true,  // PeepSpriteType::Balloon
-};
+using namespace OpenRCT2;
 
-StaffSetCostumeAction::StaffSetCostumeAction(uint16_t spriteIndex, EntertainerCostume costume)
+StaffSetCostumeAction::StaffSetCostumeAction(EntityId spriteIndex, ObjectEntryIndex costume)
     : _spriteIndex(spriteIndex)
     , _costume(costume)
 {
+}
+
+void StaffSetCostumeAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit("id", _spriteIndex);
+    visitor.Visit("costume", _costume);
 }
 
 uint16_t StaffSetCostumeAction::GetActionFlags() const
@@ -56,23 +46,29 @@ void StaffSetCostumeAction::Serialise(DataSerialiser& stream)
 
 GameActions::Result StaffSetCostumeAction::Query() const
 {
-    if (_spriteIndex >= MAX_ENTITIES)
+    if (_spriteIndex.ToUnderlying() >= kMaxEntities || _spriteIndex.IsNull())
     {
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+        LOG_ERROR("Invalid sprite index %u", _spriteIndex);
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_VALUE_OUT_OF_RANGE);
     }
 
     auto* staff = TryGetEntity<Staff>(_spriteIndex);
     if (staff == nullptr)
     {
-        log_warning("Invalid game command for sprite %u", _spriteIndex);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+        LOG_ERROR("Staff entity not found for spriteIndex %u", _spriteIndex);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_STAFF_NOT_FOUND);
     }
 
-    auto spriteType = EntertainerCostumeToSprite(_costume);
-    if (EnumValue(spriteType) > std::size(peep_slow_walking_types))
+    auto& objManager = GetContext()->GetObjectManager();
+    auto* animObj = objManager.GetLoadedObject<PeepAnimationsObject>(_costume);
+
+    auto animPeepType = AnimationPeepType(static_cast<uint8_t>(staff->AssignedStaffType) + 1);
+    if (animObj->GetPeepType() != animPeepType)
     {
-        log_warning("Invalid game command for sprite %u", _spriteIndex);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+        LOG_ERROR("Invalid entertainer costume %u", _costume);
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_VALUE_OUT_OF_RANGE);
     }
     return GameActions::Result();
 }
@@ -82,24 +78,29 @@ GameActions::Result StaffSetCostumeAction::Execute() const
     auto* staff = TryGetEntity<Staff>(_spriteIndex);
     if (staff == nullptr)
     {
-        log_warning("Invalid game command for sprite %u", _spriteIndex);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+        LOG_ERROR("Staff entity not found for spriteIndex %u", _spriteIndex);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_STAFF_NOT_FOUND);
     }
 
-    auto spriteType = EntertainerCostumeToSprite(_costume);
-    staff->SpriteType = spriteType;
+    staff->AnimationObjectIndex = _costume;
+    staff->AnimationGroup = PeepAnimationGroup::Normal;
+
+    auto& objManager = GetContext()->GetObjectManager();
+    auto* animObj = objManager.GetLoadedObject<PeepAnimationsObject>(_costume);
+
     staff->PeepFlags &= ~PEEP_FLAGS_SLOW_WALK;
-    if (peep_slow_walking_types[EnumValue(spriteType)])
-    {
+    if (animObj->IsSlowWalking(PeepAnimationGroup::Normal))
         staff->PeepFlags |= PEEP_FLAGS_SLOW_WALK;
-    }
-    staff->ActionFrame = 0;
-    staff->UpdateCurrentActionSpriteType();
+
+    staff->AnimationFrameNum = 0;
+    staff->UpdateCurrentAnimationType();
     staff->Invalidate();
 
-    window_invalidate_by_number(WC_PEEP, _spriteIndex);
+    auto* windowMgr = Ui::GetWindowManager();
+    windowMgr->InvalidateByNumber(WindowClass::Peep, _spriteIndex);
+
     auto intent = Intent(INTENT_ACTION_REFRESH_STAFF_LIST);
-    context_broadcast_intent(&intent);
+    ContextBroadcastIntent(&intent);
 
     auto res = GameActions::Result();
     res.Position = staff->GetLocation();

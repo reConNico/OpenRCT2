@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -8,32 +8,25 @@
  *****************************************************************************/
 
 #ifdef _WIN32
-#    include <windows.h>
+    #include <cassert>
+    #include <windows.h>
 #endif
 
 #include "../Version.h"
-#include "../common.h"
 #include "Console.hpp"
 #include "Diagnostics.hpp"
 #include "Guard.hpp"
 #include "String.hpp"
+#include "StringBuilder.h"
 
 #include <cassert>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 
-void openrct2_assert_fwd(bool expression, const char* message, ...)
+namespace OpenRCT2::Guard
 {
-    va_list va;
-    va_start(va, message);
-    Guard::Assert_VA(expression, message, va);
-    va_end(va);
-}
-
-namespace Guard
-{
-    constexpr const utf8* ASSERTION_MESSAGE = "An assertion failed, please report this to the OpenRCT2 developers.";
+    static constexpr const utf8* kAssertionMessage = "An assertion failed, please report this to the OpenRCT2 developers.";
 
     // The default behaviour when an assertion is raised.
     static ASSERT_BEHAVIOUR _assertBehaviour =
@@ -47,7 +40,7 @@ namespace Guard
     static std::optional<std::string> _lastAssertMessage = std::nullopt;
 
 #ifdef _WIN32
-    static void GetAssertMessage(char* buffer, size_t bufferSize, const char* formattedMessage);
+    [[nodiscard]] static std::wstring CreateDialogAssertMessage(std::string_view);
     static void ForceCrash();
 #endif
 
@@ -74,19 +67,15 @@ namespace Guard
         if (expression)
             return;
 
-        Console::Error::WriteLine(ASSERTION_MESSAGE);
+        Console::Error::WriteLine(kAssertionMessage);
         Console::Error::WriteLine("Version: %s", gVersionInfoFull);
 
         // This is never freed, but acceptable considering we are about to crash out
-        utf8* formattedMessage = nullptr;
+        std::string formattedMessage;
         if (message != nullptr)
         {
-            formattedMessage = String::Format_VA(message, args);
-            Console::Error::WriteLine(formattedMessage);
-        }
-
-        if (formattedMessage != nullptr)
-        {
+            formattedMessage = String::formatVA(message, args);
+            Console::Error::WriteLine(formattedMessage.c_str());
             _lastAssertMessage = std::make_optional(formattedMessage);
         }
 
@@ -106,9 +95,9 @@ namespace Guard
             case ASSERT_BEHAVIOUR::MESSAGE_BOX:
             {
                 // Show message box if we are not building for testing
-                char buffer[512];
-                GetAssertMessage(buffer, sizeof(buffer), formattedMessage);
-                int32_t result = MessageBoxA(nullptr, buffer, OPENRCT2_NAME, MB_ABORTRETRYIGNORE | MB_ICONEXCLAMATION);
+                auto buffer = CreateDialogAssertMessage(formattedMessage);
+                int32_t result = MessageBoxW(
+                    nullptr, buffer.c_str(), L"" OPENRCT2_NAME, MB_ABORTRETRYIGNORE | MB_ICONEXCLAMATION);
                 if (result == IDABORT)
                 {
                     ForceCrash();
@@ -138,27 +127,29 @@ namespace Guard
     }
 
 #ifdef _WIN32
-    static void GetAssertMessage(char* buffer, size_t bufferSize, const char* formattedMessage)
+    [[nodiscard]] static std::wstring CreateDialogAssertMessage(std::string_view formattedMessage)
     {
-        String::Set(buffer, bufferSize, ASSERTION_MESSAGE);
-        String::Append(buffer, bufferSize, "\r\n\r\n");
-        String::Append(buffer, bufferSize, "Version: ");
-        String::Append(buffer, bufferSize, gVersionInfoFull);
-        if (formattedMessage != nullptr)
+        StringBuilder sb;
+        sb.Append(kAssertionMessage);
+        sb.Append("\n\n");
+        sb.Append("Version: ");
+        sb.Append(gVersionInfoFull);
+        if (!formattedMessage.empty())
         {
-            String::Append(buffer, bufferSize, "\r\n");
-            String::Append(buffer, bufferSize, formattedMessage);
+            sb.Append("\n");
+            sb.Append(formattedMessage);
         }
+        return String::toWideChar({ sb.GetBuffer(), sb.GetLength() });
     }
 
     static void ForceCrash()
     {
-#    ifdef USE_BREAKPAD
+    #ifdef USE_BREAKPAD
         // Force a crash that breakpad will handle allowing us to get a dump
         *((void**)0) = 0;
-#    else
+    #else
         assert(false);
-#    endif
+    #endif
     }
 #endif
-} // namespace Guard
+} // namespace OpenRCT2::Guard

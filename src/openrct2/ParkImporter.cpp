@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -17,32 +17,40 @@
 
 #include <memory>
 
-namespace ParkImporter
+namespace OpenRCT2::ParkImporter
 {
     std::unique_ptr<IParkImporter> Create(const std::string& hintPath)
     {
         std::unique_ptr<IParkImporter> parkImporter;
         std::string extension = Path::GetExtension(hintPath);
-        if (ExtensionIsRCT1(extension))
+        auto* context = OpenRCT2::GetContext();
+        if (ExtensionIsOpenRCT2ParkFile(extension))
+        {
+            parkImporter = CreateParkFile(context->GetObjectRepository());
+        }
+        else if (ExtensionIsRCT1(extension))
         {
             parkImporter = CreateS4();
         }
         else
         {
-            auto context = OpenRCT2::GetContext();
             parkImporter = CreateS6(context->GetObjectRepository());
         }
         return parkImporter;
     }
 
-    bool ExtensionIsRCT1(const std::string& extension)
+    bool ExtensionIsOpenRCT2ParkFile(std::string_view extension)
     {
-        return String::Equals(extension, ".sc4", true) || String::Equals(extension, ".sv4", true);
+        return String::iequals(extension, ".park");
     }
 
-    bool ExtensionIsScenario(const std::string& extension)
+    bool ExtensionIsRCT1(std::string_view extension)
     {
-        return String::Equals(extension, ".sc4", true) || String::Equals(extension, ".sc6", true)
-            || String::Equals(extension, ".sea", true);
+        return String::iequals(extension, ".sc4") || String::iequals(extension, ".sv4");
     }
-} // namespace ParkImporter
+
+    bool ExtensionIsScenario(std::string_view extension)
+    {
+        return String::iequals(extension, ".sc4") || String::iequals(extension, ".sc6") || String::iequals(extension, ".sea");
+    }
+} // namespace OpenRCT2::ParkImporter

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,22 +9,22 @@
 
 #pragma once
 
-#include "../world/Scenery.h"
 #include "Object.h"
+#include "SceneryGroupEntry.h"
 
 #include <vector>
 
 struct ObjectRepositoryItem;
 
-enum class EntertainerCostume : uint8_t;
-
 class SceneryGroupObject final : public Object
 {
 private:
-    rct_scenery_group_entry _legacyType = {};
+    SceneryGroupEntry _legacyType = {};
     std::vector<ObjectEntryDescriptor> _items;
 
 public:
+    static constexpr ObjectType kObjectType = ObjectType::SceneryGroup;
+
     void* GetLegacyData() override
     {
         return &_legacyType;
@@ -36,15 +36,14 @@ public:
     void Unload() override;
     void UpdateEntryIndexes();
 
-    void DrawPreview(rct_drawpixelinfo* dpi, int32_t width, int32_t height) const override;
+    void DrawPreview(DrawPixelInfo& dpi, int32_t width, int32_t height) const override;
 
     void SetRepositoryItem(ObjectRepositoryItem* item) const override;
 
     uint16_t GetNumIncludedObjects() const;
+    const std::vector<ObjectEntryDescriptor>& GetItems() const;
 
 private:
     static std::vector<ObjectEntryDescriptor> ReadItems(OpenRCT2::IStream* stream);
-    static uint32_t ReadJsonEntertainerCostumes(json_t& jCostumes);
-    static EntertainerCostume ParseEntertainerCostume(const std::string& s);
-    static std::vector<ObjectEntryDescriptor> ReadJsonEntries(json_t& jEntries);
+    static std::vector<ObjectEntryDescriptor> ReadJsonEntries(IReadObjectContext* context, json_t& jEntries);
 };

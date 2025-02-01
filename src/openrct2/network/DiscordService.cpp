@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -8,27 +8,36 @@
  *****************************************************************************/
 
 #ifdef __ENABLE_DISCORD__
+    #include "DiscordService.h"
 
-#    include "DiscordService.h"
+    #include "../Context.h"
+    #include "../Diagnostic.h"
+    #include "../GameState.h"
+    #include "../OpenRCT2.h"
+    #include "../core/Console.hpp"
+    #include "../core/String.hpp"
+    #include "../core/UTF8.h"
+    #include "../localisation/Formatting.h"
+    #include "../world/Park.h"
+    #include "network.h"
 
-#    include "../Context.h"
-#    include "../GameState.h"
-#    include "../OpenRCT2.h"
-#    include "../core/Console.hpp"
-#    include "../core/String.hpp"
-#    include "../localisation/Localisation.h"
-#    include "../world/Park.h"
-#    include "network.h"
+    #include <chrono>
+    #include <discord_rpc.h>
 
-#    include <discord_rpc.h>
+using namespace OpenRCT2;
 
-constexpr const char* APPLICATION_ID = "378612438200877056";
-constexpr const char* STEAM_APP_ID = nullptr;
-constexpr const uint32_t REFRESH_INTERVAL = 5 * GAME_UPDATE_FPS; // 5 seconds
+namespace
+{
+    using namespace std::chrono_literals;
+
+    constexpr const char* APPLICATION_ID = "378612438200877056";
+    constexpr const char* STEAM_APP_ID = nullptr;
+    constexpr auto REFRESH_INTERVAL = 5.0s;
+} // namespace
 
 static void OnReady([[maybe_unused]] const DiscordUser* request)
 {
-    log_verbose("DiscordService::OnReady()");
+    LOG_VERBOSE("DiscordService::OnReady()");
 }
 
 static void OnDisconnected(int errorCode, const char* message)
@@ -57,30 +66,22 @@ DiscordService::~DiscordService()
 
 static std::string GetParkName()
 {
-    auto gameState = OpenRCT2::GetContext()->GetGameState();
-    if (gameState != nullptr)
-    {
-        return gameState->GetPark().Name;
-    }
-    return {};
+    auto& gameState = GetGameState();
+    return gameState.Park.Name;
 }
 
-void DiscordService::Update()
+void DiscordService::Tick()
 {
     Discord_RunCallbacks();
 
-    if (_ticksSinceLastRefresh >= REFRESH_INTERVAL)
-    {
-        _ticksSinceLastRefresh = 0;
-        RefreshPresence();
-    }
-    else
-    {
-        _ticksSinceLastRefresh++;
-    }
+    if (_updateTimer.GetElapsedTime() < REFRESH_INTERVAL)
+        return;
+
+    RefreshPresence();
+    _updateTimer.Restart();
 }
 
-void DiscordService::RefreshPresence()
+void DiscordService::RefreshPresence() const
 {
     DiscordRichPresence discordPresence = {};
     discordPresence.largeImageKey = "logo";
@@ -91,17 +92,33 @@ void DiscordService::RefreshPresence()
     {
         default:
             details = GetParkName();
-            if (network_get_mode() == NETWORK_MODE_NONE)
+            if (NetworkGetMode() == NETWORK_MODE_NONE)
             {
                 state = "Playing Solo";
             }
             else
             {
-                state = String::ToStd(network_get_server_name());
+                OpenRCT2::FmtString fmtServerName(NetworkGetServerName());
+                std::string serverName;
+                for (const auto& token : fmtServerName)
+                {
+                    if (token.IsLiteral())
+                    {
+                        serverName += token.text;
+                    }
+                    else if (token.IsCodepoint())
+                    {
+                        auto codepoint = token.GetCodepoint();
+                        char buffer[8]{};
+                        UTF8WriteCodepoint(buffer, codepoint);
+                        serverName += buffer;
+                    }
+                }
+                state = serverName;
 
                 // NOTE: the party size is displayed next to state
-                discordPresence.partyId = network_get_server_name();
-                discordPresence.partySize = network_get_num_players();
+                discordPresence.partyId = NetworkGetServerName().c_str();
+                discordPresence.partySize = NetworkGetNumPlayers();
                 discordPresence.partyMax = 256;
 
                 // TODO generate secrets for the server

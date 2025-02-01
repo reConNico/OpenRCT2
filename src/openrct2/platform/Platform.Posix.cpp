@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,30 +9,36 @@
 
 #if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__)) || defined(__FreeBSD__)
 
-#    include "../core/Memory.hpp"
-#    include "../core/Path.hpp"
-#    include "../core/String.hpp"
-#    include "Platform2.h"
-#    include "platform.h"
+    #include "Platform.h"
 
-#    include <clocale>
-#    include <cstdlib>
-#    include <cstring>
-#    include <ctime>
-#    include <dirent.h>
-#    include <pwd.h>
-#    include <sys/stat.h>
+    #include "../Date.h"
+    #include "../Diagnostic.h"
+    #include "../core/Memory.hpp"
+    #include "../core/Path.hpp"
+    #include "../core/String.hpp"
 
-namespace Platform
+    #include <cerrno>
+    #include <clocale>
+    #include <cstdlib>
+    #include <cstring>
+    #include <ctime>
+    #include <dirent.h>
+    #include <fcntl.h>
+    #include <fnmatch.h>
+    #include <locale>
+    #include <pwd.h>
+    #include <sys/stat.h>
+    #include <sys/time.h>
+    #include <unistd.h>
+
+// The name of the mutex used to prevent multiple instances of the game from running
+static constexpr const utf8* SINGLE_INSTANCE_MUTEX_NAME = u8"openrct2.lock";
+
+namespace OpenRCT2::Platform
 {
-    uint32_t GetTicks()
+    std::string GetEnvironmentVariable(std::string_view name)
     {
-        return platform_get_ticks();
-    }
-
-    std::string GetEnvironmentVariable(const std::string& name)
-    {
-        return String::ToStd(getenv(name.c_str()));
+        return String::toStd(getenv(std::string(name).c_str()));
     }
 
     std::string GetEnvironmentPath(const char* name)
@@ -105,16 +111,16 @@ namespace Platform
         return false;
     }
 
-    bool FindApp(const std::string& app, std::string* output)
+    bool FindApp(std::string_view app, std::string* output)
     {
-        return Execute(String::StdFormat("which %s 2> /dev/null", app.c_str()), output) == 0;
+        return Execute(String::stdFormat("which %s 2> /dev/null", std::string(app).c_str()), output) == 0;
     }
 
-    int32_t Execute(const std::string& command, std::string* output)
+    int32_t Execute(std::string_view command, std::string* output)
     {
-#    ifndef __EMSCRIPTEN__
-        log_verbose("executing \"%s\"...", command.c_str());
-        FILE* fpipe = popen(command.c_str(), "r");
+    #ifndef __EMSCRIPTEN__
+        LOG_VERBOSE("executing \"%s\"...", std::string(command).c_str());
+        FILE* fpipe = popen(std::string(command).c_str(), "r");
         if (fpipe == nullptr)
         {
             return -1;
@@ -154,19 +160,17 @@ namespace Platform
 
         // Return exit code
         return pclose(fpipe);
-#    else
-        log_warning("Emscripten cannot execute processes. The commandline was '%s'.", command.c_str());
+    #else
+        LOG_WARNING("Emscripten cannot execute processes. The commandline was '%s'.", std::string(command).c_str());
         return -1;
-#    endif // __EMSCRIPTEN__
+    #endif // __EMSCRIPTEN__
     }
 
-    uint64_t GetLastModified(const std::string& path)
+    uint64_t GetLastModified(std::string_view path)
     {
         uint64_t lastModified = 0;
-        struct stat statInfo
-        {
-        };
-        if (stat(path.c_str(), &statInfo) == 0)
+        struct stat statInfo{};
+        if (stat(std::string(path).c_str(), &statInfo) == 0)
         {
             lastModified = statInfo.st_mtime;
         }
@@ -176,9 +180,7 @@ namespace Platform
     uint64_t GetFileSize(std::string_view path)
     {
         uint64_t size = 0;
-        struct stat statInfo
-        {
-        };
+        struct stat statInfo{};
         if (stat(std::string(path).c_str(), &statInfo) == 0)
         {
             size = statInfo.st_size;
@@ -196,20 +198,7 @@ namespace Platform
         return c == '/';
     }
 
-    utf8* GetAbsolutePath(utf8* buffer, size_t bufferSize, const utf8* relativePath)
-    {
-        utf8* absolutePath = realpath(relativePath, nullptr);
-        if (absolutePath == nullptr)
-        {
-            return String::Set(buffer, bufferSize, relativePath);
-        }
-
-        String::Set(buffer, bufferSize, absolutePath);
-        Memory::Free(absolutePath);
-        return buffer;
-    }
-
-    std::string ResolveCasing(const std::string& path, bool fileExists)
+    std::string ResolveCasing(std::string_view path, bool fileExists)
     {
         std::string result;
         if (fileExists)
@@ -230,7 +219,7 @@ namespace Platform
                 // Find a file which matches by name (case insensitive)
                 for (int32_t i = 0; i < count; i++)
                 {
-                    if (String::Equals(files[i]->d_name, fileName.c_str(), true))
+                    if (String::iequals(files[i]->d_name, fileName.c_str()))
                     {
                         result = Path::Combine(directory, std::string(files[i]->d_name));
                         break;
@@ -252,6 +241,130 @@ namespace Platform
     {
         return true;
     }
-} // namespace Platform
+
+    std::string GetUsername()
+    {
+        std::string result;
+        auto pw = getpwuid(getuid());
+        if (pw != nullptr)
+        {
+            result = std::string(pw->pw_name);
+        }
+        return result;
+    }
+
+    uint8_t GetLocaleDateFormat()
+    {
+        const std::time_base::dateorder dateorder = std::use_facet<std::time_get<char>>(std::locale()).date_order();
+
+        switch (dateorder)
+        {
+            case std::time_base::mdy:
+                return DATE_FORMAT_MONTH_DAY_YEAR;
+
+            case std::time_base::ymd:
+                return DATE_FORMAT_YEAR_MONTH_DAY;
+
+            case std::time_base::ydm:
+                return DATE_FORMAT_YEAR_DAY_MONTH;
+
+            default:
+                return DATE_FORMAT_DAY_MONTH_YEAR;
+        }
+    }
+
+    TemperatureUnit GetLocaleTemperatureFormat()
+    {
+    // LC_MEASUREMENT is GNU specific.
+    #ifdef LC_MEASUREMENT
+        const char* langstring = setlocale(LC_MEASUREMENT, "");
+    #else
+        const char* langstring = setlocale(LC_ALL, "");
+    #endif
+
+        if (langstring != nullptr)
+        {
+            if (!fnmatch("*_US*", langstring, 0) || !fnmatch("*_BS*", langstring, 0) || !fnmatch("*_BZ*", langstring, 0)
+                || !fnmatch("*_PW*", langstring, 0))
+            {
+                return TemperatureUnit::Fahrenheit;
+            }
+        }
+        return TemperatureUnit::Celsius;
+    }
+
+    bool ProcessIsElevated()
+    {
+    #ifndef __EMSCRIPTEN__
+        return (geteuid() == 0);
+    #else
+        return false;
+    #endif // __EMSCRIPTEN__
+    }
+
+    bool LockSingleInstance()
+    {
+        // We will never close this file manually. The operating system will
+        // take care of that, because flock keeps the lock as long as the
+        // file is open and closes it automatically on file close.
+        // This is intentional.
+        int32_t pidFile = open(SINGLE_INSTANCE_MUTEX_NAME, O_CREAT | O_RDWR, 0666);
+
+        if (pidFile == -1)
+        {
+            LOG_WARNING("Cannot open lock file for writing.");
+            return false;
+        }
+
+        struct flock lock;
+
+        lock.l_start = 0;
+        lock.l_len = 0;
+        lock.l_type = F_WRLCK;
+        lock.l_whence = SEEK_SET;
+
+        if (fcntl(pidFile, F_SETLK, &lock) == -1)
+        {
+            if (errno == EWOULDBLOCK)
+            {
+                LOG_WARNING("Another OpenRCT2 session has been found running.");
+                return false;
+            }
+            LOG_ERROR("flock returned an uncatched errno: %d", errno);
+            return false;
+        }
+        return true;
+    }
+
+    int32_t GetDrives()
+    {
+        // POSIX systems do not know drives. Return 0.
+        return 0;
+    }
+
+    time_t FileGetModifiedTime(u8string_view path)
+    {
+        struct stat buf;
+        if (stat(u8string(path).c_str(), &buf) == 0)
+        {
+            return buf.st_mtime;
+        }
+        return 100;
+    }
+
+    datetime64 GetDatetimeNowUTC()
+    {
+        const datetime64 epochAsTicks = 621355968000000000;
+
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+
+        // Epoch starts from: 1970-01-01T00:00:00Z
+        // Convert to ticks from 0001-01-01T00:00:00Z
+        uint64_t utcEpochTicks = static_cast<uint64_t>(tv.tv_sec) * 10000000uLL + tv.tv_usec * 10;
+        datetime64 utcNow = epochAsTicks + utcEpochTicks;
+        return utcNow;
+    }
+} // namespace OpenRCT2::Platform
 
 #endif

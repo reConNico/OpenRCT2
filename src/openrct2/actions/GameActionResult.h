@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -8,7 +8,6 @@
  *****************************************************************************/
 #pragma once
 
-#include "../localisation/StringIds.h"
 #include "../management/Finance.h"
 #include "../world/Location.hpp"
 
@@ -21,7 +20,7 @@
 #include <type_traits>
 #include <variant>
 
-namespace GameActions
+namespace OpenRCT2::GameActions
 {
     /**
      * Common error codes for game actions.
@@ -49,51 +48,60 @@ namespace GameActions
         Unknown = std::numeric_limits<std::underlying_type_t<Status>>::max(),
     };
 
-#ifdef __WARN_SUGGEST_FINAL_METHODS__
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wsuggest-final-methods"
-#    pragma GCC diagnostic ignored "-Wsuggest-final-types"
-#endif
-
     /**
      * Represents the result of a game action query or execution.
      */
     class Result final
     {
     public:
-        using StringVariant = std::variant<std::string, rct_string_id>;
+        using StringVariant = std::variant<std::string, StringId>;
 
-        GameActions::Status Error = GameActions::Status::Ok;
-        StringVariant ErrorTitle = STR_NONE;
-        StringVariant ErrorMessage = STR_NONE;
+        OpenRCT2::GameActions::Status Error = OpenRCT2::GameActions::Status::Ok;
+        StringVariant ErrorTitle = kStringIdNone;
+        StringVariant ErrorMessage = kStringIdNone;
         std::array<uint8_t, 32> ErrorMessageArgs{};
-        CoordsXYZ Position = { LOCATION_NULL, LOCATION_NULL, LOCATION_NULL };
-        money32 Cost = 0;
+        CoordsXYZ Position = { kLocationNull, kLocationNull, kLocationNull };
+        money64 Cost = 0;
         ExpenditureType Expenditure = ExpenditureType::Count;
+
+#ifdef __ANDROID__
+        // Any_cast throws a bad_any_cast exception on Android
+        // To avoid this in the Android release, a shared void pointer is used to store the result data.
+        std::shared_ptr<void> ResultData;
+#else
+        // Other platforms still use Any as this provides type checks
         std::any ResultData;
+#endif
 
         Result() = default;
-        Result(GameActions::Status error, rct_string_id title, rct_string_id message, uint8_t* args = nullptr);
+        Result(OpenRCT2::GameActions::Status error, StringId title, StringId message, uint8_t* args = nullptr);
 
         std::string GetErrorTitle() const;
         std::string GetErrorMessage() const;
 
         // It is recommended to use strong types since a type alias such as 'using MyType = uint32_t'
         // is still just uint32_t, this guarantees the data is associated with the correct type.
-        template<typename T> void SetData(const T&& data)
+        template<typename T>
+        void SetData(const T&& data)
         {
+#ifdef __ANDROID__
+            ResultData = std::make_shared<T>(data);
+#else
             ResultData = std::forward<const T&&>(data);
+#endif
         }
 
-        // This function will throw std::bad_any_cast if the type mismatches.
-        template<typename T> T GetData() const
+        template<typename T>
+        T GetData() const
         {
+#ifdef __ANDROID__
+            return *static_cast<T*>(ResultData.get());
+            ;
+#else
+            // This function will throw std::bad_any_cast if the type mismatches.
             return std::any_cast<T>(ResultData);
+#endif
         }
     };
 
-#ifdef __WARN_SUGGEST_FINAL_METHODS__
-#    pragma GCC diagnostic pop
-#endif
-
-} // namespace GameActions
+} // namespace OpenRCT2::GameActions

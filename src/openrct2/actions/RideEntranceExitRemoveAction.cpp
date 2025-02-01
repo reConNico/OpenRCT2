@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,15 +9,17 @@
 
 #include "RideEntranceExitRemoveAction.h"
 
+#include "../Diagnostic.h"
 #include "../ride/Ride.h"
 #include "../ride/Station.h"
 #include "../world/Entrance.h"
 #include "../world/TileElementsView.h"
+#include "../world/tile_element/EntranceElement.h"
 
 using namespace OpenRCT2;
 
 RideEntranceExitRemoveAction::RideEntranceExitRemoveAction(
-    const CoordsXY& loc, ride_id_t rideIndex, StationIndex stationNum, bool isExit)
+    const CoordsXY& loc, RideId rideIndex, StationIndex stationNum, bool isExit)
     : _loc(loc)
     , _rideIndex(rideIndex)
     , _stationNum(stationNum)
@@ -46,15 +48,10 @@ void RideEntranceExitRemoveAction::Serialise(DataSerialiser& stream)
 }
 
 static TileElement* FindEntranceElement(
-    const CoordsXY& loc, ride_id_t rideIndex, int32_t stationNum, int32_t entranceType, uint32_t flags)
+    const CoordsXY& loc, RideId rideIndex, StationIndex stationNum, int32_t entranceType, uint32_t flags)
 {
-    const bool isGhost = flags & GAME_COMMAND_FLAG_GHOST;
     for (auto* entranceElement : TileElementsView<EntranceElement>(loc))
     {
-        // If we are removing ghost elements
-        if (isGhost && entranceElement->IsGhost() == false)
-            continue;
-
         if (entranceElement->GetRideIndex() != rideIndex)
             continue;
 
@@ -71,37 +68,44 @@ static TileElement* FindEntranceElement(
 
 GameActions::Result RideEntranceExitRemoveAction::Query() const
 {
-    auto ride = get_ride(_rideIndex);
+    auto ride = GetRide(_rideIndex);
     if (ride == nullptr)
     {
-        log_warning("Invalid ride id %d for entrance/exit removal", EnumValue(_rideIndex));
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+        LOG_ERROR("Ride not found for rideIndex %u", _rideIndex.ToUnderlying());
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_RIDE_NOT_FOUND);
     }
 
     if (ride->status != RideStatus::Closed && ride->status != RideStatus::Simulating)
     {
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_MUST_BE_CLOSED_FIRST, STR_NONE);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_MUST_BE_CLOSED_FIRST, kStringIdNone);
     }
 
     if (ride->lifecycle_flags & RIDE_LIFECYCLE_INDESTRUCTIBLE_TRACK)
     {
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NOT_ALLOWED_TO_MODIFY_STATION, STR_NONE);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NOT_ALLOWED_TO_MODIFY_STATION, kStringIdNone);
     }
 
     if (!LocationValid(_loc))
     {
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_LAND_NOT_OWNED_BY_PARK, STR_NONE);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REMOVE_THIS, STR_OFF_EDGE_OF_MAP);
     }
 
     auto* entranceElement = FindEntranceElement(
         _loc, _rideIndex, _stationNum, _isExit ? ENTRANCE_TYPE_RIDE_EXIT : ENTRANCE_TYPE_RIDE_ENTRANCE, GetFlags());
 
-    if (entranceElement == nullptr)
+    // If we are trying to remove a ghost and the element we found is real, return an error, but don't log a warning
+    if (entranceElement != nullptr && (GetFlags() & GAME_COMMAND_FLAG_GHOST) && !(entranceElement->IsGhost()))
     {
-        log_warning(
-            "Track Element not found. x = %d, y = %d, ride = %d, station = %d", _loc.x, _loc.y, EnumValue(_rideIndex),
-            _stationNum);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_GHOST_ELEMENT_NOT_FOUND);
+    }
+    else if (entranceElement == nullptr)
+    {
+        LOG_ERROR(
+            "Entrance/exit element not found. x = %d, y = %d, ride = %u, station = %u", _loc.x, _loc.y,
+            _rideIndex.ToUnderlying(), _stationNum.ToUnderlying());
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_ENTRANCE_ELEMENT_NOT_FOUND);
     }
 
     return GameActions::Result();
@@ -109,54 +113,62 @@ GameActions::Result RideEntranceExitRemoveAction::Query() const
 
 GameActions::Result RideEntranceExitRemoveAction::Execute() const
 {
-    auto ride = get_ride(_rideIndex);
+    auto ride = GetRide(_rideIndex);
     if (ride == nullptr)
     {
-        log_warning("Invalid ride id %d for entrance/exit removal", EnumValue(_rideIndex));
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+        LOG_ERROR("Ride not found for rideIndex %u", _rideIndex.ToUnderlying());
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_RIDE_NOT_FOUND);
     }
 
     const bool isGhost = GetFlags() & GAME_COMMAND_FLAG_GHOST;
     if (!isGhost)
     {
-        ride_clear_for_construction(ride);
+        RideClearForConstruction(*ride);
         ride->RemovePeeps();
-        invalidate_test_results(ride);
+        InvalidateTestResults(*ride);
     }
 
     auto* entranceElement = FindEntranceElement(
         _loc, _rideIndex, _stationNum, _isExit ? ENTRANCE_TYPE_RIDE_EXIT : ENTRANCE_TYPE_RIDE_ENTRANCE, GetFlags());
 
-    if (entranceElement == nullptr)
+    // If we are trying to remove a ghost and the element we found is real, return an error, but don't log a warning
+    if (entranceElement != nullptr && isGhost && !(entranceElement->IsGhost()))
     {
-        log_warning(
-            "Track Element not found. x = %d, y = %d, ride = %d, station = %d", _loc.x, _loc.y, EnumValue(_rideIndex),
-            _stationNum);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_GHOST_ELEMENT_NOT_FOUND);
+    }
+    else if (entranceElement == nullptr)
+    {
+        LOG_ERROR(
+            "Entrance/exit element not found. x = %d, y = %d, ride = %u, station = %d", _loc.x, _loc.y,
+            _rideIndex.ToUnderlying(), _stationNum);
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_ENTRANCE_ELEMENT_NOT_FOUND);
     }
 
     auto res = GameActions::Result();
     res.Position.x = _loc.x + 16;
     res.Position.y = _loc.y + 16;
-    res.Position.z = tile_element_height(res.Position);
+    res.Position.z = TileElementHeight(res.Position);
 
-    footpath_queue_chain_reset();
-    maze_entrance_hedge_replacement({ _loc, entranceElement });
-    footpath_remove_edges_at(_loc, entranceElement);
+    FootpathQueueChainReset();
+    MazeEntranceHedgeReplacement({ _loc, entranceElement });
+    FootpathRemoveEdgesAt(_loc, entranceElement);
 
-    tile_element_remove(entranceElement);
+    TileElementRemove(entranceElement);
 
+    auto& station = ride->GetStation(_stationNum);
     if (_isExit)
     {
-        ride_clear_exit_location(ride, _stationNum);
+        station.Exit.SetNull();
     }
     else
     {
-        ride_clear_entrance_location(ride, _stationNum);
+        station.Entrance.SetNull();
     }
 
-    footpath_update_queue_chains();
+    FootpathUpdateQueueChains();
 
-    map_invalidate_tile_full(_loc);
+    MapInvalidateTileFull(_loc);
     return res;
 }

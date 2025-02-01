@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,19 +10,20 @@
 #include "TerrainEdgeObject.h"
 
 #include "../Context.h"
+#include "../core/Guard.hpp"
 #include "../core/IStream.hpp"
 #include "../core/Json.hpp"
 #include "../core/String.hpp"
 #include "../drawing/Drawing.h"
-#include "../drawing/Image.h"
-#include "../localisation/Localisation.h"
 #include "ObjectManager.h"
+
+using namespace OpenRCT2;
 
 void TerrainEdgeObject::Load()
 {
     GetStringTable().Sort();
-    NameStringId = language_allocate_object_string(GetName());
-    IconImageId = gfx_object_allocate_images(GetImageTable().GetImages(), GetImageTable().GetCount());
+    NameStringId = LanguageAllocateObjectString(GetName());
+    IconImageId = LoadImages();
 
     // First image is icon followed by edge images
     BaseImageId = IconImageId + 1;
@@ -30,21 +31,21 @@ void TerrainEdgeObject::Load()
 
 void TerrainEdgeObject::Unload()
 {
-    language_free_object_string(NameStringId);
-    gfx_object_free_images(IconImageId, GetImageTable().GetCount());
+    LanguageFreeObjectString(NameStringId);
+    UnloadImages();
 
     NameStringId = 0;
     IconImageId = 0;
     BaseImageId = 0;
 }
 
-void TerrainEdgeObject::DrawPreview(rct_drawpixelinfo* dpi, int32_t width, int32_t height) const
+void TerrainEdgeObject::DrawPreview(DrawPixelInfo& dpi, int32_t width, int32_t height) const
 {
     auto screenCoords = ScreenCoordsXY{ width / 2, height / 2 };
 
-    uint32_t imageId = BaseImageId;
-    gfx_draw_sprite(dpi, imageId + 5, screenCoords + ScreenCoordsXY{ 8, -8 }, 0);
-    gfx_draw_sprite(dpi, imageId + 5, screenCoords + ScreenCoordsXY{ 8, 8 }, 0);
+    auto imageId = ImageId(BaseImageId + 5);
+    GfxDrawSprite(dpi, imageId, screenCoords + ScreenCoordsXY{ 8, -8 });
+    GfxDrawSprite(dpi, imageId, screenCoords + ScreenCoordsXY{ 8, 8 });
 }
 
 void TerrainEdgeObject::ReadJson(IReadObjectContext* context, json_t& root)
@@ -64,6 +65,6 @@ void TerrainEdgeObject::ReadJson(IReadObjectContext* context, json_t& root)
 TerrainEdgeObject* TerrainEdgeObject::GetById(ObjectEntryIndex entryIndex)
 {
     auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
-    auto obj = objMgr.GetLoadedObject(ObjectType::TerrainSurface, entryIndex);
-    return obj != nullptr ? static_cast<TerrainEdgeObject*>(obj) : nullptr;
+    auto* obj = objMgr.GetLoadedObject(ObjectType::TerrainEdge, entryIndex);
+    return static_cast<TerrainEdgeObject*>(obj);
 }

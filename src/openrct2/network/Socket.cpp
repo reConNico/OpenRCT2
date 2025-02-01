@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,13 +9,15 @@
 
 #ifndef DISABLE_NETWORK
 
-#    include <atomic>
-#    include <chrono>
-#    include <cmath>
-#    include <cstring>
-#    include <future>
-#    include <string>
-#    include <thread>
+    #include "../Diagnostic.h"
+
+    #include <atomic>
+    #include <chrono>
+    #include <cmath>
+    #include <cstring>
+    #include <future>
+    #include <string>
+    #include <thread>
 
 // clang-format off
 // MSVC: include <math.h> here otherwise PI gets defined twice
@@ -50,8 +52,11 @@
     #include <netinet/in.h>
     #include <netinet/tcp.h>
     #include <sys/ioctl.h>
+    #include <sys/select.h>
     #include <sys/socket.h>
-    #include "../common.h"
+    #include <sys/time.h>
+    #include <unistd.h>
+
     using SOCKET = int32_t;
     #define SOCKET_ERROR -1
     #define INVALID_SOCKET -1
@@ -66,19 +71,19 @@
 #endif // _WIN32
 // clang-format on
 
-#    include "Socket.h"
+    #include "Socket.h"
 
-constexpr auto CONNECT_TIMEOUT = std::chrono::milliseconds(3000);
+constexpr auto kConnectTimeout = std::chrono::milliseconds(3000);
 
-// RAII WSA initialisation needed for Windows
-#    ifdef _WIN32
+    // RAII WSA initialisation needed for Windows
+    #ifdef _WIN32
 class WSA
 {
 private:
     bool _isInitialised{};
 
 public:
-    bool IsInitialised() const
+    bool IsInitialised() const noexcept
     {
         return _isInitialised;
     }
@@ -87,11 +92,11 @@ public:
     {
         if (!_isInitialised)
         {
-            log_verbose("WSAStartup()");
+            LOG_VERBOSE("WSAStartup()");
             WSADATA wsa_data;
             if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
             {
-                log_error("Unable to initialise winsock.");
+                LOG_ERROR("Unable to initialise winsock.");
                 return false;
             }
             _isInitialised = true;
@@ -99,11 +104,11 @@ public:
         return true;
     }
 
-    ~WSA()
+    ~WSA() noexcept
     {
         if (_isInitialised)
         {
-            log_verbose("WSACleanup()");
+            LOG_VERBOSE("WSACleanup()");
             WSACleanup();
             _isInitialised = false;
         }
@@ -115,12 +120,12 @@ static bool InitialiseWSA()
     static WSA wsa;
     return wsa.Initialise();
 }
-#    else
+    #else
 static bool InitialiseWSA()
 {
     return true;
 }
-#    endif
+    #endif
 
 class SocketException : public std::runtime_error
 {
@@ -138,9 +143,7 @@ private:
     socklen_t _addressLen{};
 
 public:
-    NetworkEndpoint()
-    {
-    }
+    NetworkEndpoint() noexcept = default;
 
     NetworkEndpoint(const sockaddr* address, socklen_t addressLen)
     {
@@ -148,12 +151,12 @@ public:
         _addressLen = addressLen;
     }
 
-    const sockaddr& GetAddress() const
+    constexpr const sockaddr& GetAddress() const noexcept
     {
         return _address;
     }
 
-    socklen_t GetAddressLen() const
+    constexpr socklen_t GetAddressLen() const noexcept
     {
         return _addressLen;
     }
@@ -195,13 +198,13 @@ protected:
 
     static bool SetNonBlocking(SOCKET socket, bool on)
     {
-#    ifdef _WIN32
+    #ifdef _WIN32
         u_long nonBlocking = on;
         return ioctlsocket(socket, FIONBIO, &nonBlocking) == 0;
-#    else
+    #else
         int32_t flags = fcntl(socket, F_GETFL, 0);
         return fcntl(socket, F_SETFL, on ? (flags | O_NONBLOCK) : (flags & ~O_NONBLOCK)) == 0;
-#    endif
+    #endif
     }
 
     static bool SetOption(SOCKET socket, int32_t a, int32_t b, bool value)
@@ -227,8 +230,8 @@ private:
         int errorcode = getaddrinfo(address.empty() ? nullptr : address.c_str(), serviceName.c_str(), &hints, &result);
         if (errorcode != 0)
         {
-            log_error("Resolving address failed: Code %d.", errorcode);
-            log_error("Resolution error message: %s.", gai_strerror(errorcode));
+            LOG_ERROR("Resolving address failed: Code %d.", errorcode);
+            LOG_ERROR("Resolution error message: %s.", gai_strerror(errorcode));
             return false;
         }
 
@@ -247,7 +250,7 @@ private:
 class TcpSocket final : public ITcpSocket, protected Socket
 {
 private:
-    std::atomic<SocketStatus> _status = ATOMIC_VAR_INIT(SocketStatus::Closed);
+    std::atomic<SocketStatus> _status{ SocketStatus::Closed };
     uint16_t _listeningPort = 0;
     SOCKET _socket = INVALID_SOCKET;
 
@@ -257,7 +260,15 @@ private:
     std::string _error;
 
 public:
-    TcpSocket() = default;
+    TcpSocket() noexcept = default;
+
+    explicit TcpSocket(SOCKET socket, std::string hostName, std::string ipAddress) noexcept
+        : _status(SocketStatus::Connected)
+        , _socket(socket)
+        , _ipAddress(std::move(ipAddress))
+        , _hostName(std::move(hostName))
+    {
+    }
 
     ~TcpSocket() override
     {
@@ -315,12 +326,12 @@ public:
         // Turn off IPV6_V6ONLY so we can accept both v4 and v6 connections
         if (!SetOption(_socket, IPPROTO_IPV6, IPV6_V6ONLY, false))
         {
-            log_verbose("setsockopt(socket, IPV6_V6ONLY) failed: %d", LAST_SOCKET_ERROR());
+            LOG_VERBOSE("setsockopt(socket, IPV6_V6ONLY) failed: %d", LAST_SOCKET_ERROR());
         }
 
         if (!SetOption(_socket, SOL_SOCKET, SO_REUSEADDR, true))
         {
-            log_verbose("setsockopt(socket, SO_REUSEADDR) failed: %d", LAST_SOCKET_ERROR());
+            LOG_VERBOSE("setsockopt(socket, SO_REUSEADDR) failed: %d", LAST_SOCKET_ERROR());
         }
 
         try
@@ -357,9 +368,7 @@ public:
         {
             throw std::runtime_error("Socket not listening.");
         }
-        struct sockaddr_storage client_addr
-        {
-        };
+        struct sockaddr_storage client_addr{};
         socklen_t client_len = sizeof(struct sockaddr_storage);
 
         std::unique_ptr<ITcpSocket> tcpSocket;
@@ -368,7 +377,7 @@ public:
         {
             if (LAST_SOCKET_ERROR() != EWOULDBLOCK)
             {
-                log_error("Failed to accept client.");
+                LOG_ERROR("Failed to accept client.");
             }
         }
         else
@@ -376,7 +385,7 @@ public:
             if (!SetNonBlocking(socket, true))
             {
                 closesocket(socket);
-                log_error("Failed to set non-blocking mode.");
+                LOG_ERROR("Failed to set non-blocking mode.");
             }
             else
             {
@@ -390,11 +399,11 @@ public:
 
                 if (rc == 0)
                 {
-                    tcpSocket = std::unique_ptr<ITcpSocket>(new TcpSocket(socket, hostName, ipAddress));
+                    tcpSocket = std::make_unique<TcpSocket>(socket, hostName, ipAddress);
                 }
                 else
                 {
-                    tcpSocket = std::unique_ptr<ITcpSocket>(new TcpSocket(socket, "", ipAddress));
+                    tcpSocket = std::make_unique<TcpSocket>(socket, "", ipAddress);
                 }
             }
         }
@@ -460,10 +469,10 @@ public:
 
                 fd_set writeFD;
                 FD_ZERO(&writeFD);
-#    pragma warning(push)
-#    pragma warning(disable : 4548) // expression before comma has no effect; expected expression with side-effect
+    #pragma warning(push)
+    #pragma warning(disable : 4548) // expression before comma has no effect; expected expression with side-effect
                 FD_SET(_socket, &writeFD);
-#    pragma warning(pop)
+    #pragma warning(pop)
                 timeval timeout{};
                 timeout.tv_sec = 0;
                 timeout.tv_usec = 0;
@@ -481,7 +490,7 @@ public:
                         return;
                     }
                 }
-            } while ((std::chrono::system_clock::now() - connectStartTime) < CONNECT_TIMEOUT);
+            } while ((std::chrono::system_clock::now() - connectStartTime) < kConnectTimeout);
 
             // Connection request timed out
             throw SocketException("Connection timed out.");
@@ -580,7 +589,7 @@ public:
         if (readBytes == SOCKET_ERROR)
         {
             *sizeReceived = 0;
-#    ifndef _WIN32
+    #ifndef _WIN32
             // Removing the check for EAGAIN and instead relying on the values being the same allows turning on of
             // -Wlogical-op warning.
             // This is not true on Windows, see:
@@ -591,7 +600,7 @@ public:
                 EWOULDBLOCK == EAGAIN,
                 "Portability note: your system has different values for EWOULDBLOCK "
                 "and EAGAIN, please extend the condition below");
-#    endif // _WIN32
+    #endif // _WIN32
             if (LAST_SOCKET_ERROR() != EWOULDBLOCK)
             {
                 return NetworkReadPacket::Disconnected;
@@ -624,14 +633,6 @@ public:
     }
 
 private:
-    explicit TcpSocket(SOCKET socket, const std::string& hostName, const std::string& ipAddress)
-        : _status(SocketStatus::Connected)
-        , _socket(socket)
-        , _ipAddress(ipAddress)
-        , _hostName(hostName)
-    {
-    }
-
     void CloseSocket()
     {
         if (_socket != INVALID_SOCKET)
@@ -642,15 +643,9 @@ private:
         _status = SocketStatus::Closed;
     }
 
-    std::string GetIpAddressFromSocket(const sockaddr_in* addr)
+    std::string GetIpAddressFromSocket(const sockaddr_in* addr) const
     {
         std::string result;
-#    if defined(__MINGW32__)
-        if (addr->sin_family == AF_INET)
-        {
-            result = inet_ntoa(addr->sin_addr);
-        }
-#    else
         if (addr->sin_family == AF_INET)
         {
             char str[INET_ADDRSTRLEN]{};
@@ -664,7 +659,6 @@ private:
             inet_ntop(AF_INET6, &addrv6->sin6_addr, str, sizeof(str));
             result = str;
         }
-#    endif
         return result;
     }
 };
@@ -681,7 +675,7 @@ private:
     std::string _error;
 
 public:
-    UdpSocket() = default;
+    UdpSocket() noexcept = default;
 
     ~UdpSocket() override
     {
@@ -824,14 +818,7 @@ public:
     }
 
 private:
-    explicit UdpSocket(SOCKET socket, const std::string& hostName)
-        : _status(SocketStatus::Connected)
-        , _socket(socket)
-        , _hostName(hostName)
-    {
-    }
-
-    SOCKET CreateSocket()
+    SOCKET CreateSocket() const
     {
         auto sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (sock == INVALID_SOCKET)
@@ -842,18 +829,18 @@ private:
         // Enable send and receiving of broadcast messages
         if (!SetOption(sock, SOL_SOCKET, SO_BROADCAST, true))
         {
-            log_verbose("setsockopt(socket, SO_BROADCAST) failed: %d", LAST_SOCKET_ERROR());
+            LOG_VERBOSE("setsockopt(socket, SO_BROADCAST) failed: %d", LAST_SOCKET_ERROR());
         }
 
         // Turn off IPV6_V6ONLY so we can accept both v4 and v6 connections
         if (!SetOption(sock, IPPROTO_IPV6, IPV6_V6ONLY, false))
         {
-            log_verbose("setsockopt(socket, IPV6_V6ONLY) failed: %d", LAST_SOCKET_ERROR());
+            LOG_VERBOSE("setsockopt(socket, IPV6_V6ONLY) failed: %d", LAST_SOCKET_ERROR());
         }
 
         if (!SetOption(sock, SOL_SOCKET, SO_REUSEADDR, true))
         {
-            log_verbose("setsockopt(socket, SO_REUSEADDR) failed: %d", LAST_SOCKET_ERROR());
+            LOG_VERBOSE("setsockopt(socket, SO_REUSEADDR) failed: %d", LAST_SOCKET_ERROR());
         }
 
         if (!SetNonBlocking(sock, true))
@@ -887,7 +874,7 @@ std::unique_ptr<IUdpSocket> CreateUdpSocket()
     return std::make_unique<UdpSocket>();
 }
 
-#    ifdef _WIN32
+    #ifdef _WIN32
 static std::vector<INTERFACE_INFO> GetNetworkInterfaces()
 {
     InitialiseWSA();
@@ -924,12 +911,12 @@ static std::vector<INTERFACE_INFO> GetNetworkInterfaces()
     interfaces.shrink_to_fit();
     return interfaces;
 }
-#    endif
+    #endif
 
 std::vector<std::unique_ptr<INetworkEndpoint>> GetBroadcastAddresses()
 {
     std::vector<std::unique_ptr<INetworkEndpoint>> baddresses;
-#    ifdef _WIN32
+    #ifdef _WIN32
     auto interfaces = GetNetworkInterfaces();
     for (const auto& ifo : interfaces)
     {
@@ -946,7 +933,7 @@ std::vector<std::unique_ptr<INetworkEndpoint>> GetBroadcastAddresses()
         baddresses.push_back(std::make_unique<NetworkEndpoint>(
             reinterpret_cast<const sockaddr*>(&address), static_cast<socklen_t>(sizeof(sockaddr))));
     }
-#    else
+    #else
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock == -1)
     {
@@ -977,16 +964,16 @@ std::vector<std::unique_ptr<INetworkEndpoint>> GetBroadcastAddresses()
             }
         }
         p += sizeof(ifreq);
-#        if defined(AF_LINK) && !defined(SUNOS)
+        #if defined(AF_LINK) && !defined(SUNOS)
         p += req->ifr_addr.sa_len - sizeof(struct sockaddr);
-#        endif
+        #endif
     }
     close(sock);
-#    endif
+    #endif
     return baddresses;
 }
 
-namespace Convert
+namespace OpenRCT2::Convert
 {
     uint16_t HostToNetwork(uint16_t value)
     {
@@ -997,6 +984,6 @@ namespace Convert
     {
         return ntohs(value);
     }
-} // namespace Convert
+} // namespace OpenRCT2::Convert
 
 #endif

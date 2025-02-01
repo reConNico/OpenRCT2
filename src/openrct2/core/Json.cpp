@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,13 +9,14 @@
 
 #include "Json.hpp"
 
+#include "../Diagnostic.h"
 #include "FileStream.h"
 #include "Memory.hpp"
 #include "String.hpp"
 
-namespace Json
+namespace OpenRCT2::Json
 {
-    json_t ReadFromFile(const utf8* path, size_t maxSize)
+    json_t ReadFromFile(u8string_view path, size_t maxSize)
     {
         auto fs = OpenRCT2::FileStream(path, OpenRCT2::FILE_MODE_OPEN);
 
@@ -32,23 +33,18 @@ namespace Json
 
         try
         {
-            json = json_t::parse(fileData);
+            json = json_t::parse(fileData, /* callback */ nullptr, /* allow_exceptions */ true, /* ignore_comments */ true);
         }
         catch (const json_t::exception& e)
         {
-            throw JsonException(String::Format("Unable to parse JSON file (%s)\n\t%s", path, e.what()));
+            throw JsonException(String::stdFormat(
+                "Unable to parse JSON file (%.*s)\n\t%s", static_cast<int>(path.length()), path.data(), e.what()));
         }
 
         return json;
     }
 
-    json_t ReadFromFile(const fs::path& path, size_t maxSize)
-    {
-        auto path8 = path.u8string();
-        return ReadFromFile(path8.c_str(), maxSize);
-    }
-
-    void WriteToFile(const utf8* path, const json_t& jsonData, int indentSize)
+    void WriteToFile(u8string_view path, const json_t& jsonData, int indentSize)
     {
         // Serialise JSON
         std::string jsonOutput = jsonData.dump(indentSize);
@@ -58,23 +54,17 @@ namespace Json
         fs.Write(jsonOutput.data(), jsonOutput.size());
     }
 
-    void WriteToFile(const fs::path& path, const json_t& jsonData, int indentSize)
-    {
-        auto path8 = path.u8string();
-        WriteToFile(path8.c_str(), jsonData, indentSize);
-    }
-
     json_t FromString(std::string_view raw)
     {
         json_t json;
 
         try
         {
-            json = json_t::parse(raw);
+            json = json_t::parse(raw, /* callback */ nullptr, /* allow_exceptions */ true, /* ignore_comments */ true);
         }
         catch (const json_t::exception& e)
         {
-            log_error("Unable to parse JSON string (%s)\n\t%s", raw, e.what());
+            LOG_ERROR("Unable to parse JSON string (%.*s)\n\t%s", static_cast<int>(raw.length()), raw.data(), e.what());
         }
 
         return json;
@@ -86,11 +76,12 @@ namespace Json
 
         try
         {
-            json = json_t::parse(vec.begin(), vec.end());
+            json = json_t::parse(
+                vec.begin(), vec.end(), /* callback */ nullptr, /* allow_exceptions */ true, /* ignore_comments */ true);
         }
         catch (const json_t::exception& e)
         {
-            log_error("Unable to parse JSON vector (%s)\n\t%s", vec.data(), e.what());
+            LOG_ERROR("Unable to parse JSON vector (%.*s)\n\t%s", static_cast<int>(vec.size()), vec.data(), e.what());
         }
 
         return json;
@@ -134,4 +125,4 @@ namespace Json
 
         return retVal;
     }
-} // namespace Json
+} // namespace OpenRCT2::Json

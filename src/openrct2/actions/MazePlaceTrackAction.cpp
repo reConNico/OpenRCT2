@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -8,14 +8,23 @@
  *****************************************************************************/
 #include "MazePlaceTrackAction.h"
 
+#include "../Diagnostic.h"
+#include "../GameState.h"
 #include "../management/Finance.h"
+#include "../ride/MazeCost.h"
 #include "../ride/RideData.h"
 #include "../ride/TrackData.h"
 #include "../world/ConstructionClearance.h"
+#include "../world/Footpath.h"
+#include "../world/Wall.h"
+#include "../world/tile_element/SurfaceElement.h"
+#include "../world/tile_element/TrackElement.h"
+
+using namespace OpenRCT2;
 
 using namespace OpenRCT2::TrackMetaData;
 
-MazePlaceTrackAction::MazePlaceTrackAction(const CoordsXYZ& location, NetworkRideId_t rideIndex, uint16_t mazeEntry)
+MazePlaceTrackAction::MazePlaceTrackAction(const CoordsXYZ& location, RideId rideIndex, uint16_t mazeEntry)
     : _loc(location)
     , _rideIndex(rideIndex)
     , _mazeEntry(mazeEntry)
@@ -45,11 +54,18 @@ GameActions::Result MazePlaceTrackAction::Query() const
     if ((_loc.z & 0xF) != 0)
     {
         res.Error = GameActions::Status::Unknown;
-        res.ErrorMessage = STR_CONSTRUCTION_ERR_UNKNOWN;
+        res.ErrorMessage = STR_INVALID_HEIGHT;
         return res;
     }
 
-    if (!LocationValid(_loc) || (!map_is_location_owned(_loc) && !gCheatsSandboxMode))
+    if (!LocationValid(_loc))
+    {
+        res.Error = GameActions::Status::InvalidParameters;
+        res.ErrorMessage = STR_OFF_EDGE_OF_MAP;
+        return res;
+    }
+    auto& gameState = GetGameState();
+    if (!MapIsLocationOwned(_loc) && !gameState.Cheats.sandboxMode)
     {
         res.Error = GameActions::Status::NotOwned;
         res.ErrorMessage = STR_LAND_NOT_OWNED_BY_PARK;
@@ -62,7 +78,7 @@ GameActions::Result MazePlaceTrackAction::Query() const
         res.ErrorMessage = STR_TILE_ELEMENT_LIMIT_REACHED;
         return res;
     }
-    auto surfaceElement = map_get_surface_element_at(_loc);
+    auto surfaceElement = MapGetSurfaceElementAt(_loc);
     if (surfaceElement == nullptr)
     {
         res.Error = GameActions::Status::Unknown;
@@ -71,14 +87,16 @@ GameActions::Result MazePlaceTrackAction::Query() const
     }
 
     auto baseHeight = _loc.z;
-    auto clearanceHeight = _loc.z + MAZE_CLEARANCE_HEIGHT;
+    auto clearanceHeight = _loc.z + kMazeClearanceHeight;
 
     auto heightDifference = baseHeight - surfaceElement->GetBaseZ();
-    if (heightDifference >= 0 && !gCheatsDisableSupportLimits)
+    if (heightDifference >= 0 && !gameState.Cheats.disableSupportLimits)
     {
-        heightDifference /= COORDS_Z_PER_TINY_Z;
+        heightDifference /= kCoordsZPerTinyZ;
 
-        if (heightDifference > GetRideTypeDescriptor(RIDE_TYPE_MAZE).Heights.MaxHeight)
+        auto* ride = GetRide(_rideIndex);
+        const auto& rtd = ride->GetRideTypeDescriptor();
+        if (heightDifference > rtd.Heights.MaxHeight)
         {
             res.Error = GameActions::Status::TooHigh;
             res.ErrorMessage = STR_TOO_HIGH_FOR_SUPPORTS;
@@ -87,7 +105,7 @@ GameActions::Result MazePlaceTrackAction::Query() const
     }
 
     auto canBuild = MapCanConstructWithClearAt(
-        { _loc.ToTileStart(), baseHeight, clearanceHeight }, &map_place_non_scenery_clear_func, { 0b1111, 0 }, GetFlags());
+        { _loc.ToTileStart(), baseHeight, clearanceHeight }, &MapPlaceNonSceneryClearFunc, { 0b1111, 0 }, GetFlags());
     if (canBuild.Error != GameActions::Status::Ok)
     {
         canBuild.ErrorTitle = STR_RIDE_CONSTRUCTION_CANT_CONSTRUCT_THIS_HERE;
@@ -109,17 +127,16 @@ GameActions::Result MazePlaceTrackAction::Query() const
         return res;
     }
 
-    auto ride = get_ride(_rideIndex);
-    if (ride == nullptr || ride->type == RIDE_TYPE_NULL)
+    auto ride = GetRide(_rideIndex);
+    if (ride == nullptr || ride->type == kRideTypeNull)
     {
+        LOG_ERROR("Ride not found for rideIndex %u", _rideIndex);
         res.Error = GameActions::Status::InvalidParameters;
-        res.ErrorMessage = STR_INVALID_SELECTION_OF_OBJECTS;
+        res.ErrorMessage = STR_ERR_RIDE_NOT_FOUND;
         return res;
     }
 
-    const auto& ted = GetTrackElementDescriptor(TrackElemType::Maze);
-    money32 price = (((ride->GetRideTypeDescriptor().BuildCosts.TrackPrice * ted.Price) >> 16));
-    res.Cost = canBuild.Cost + price / 2 * 10;
+    res.Cost = MazeCalculateCost(canBuild.Cost, *ride, _loc);
 
     return res;
 }
@@ -132,26 +149,27 @@ GameActions::Result MazePlaceTrackAction::Execute() const
     res.Expenditure = ExpenditureType::RideConstruction;
     res.ErrorTitle = STR_RIDE_CONSTRUCTION_CANT_CONSTRUCT_THIS_HERE;
 
-    auto ride = get_ride(_rideIndex);
+    auto ride = GetRide(_rideIndex);
     if (ride == nullptr)
     {
+        LOG_ERROR("Ride not found for rideIndex %u", _rideIndex);
         res.Error = GameActions::Status::InvalidParameters;
-        res.ErrorMessage = STR_NONE;
+        res.ErrorMessage = STR_ERR_RIDE_NOT_FOUND;
         return res;
     }
 
     uint32_t flags = GetFlags();
     if (!(flags & GAME_COMMAND_FLAG_GHOST))
     {
-        footpath_remove_litter(_loc);
-        wall_remove_at({ _loc.ToTileStart(), _loc.z, _loc.z + 32 });
+        FootpathRemoveLitter(_loc);
+        WallRemoveAt({ _loc.ToTileStart(), _loc.z, _loc.z + 32 });
     }
 
     auto baseHeight = _loc.z;
-    auto clearanceHeight = _loc.z + MAZE_CLEARANCE_HEIGHT;
+    auto clearanceHeight = _loc.z + kMazeClearanceHeight;
 
     auto canBuild = MapCanConstructWithClearAt(
-        { _loc.ToTileStart(), baseHeight, clearanceHeight }, &map_place_non_scenery_clear_func, { 0b1111, 0 },
+        { _loc.ToTileStart(), baseHeight, clearanceHeight }, &MapPlaceNonSceneryClearFunc, { 0b1111, 0 },
         GetFlags() | GAME_COMMAND_FLAG_APPLY);
     if (canBuild.Error != GameActions::Status::Ok)
     {
@@ -159,9 +177,7 @@ GameActions::Result MazePlaceTrackAction::Execute() const
         return canBuild;
     }
 
-    const auto& ted = GetTrackElementDescriptor(TrackElemType::Maze);
-    money32 price = (((ride->GetRideTypeDescriptor().BuildCosts.TrackPrice * ted.Price) >> 16));
-    res.Cost = canBuild.Cost + price / 2 * 10;
+    res.Cost = MazeCalculateCost(canBuild.Cost, *ride, _loc);
 
     auto startLoc = _loc.ToTileStart();
 
@@ -175,11 +191,11 @@ GameActions::Result MazePlaceTrackAction::Execute() const
     trackElement->SetMazeEntry(_mazeEntry);
     trackElement->SetGhost(flags & GAME_COMMAND_FLAG_GHOST);
 
-    map_invalidate_tile_full(startLoc);
+    MapInvalidateTileFull(startLoc);
 
     ride->maze_tiles++;
-    ride->stations[0].SetBaseZ(trackElement->GetBaseZ());
-    ride->stations[0].Start = { 0, 0 };
+    ride->GetStation().SetBaseZ(trackElement->GetBaseZ());
+    ride->GetStation().Start = { 0, 0 };
 
     if (ride->maze_tiles == 1)
     {

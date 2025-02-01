@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,13 +9,23 @@
 
 #include "WaterLowerAction.h"
 
+#include "../GameState.h"
 #include "../OpenRCT2.h"
 #include "../audio/audio.h"
+#include "../ride/RideConstruction.h"
+#include "../world/tile_element/SurfaceElement.h"
 #include "WaterSetHeightAction.h"
+
+using namespace OpenRCT2;
 
 WaterLowerAction::WaterLowerAction(MapRange range)
     : _range(range)
 {
+}
+
+void WaterLowerAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit(_range);
 }
 
 uint16_t WaterLowerAction::GetActionFlags() const
@@ -44,18 +54,11 @@ GameActions::Result WaterLowerAction::QueryExecute(bool isExecuting) const
 {
     auto res = GameActions::Result();
 
-    // Keep big coordinates within map boundaries
-    auto aX = std::max<decltype(_range.GetLeft())>(32, _range.GetLeft());
-    auto bX = std::min<decltype(_range.GetRight())>(GetMapSizeMaxXY(), _range.GetRight());
-    auto aY = std::max<decltype(_range.GetTop())>(32, _range.GetTop());
-    auto bY = std::min<decltype(_range.GetBottom())>(GetMapSizeMaxXY(), _range.GetBottom());
-
-    MapRange validRange = MapRange{ aX, aY, bX, bY };
-
+    auto validRange = ClampRangeWithinMap(_range);
     res.Position.x = ((validRange.GetLeft() + validRange.GetRight()) / 2) + 16;
     res.Position.y = ((validRange.GetTop() + validRange.GetBottom()) / 2) + 16;
-    int16_t z = tile_element_height(res.Position);
-    int16_t waterHeight = tile_element_water_height(res.Position);
+    int16_t z = TileElementHeight(res.Position);
+    int16_t waterHeight = TileElementWaterHeight(res.Position);
     if (waterHeight != 0)
     {
         z = waterHeight;
@@ -66,27 +69,27 @@ GameActions::Result WaterLowerAction::QueryExecute(bool isExecuting) const
     uint8_t minHeight = GetLowestHeight(validRange);
     bool hasChanged = false;
     bool withinOwnership = false;
-    for (int32_t y = validRange.GetTop(); y <= validRange.GetBottom(); y += COORDS_XY_STEP)
+    for (int32_t y = validRange.GetTop(); y <= validRange.GetBottom(); y += kCoordsXYStep)
     {
-        for (int32_t x = validRange.GetLeft(); x <= validRange.GetRight(); x += COORDS_XY_STEP)
+        for (int32_t x = validRange.GetLeft(); x <= validRange.GetRight(); x += kCoordsXYStep)
         {
             if (!LocationValid({ x, y }))
                 continue;
 
-            auto* surfaceElement = map_get_surface_element_at(CoordsXY{ x, y });
+            auto* surfaceElement = MapGetSurfaceElementAt(CoordsXY{ x, y });
             if (surfaceElement == nullptr)
                 continue;
 
-            if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !gCheatsSandboxMode)
+            if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !GetGameState().Cheats.sandboxMode)
             {
-                if (!map_is_location_in_park(CoordsXY{ x, y }))
+                if (!MapIsLocationInPark(CoordsXY{ x, y }))
                 {
                     continue;
                 }
             }
             withinOwnership = true;
 
-            uint8_t height = surfaceElement->GetWaterHeight() / COORDS_Z_STEP;
+            uint8_t height = surfaceElement->GetWaterHeight() / kCoordsZStep;
             if (height == 0)
                 continue;
 
@@ -120,7 +123,7 @@ GameActions::Result WaterLowerAction::QueryExecute(bool isExecuting) const
 
     if (isExecuting && hasChanged)
     {
-        OpenRCT2::Audio::Play3D(OpenRCT2::Audio::SoundId::LayingOutWater, res.Position);
+        Audio::Play3D(Audio::SoundId::LayingOutWater, res.Position);
     }
     // Force ride construction to recheck area
     _currentTrackSelectionFlags |= TRACK_SELECTION_FLAG_RECHECK;
@@ -128,27 +131,27 @@ GameActions::Result WaterLowerAction::QueryExecute(bool isExecuting) const
     return res;
 }
 
-uint8_t WaterLowerAction::GetLowestHeight(MapRange validRange) const
+uint8_t WaterLowerAction::GetLowestHeight(const MapRange& validRange) const
 {
     // The lowest height to lower the water to is the highest water level in the selection
     uint8_t minHeight{ 0 };
-    for (int32_t y = validRange.GetTop(); y <= validRange.GetBottom(); y += COORDS_XY_STEP)
+    for (int32_t y = validRange.GetTop(); y <= validRange.GetBottom(); y += kCoordsXYStep)
     {
-        for (int32_t x = validRange.GetLeft(); x <= validRange.GetRight(); x += COORDS_XY_STEP)
+        for (int32_t x = validRange.GetLeft(); x <= validRange.GetRight(); x += kCoordsXYStep)
         {
-            if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !gCheatsSandboxMode)
+            if (!(gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) && !GetGameState().Cheats.sandboxMode)
             {
-                if (!map_is_location_in_park(CoordsXY{ x, y }))
+                if (!MapIsLocationInPark(CoordsXY{ x, y }))
                 {
                     continue;
                 }
             }
 
-            auto* surfaceElement = map_get_surface_element_at(CoordsXY{ x, y });
+            auto* surfaceElement = MapGetSurfaceElementAt(CoordsXY{ x, y });
             if (surfaceElement == nullptr)
                 continue;
 
-            uint8_t height = surfaceElement->GetWaterHeight() / COORDS_Z_STEP;
+            uint8_t height = surfaceElement->GetWaterHeight() / kCoordsZStep;
             if (height == 0)
                 continue;
 

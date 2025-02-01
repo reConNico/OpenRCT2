@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,7 +9,9 @@
 
 #pragma once
 
+#include "../core/EnumUtils.hpp"
 #include "../core/Imaging.h"
+#include "../core/JsonFwd.hpp"
 #include "Drawing.h"
 
 #include <string_view>
@@ -19,6 +21,36 @@ struct Image;
 
 namespace OpenRCT2::Drawing
 {
+    enum class ImportMode : uint8_t
+    {
+        Default,
+        Closest,
+        Dithering,
+    };
+
+    enum class ImportFlags : uint8_t
+    {
+        RLE,
+        NoDrawOnZoom,
+    };
+
+    enum class Palette : uint8_t
+    {
+        OpenRCT2,
+        KeepIndices,
+    };
+
+    struct ImageImportMeta
+    {
+        ScreenCoordsXY offset{};
+        Palette palette = Palette::OpenRCT2;
+        uint8_t importFlags = EnumToFlag(ImportFlags::RLE);
+        ImportMode importMode = ImportMode::Default;
+        ScreenCoordsXY srcOffset{};
+        ScreenSize srcSize{};
+        int32_t zoomedOffset{};
+    };
+
     /**
      * Imports images to the internal RCT G1 format.
      */
@@ -27,30 +59,11 @@ namespace OpenRCT2::Drawing
     public:
         struct ImportResult
         {
-            rct_g1_element Element{};
+            G1Element Element{};
             std::vector<uint8_t> Buffer;
         };
 
-        enum class IMPORT_MODE
-        {
-            DEFAULT,
-            CLOSEST,
-            DITHERING,
-        };
-
-        enum IMPORT_FLAGS
-        {
-            NONE = 0,
-            KEEP_PALETTE = 1 << 0,
-            RLE = 1 << 1,
-        };
-
-        ImportResult Import(
-            const Image& image, int32_t srcX, int32_t srcY, int32_t width, int32_t height, int32_t offsetX, int32_t offsetY,
-            IMPORT_FLAGS flags = IMPORT_FLAGS::NONE, IMPORT_MODE mode = IMPORT_MODE::DEFAULT) const;
-        ImportResult Import(
-            const Image& image, int32_t offsetX = 0, int32_t offsetY = 0, IMPORT_FLAGS flags = IMPORT_FLAGS::NONE,
-            IMPORT_MODE mode = IMPORT_MODE::DEFAULT) const;
+        ImportResult Import(const Image& image, ImageImportMeta& meta) const;
 
     private:
         enum class PaletteIndexType : uint8_t
@@ -62,14 +75,12 @@ namespace OpenRCT2::Drawing
             Special,
         };
 
-        static std::vector<int32_t> GetPixels(
-            const uint8_t* pixels, uint32_t pitch, uint32_t srcX, uint32_t srcY, uint32_t width, uint32_t height,
-            IMPORT_FLAGS flags, IMPORT_MODE mode);
-        static std::vector<uint8_t> EncodeRaw(const int32_t* pixels, uint32_t width, uint32_t height);
-        static std::vector<uint8_t> EncodeRLE(const int32_t* pixels, uint32_t width, uint32_t height);
+        static std::vector<int32_t> GetPixels(const Image& image, const ImageImportMeta& meta);
+        static std::vector<uint8_t> EncodeRaw(const int32_t* pixels, ScreenSize size);
+        static std::vector<uint8_t> EncodeRLE(const int32_t* pixels, ScreenSize size);
 
         static int32_t CalculatePaletteIndex(
-            IMPORT_MODE mode, int16_t* rgbaSrc, int32_t x, int32_t y, int32_t width, int32_t height);
+            ImportMode mode, int16_t* rgbaSrc, int32_t x, int32_t y, int32_t width, int32_t height);
         static int32_t GetPaletteIndex(const GamePalette& palette, int16_t* colour);
         static bool IsTransparentPixel(const int16_t* colour);
         static bool IsInPalette(const GamePalette& palette, int16_t* colour);
@@ -77,9 +88,12 @@ namespace OpenRCT2::Drawing
         static PaletteIndexType GetPaletteIndexType(int32_t paletteIndex);
         static int32_t GetClosestPaletteIndex(const GamePalette& palette, const int16_t* colour);
     };
+
+    // Note: jsonSprite is deliberately left non-const: json_t behaviour changes when const.
+    ImageImportMeta createImageImportMetaFromJson(json_t& input);
 } // namespace OpenRCT2::Drawing
 
-constexpr const GamePalette StandardPalette = { {
+constexpr OpenRCT2::Drawing::GamePalette StandardPalette = { {
     // 0 (Unused/Transparent)
     { 0, 0, 0, 255 },
 
@@ -355,18 +369,18 @@ constexpr const GamePalette StandardPalette = { {
     { 0, 255, 255, 255 },
 
     // 230 - 234 (Water waves)
-    { 99, 107, 7, 255 },
-    { 99, 107, 7, 255 },
     { 135, 143, 39, 255 },
     { 123, 131, 27, 255 },
-    { 99, 107, 7, 255 },
+    { 95, 103, 7, 255 },
+    { 87, 95, 0, 255 },
+    { 111, 119, 15, 255 },
 
     // 235 - 249 (Water sparkles)
-    { 151, 155, 55, 255 },
-    { 151, 155, 55, 255 },
+    { 255, 255, 199, 255 },
     { 227, 227, 155, 255 },
-    { 203, 203, 115, 255 },
-    { 151, 155, 55, 255 },
+    { 175, 175, 83, 255 },
+    { 151, 155, 51, 255 },
+    { 203, 203, 123, 255 },
 
     // 240 - 242 (Extra grey)
     { 91, 91, 67, 255 },

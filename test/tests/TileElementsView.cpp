@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,6 +10,7 @@
 #include "TestData.h"
 
 #include <gtest/gtest.h>
+#include <memory>
 #include <openrct2/Context.h>
 #include <openrct2/Game.h>
 #include <openrct2/OpenRCT2.h>
@@ -17,6 +18,15 @@
 #include <openrct2/world/Footpath.h>
 #include <openrct2/world/Map.h>
 #include <openrct2/world/TileElementsView.h>
+#include <openrct2/world/tile_element/BannerElement.h>
+#include <openrct2/world/tile_element/EntranceElement.h>
+#include <openrct2/world/tile_element/LargeSceneryElement.h>
+#include <openrct2/world/tile_element/PathElement.h>
+#include <openrct2/world/tile_element/SmallSceneryElement.h>
+#include <openrct2/world/tile_element/SurfaceElement.h>
+#include <openrct2/world/tile_element/TileElement.h>
+#include <openrct2/world/tile_element/TrackElement.h>
+#include <openrct2/world/tile_element/WallElement.h>
 
 using namespace OpenRCT2;
 
@@ -32,8 +42,8 @@ protected:
         bool initialised = _context->Initialise();
         ASSERT_TRUE(initialised);
 
-        load_from_sv6(parkPath.c_str());
-        game_load_init();
+        GetContext()->LoadParkFromFile(parkPath);
+        GameLoadInit();
 
         // Changed in some tests. Store to restore its value
         _gScreenFlags = gScreenFlags;
@@ -56,11 +66,12 @@ private:
 std::shared_ptr<IContext> TileElementsViewTests::_context;
 uint8_t TileElementsViewTests::_gScreenFlags;
 
-template<typename T> std::vector<T*> BuildListManual(const CoordsXY& pos)
+template<typename T>
+std::vector<T*> BuildListManual(const CoordsXY& pos)
 {
-    std::vector<TileElement*> res;
+    std::vector<T*> res;
 
-    TileElement* element = map_get_first_element_at(pos);
+    TileElement* element = MapGetFirstElementAt(pos);
     if (element == nullptr)
         return res;
 
@@ -68,9 +79,9 @@ template<typename T> std::vector<T*> BuildListManual(const CoordsXY& pos)
     {
         if constexpr (!std::is_same_v<T, TileElement>)
         {
-            auto* res = element->as<T>();
-            if (res)
-                res.push_back(res);
+            auto* el = element->as<T>();
+            if (el)
+                res.push_back(el);
         }
         else
         {
@@ -82,9 +93,10 @@ template<typename T> std::vector<T*> BuildListManual(const CoordsXY& pos)
     return res;
 }
 
-template<typename T> std::vector<T*> BuildListByView(const CoordsXY& pos)
+template<typename T>
+std::vector<T*> BuildListByView(const CoordsXY& pos)
 {
-    std::vector<TileElement*> res;
+    std::vector<T*> res;
 
     for (auto* element : TileElementsView<T>(pos))
     {
@@ -94,10 +106,11 @@ template<typename T> std::vector<T*> BuildListByView(const CoordsXY& pos)
     return res;
 }
 
-template<typename T> bool CompareLists(const CoordsXY& pos)
+template<typename T>
+bool CompareLists(const CoordsXY& pos)
 {
-    auto listManual = BuildListManual<TileElement>(pos);
-    auto listView = BuildListByView<TileElement>(pos);
+    auto listManual = BuildListManual<T>(pos);
+    auto listView = BuildListByView<T>(pos);
 
     EXPECT_EQ(listManual.size(), listView.size());
     if (listManual.size() != listView.size())
@@ -114,11 +127,12 @@ template<typename T> bool CompareLists(const CoordsXY& pos)
     return true;
 }
 
-template<typename T> void CheckMapTiles()
+template<typename T>
+void CheckMapTiles()
 {
-    for (int x = 0; x < MAXIMUM_MAP_SIZE_TECHNICAL; ++x)
+    for (int y = 0; y < kMaximumMapSizeTechnical; ++y)
     {
-        for (int y = 0; y < MAXIMUM_MAP_SIZE_TECHNICAL; ++y)
+        for (int x = 0; x < kMaximumMapSizeTechnical; ++x)
         {
             auto pos = TileCoordsXY(x, y).ToCoordsXY();
 

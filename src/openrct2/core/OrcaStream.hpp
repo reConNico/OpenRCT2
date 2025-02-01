@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2019 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "../core/Compression.h"
 #include "../world/Location.hpp"
 #include "Crypt.h"
 #include "FileStream.h"
@@ -18,8 +19,8 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <fstream>
-#include <sstream>
+#include <optional>
+#include <span>
 #include <stack>
 #include <type_traits>
 #include <vector>
@@ -35,8 +36,11 @@ namespace OpenRCT2
             WRITING,
         };
 
-        static constexpr uint32_t COMPRESSION_NONE = 0;
-        static constexpr uint32_t COMPRESSION_GZIP = 1;
+        enum class CompressionType : uint32_t
+        {
+            none,
+            gzip,
+        };
 
     private:
 #pragma pack(push, 1)
@@ -47,7 +51,7 @@ namespace OpenRCT2
             uint32_t MinVersion{};
             uint32_t NumChunks{};
             uint64_t UncompressedSize{};
-            uint32_t Compression{};
+            CompressionType Compression{};
             uint64_t CompressedSize{};
             std::array<uint8_t, 8> FNV1a{};
             uint8_t padding[20];
@@ -98,9 +102,9 @@ namespace OpenRCT2
                 } while (bytesLeft > 0);
 
                 // Uncompress
-                if (_header.Compression == COMPRESSION_GZIP)
+                if (_header.Compression == CompressionType::gzip)
                 {
-                    auto uncompressedData = Ungzip(_buffer.GetData(), _buffer.GetLength());
+                    auto uncompressedData = Compression::ungzip(_buffer.GetData(), _buffer.GetLength());
                     if (_header.UncompressedSize != uncompressedData.size())
                     {
                         // Warning?
@@ -112,7 +116,7 @@ namespace OpenRCT2
             else
             {
                 _header = {};
-                _header.Compression = COMPRESSION_GZIP;
+                _header.Compression = CompressionType::gzip;
 
                 _buffer = MemoryStream{};
             }
@@ -134,9 +138,9 @@ namespace OpenRCT2
 
                 // Compress data
                 std::optional<std::vector<uint8_t>> compressedBytes;
-                if (_header.Compression == COMPRESSION_GZIP)
+                if (_header.Compression == CompressionType::gzip)
                 {
-                    compressedBytes = Gzip(uncompressedData, uncompressedSize);
+                    compressedBytes = Compression::gzip(uncompressedData, uncompressedSize);
                     if (compressedBytes)
                     {
                         _header.CompressedSize = compressedBytes->size();
@@ -144,7 +148,7 @@ namespace OpenRCT2
                     else
                     {
                         // Compression failed
-                        _header.Compression = COMPRESSION_NONE;
+                        _header.Compression = CompressionType::none;
                     }
                 }
 
@@ -182,7 +186,8 @@ namespace OpenRCT2
             return _header;
         }
 
-        template<typename TFunc> bool ReadWriteChunk(const uint32_t chunkId, TFunc f)
+        template<typename TFunc>
+        bool ReadWriteChunk(const uint32_t chunkId, TFunc f)
         {
             if (_mode == Mode::READING)
             {
@@ -288,7 +293,8 @@ namespace OpenRCT2
                 }
             }
 
-            template<typename T, std::enable_if_t<std::is_integral<T>::value, bool> = true> void ReadWrite(T& v)
+            template<typename T, std::enable_if_t<std::is_integral<T>::value, bool> = true>
+            void ReadWrite(T& v)
             {
                 if (_mode == Mode::READING)
                 {
@@ -300,7 +306,8 @@ namespace OpenRCT2
                 }
             }
 
-            template<typename T, std::enable_if_t<std::is_enum<T>::value, bool> = true> void ReadWrite(T& v)
+            template<typename T, std::enable_if_t<std::is_enum<T>::value, bool> = true>
+            void ReadWrite(T& v)
             {
                 using underlying = typename std::underlying_type<T>::type;
                 if (_mode == Mode::READING)
@@ -313,7 +320,8 @@ namespace OpenRCT2
                 }
             }
 
-            template<typename T, T TNullValue, typename TTag> void ReadWrite(TIdentifier<T, TNullValue, TTag>& value)
+            template<typename T, T TNullValue, typename TTag>
+            void ReadWrite(TIdentifier<T, TNullValue, TTag>& value)
             {
                 if (_mode == Mode::READING)
                 {
@@ -377,7 +385,8 @@ namespace OpenRCT2
                 ReadWrite(coords.direction);
             }
 
-            template<typename T, typename = std::enable_if<std::is_integral<T>::value>> T Read()
+            template<typename T, typename = std::enable_if<std::is_integral<T>::value>>
+            T Read()
             {
                 T v{};
                 ReadWrite(v);
@@ -396,7 +405,8 @@ namespace OpenRCT2
                 }
             }
 
-            template<typename T, typename = std::enable_if<std::is_integral<T>::value>> void Write(T v)
+            template<typename T, typename = std::enable_if<std::is_integral<T>::value>>
+            void Write(T v)
             {
                 if (_mode == Mode::READING)
                 {
@@ -435,7 +445,8 @@ namespace OpenRCT2
                 Write(std::string_view(v));
             }
 
-            template<typename TVec, typename TFunc> void ReadWriteVector(TVec& vec, TFunc f)
+            template<typename TVec, typename TFunc>
+            void ReadWriteVector(TVec& vec, TFunc f)
             {
                 if (_mode == Mode::READING)
                 {
@@ -461,14 +472,8 @@ namespace OpenRCT2
                 }
             }
 
-            template<typename TArr, size_t TArrSize, typename TFunc> void ReadWriteArray(TArr (&arr)[TArrSize], TFunc f)
-            {
-                auto& arr2 = *(reinterpret_cast<std::array<TArr, TArrSize>*>(arr));
-                ReadWriteArray(arr2, f);
-            }
-
-            template<typename TArr, size_t TArrSize, typename TFunc>
-            void ReadWriteArray(std::array<TArr, TArrSize>& arr, TFunc f)
+            template<typename TArr, typename TFunc>
+            void ReadWriteArray(std::span<TArr> arr, TFunc f)
             {
                 if (_mode == Mode::READING)
                 {
@@ -479,7 +484,7 @@ namespace OpenRCT2
                     }
                     for (size_t i = 0; i < count; i++)
                     {
-                        if (i < TArrSize)
+                        if (i < arr.size())
                         {
                             f(arr[i]);
                         }
@@ -501,7 +506,20 @@ namespace OpenRCT2
                 }
             }
 
-            template<typename T> void Ignore()
+            template<typename TArr, size_t TArrSize, typename TFunc>
+            void ReadWriteArray(TArr (&arr)[TArrSize], TFunc f)
+            {
+                ReadWriteArray(std::span<TArr>{ arr, TArrSize }, f);
+            }
+
+            template<typename TArr, size_t TArrSize, typename TFunc>
+            void ReadWriteArray(std::array<TArr, TArrSize>& arr, TFunc f)
+            {
+                ReadWriteArray(std::span<TArr>{ arr.begin(), arr.end() }, f);
+            }
+
+            template<typename T>
+            void Ignore()
             {
                 T value{};
                 ReadWrite(value);
@@ -518,7 +536,8 @@ namespace OpenRCT2
                 _buffer.Write(buffer, len);
             }
 
-            template<typename T, typename = std::enable_if<std::is_integral<T>::value>> T ReadInteger()
+            template<typename T, typename = std::enable_if<std::is_integral<T>::value>>
+            T ReadInteger()
             {
                 if constexpr (sizeof(T) > 4)
                 {
@@ -560,7 +579,8 @@ namespace OpenRCT2
                 }
             }
 
-            template<typename T, typename = std::enable_if<std::is_integral<T>::value>> void WriteInteger(const T value)
+            template<typename T, typename = std::enable_if<std::is_integral<T>::value>>
+            void WriteInteger(const T value)
             {
                 if constexpr (sizeof(T) > 4)
                 {
@@ -593,7 +613,6 @@ namespace OpenRCT2
             std::string ReadString()
             {
                 std::string buffer;
-                buffer.reserve(64);
                 while (true)
                 {
                     char c{};
@@ -604,7 +623,6 @@ namespace OpenRCT2
                     }
                     buffer.push_back(c);
                 }
-                buffer.shrink_to_fit();
                 return buffer;
             }
 

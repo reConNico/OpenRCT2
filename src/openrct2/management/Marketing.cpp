@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,35 +11,49 @@
 
 #include "../Cheats.h"
 #include "../Game.h"
+#include "../GameState.h"
 #include "../config/Config.h"
 #include "../entity/Guest.h"
-#include "../interface/Window.h"
-#include "../localisation/Localisation.h"
+#include "../localisation/Formatter.h"
+#include "../profiling/Profiling.h"
 #include "../ride/Ride.h"
 #include "../ride/RideData.h"
+#include "../ride/RideManager.hpp"
 #include "../ride/ShopItem.h"
+#include "../ui/WindowManager.h"
 #include "../world/Park.h"
 #include "Finance.h"
 #include "NewsItem.h"
 
-const money16 AdvertisingCampaignPricePerWeek[] = {
-    MONEY(50, 00),  // PARK_ENTRY_FREE
-    MONEY(50, 00),  // RIDE_FREE
-    MONEY(50, 00),  // PARK_ENTRY_HALF_PRICE
-    MONEY(50, 00),  // FOOD_OR_DRINK_FREE
-    MONEY(350, 00), // PARK
-    MONEY(200, 00), // RIDE
+using namespace OpenRCT2;
+
+const money64 AdvertisingCampaignPricePerWeek[] = {
+    50.00_GBP,  // PARK_ENTRY_FREE
+    50.00_GBP,  // RIDE_FREE
+    50.00_GBP,  // PARK_ENTRY_HALF_PRICE
+    50.00_GBP,  // FOOD_OR_DRINK_FREE
+    350.00_GBP, // PARK
+    200.00_GBP, // RIDE
 };
 
-static constexpr const uint16_t AdvertisingCampaignGuestGenerationProbabilities[] = {
+// clang-format off
+const StringId kMarketingCampaignNames[ADVERTISING_CAMPAIGN_COUNT][3] = {
+    { STR_MARKETING_VOUCHERS_FOR_FREE_ENTRY_TO_THE_PARK,            STR_VOUCHERS_FOR_FREE_ENTRY_TO,         STR_MARKETING_FINISHED_FREE_ENTRY },        // ADVERTISING_CAMPAIGN_PARK_ENTRY_FREE,
+    { STR_MARKETING_VOUCHERS_FOR_FREE_RIDES_ON_A_PARTICULAR_RIDE,   STR_VOUCHERS_FOR_FREE_RIDE_ON,          STR_MARKETING_FINISHED_FREE_RIDES },        // ADVERTISING_CAMPAIGN_RIDE_FREE,
+    { STR_MARKETING_VOUCHERS_FOR_HALF_PRICE_ENTRY_TO_THE_PARK,      STR_VOUCHERS_FOR_HALF_PRICE_ENTRY_TO,   STR_MARKETING_FINISHED_HALF_PRICE_ENTRY },  // ADVERTISING_CAMPAIGN_PARK_ENTRY_HALF_PRICE,
+    { STR_MARKETING_VOUCHERS_FOR_FREE_FOOD_OR_DRINK,                STR_VOUCHERS_FOR_FREE,                  STR_MARKETING_FINISHED_FREE_RIDE },         // ADVERTISING_CAMPAIGN_FOOD_OR_DRINK_FREE,
+    { STR_MARKETING_ADVERTISING_CAMPAIGN_FOR_THE_PARK,              STR_ADVERTISING_CAMPAIGN_FOR_1,         STR_MARKETING_FINISHED_PARK_ADS },          // ADVERTISING_CAMPAIGN_PARK,
+    { STR_MARKETING_ADVERTISING_CAMPAIGN_FOR_A_PARTICULAR_RIDE,     STR_ADVERTISING_CAMPAIGN_FOR_2,         STR_MARKETING_FINISHED_RIDE_ADS },          // ADVERTISING_CAMPAIGN_RIDE,
+};
+// clang-format on
+
+static constexpr uint16_t AdvertisingCampaignGuestGenerationProbabilities[] = {
     400, 300, 200, 200, 250, 200,
 };
 
-std::vector<MarketingCampaign> gMarketingCampaigns;
-
-uint16_t marketing_get_campaign_guest_generation_probability(int32_t campaignType)
+uint16_t MarketingGetCampaignGuestGenerationProbability(int32_t campaignType)
 {
-    auto campaign = marketing_get_campaign(campaignType);
+    auto campaign = MarketingGetCampaign(campaignType);
     if (campaign == nullptr)
         return 0;
 
@@ -48,17 +62,17 @@ uint16_t marketing_get_campaign_guest_generation_probability(int32_t campaignTyp
     switch (campaign->Type)
     {
         case ADVERTISING_CAMPAIGN_PARK_ENTRY_FREE:
-            if (park_get_entrance_fee() < MONEY(4, 00))
+            if (Park::GetEntranceFee() < 4.00_GBP)
                 probability /= 8;
             break;
         case ADVERTISING_CAMPAIGN_PARK_ENTRY_HALF_PRICE:
-            if (park_get_entrance_fee() < MONEY(6, 00))
+            if (Park::GetEntranceFee() < 6.00_GBP)
                 probability /= 8;
             break;
         case ADVERTISING_CAMPAIGN_RIDE_FREE:
         {
-            auto ride = get_ride(campaign->RideId);
-            if (ride == nullptr || ride->price[0] < MONEY(0, 30))
+            auto ride = GetRide(campaign->RideId);
+            if (ride == nullptr || ride->price[0] < 0.30_GBP)
                 probability /= 8;
             break;
         }
@@ -67,15 +81,15 @@ uint16_t marketing_get_campaign_guest_generation_probability(int32_t campaignTyp
     return probability;
 }
 
-static void marketing_raise_finished_notification(const MarketingCampaign& campaign)
+static void MarketingRaiseFinishedNotification(const MarketingCampaign& campaign)
 {
-    if (gConfigNotifications.park_marketing_campaign_finished)
+    if (Config::Get().notifications.ParkMarketingCampaignFinished)
     {
         Formatter ft;
         // This sets the string parameters for the marketing types that have an argument.
         if (campaign.Type == ADVERTISING_CAMPAIGN_RIDE_FREE || campaign.Type == ADVERTISING_CAMPAIGN_RIDE)
         {
-            auto ride = get_ride(campaign.RideId);
+            auto ride = GetRide(campaign.RideId);
             if (ride != nullptr)
             {
                 ride->FormatNameTo(ft);
@@ -83,23 +97,27 @@ static void marketing_raise_finished_notification(const MarketingCampaign& campa
         }
         else if (campaign.Type == ADVERTISING_CAMPAIGN_FOOD_OR_DRINK_FREE)
         {
-            ft.Add<rct_string_id>(GetShopItemDescriptor(campaign.ShopItemType).Naming.Plural);
+            ft.Add<StringId>(GetShopItemDescriptor(campaign.ShopItemType).Naming.Plural);
         }
 
-        News::AddItemToQueue(News::ItemType::Money, MarketingCampaignNames[campaign.Type][2], 0, ft);
+        News::AddItemToQueue(News::ItemType::Campaign, kMarketingCampaignNames[campaign.Type][2], 0, ft);
     }
 }
 
 /**
- * Update status of marketing campaigns and send produce a news item when they have finished.
+ * Update status of marketing campaigns and produce a news item when they have finished.
  *  rct2: 0x0069E0C1
  */
-void marketing_update()
+void MarketingUpdate()
 {
-    if (gCheatsNeverendingMarketing)
+    PROFILED_FUNCTION();
+
+    auto& gameState = GetGameState();
+
+    if (gameState.Cheats.neverendingMarketing)
         return;
 
-    for (auto it = gMarketingCampaigns.begin(); it != gMarketingCampaigns.end();)
+    for (auto it = gameState.MarketingCampaigns.begin(); it != gameState.MarketingCampaigns.end();)
     {
         auto& campaign = *it;
         if (campaign.Flags & MarketingCampaignFlags::FIRST_WEEK)
@@ -115,8 +133,8 @@ void marketing_update()
 
         if (campaign.WeeksLeft == 0)
         {
-            marketing_raise_finished_notification(campaign);
-            it = gMarketingCampaigns.erase(it);
+            MarketingRaiseFinishedNotification(campaign);
+            it = gameState.MarketingCampaigns.erase(it);
         }
         else
         {
@@ -124,12 +142,13 @@ void marketing_update()
         }
     }
 
-    window_invalidate_by_class(WC_FINANCES);
+    auto* windowMgr = Ui::GetWindowManager();
+    windowMgr->InvalidateByClass(WindowClass::Finances);
 }
 
-void marketing_set_guest_campaign(Guest* peep, int32_t campaignType)
+void MarketingSetGuestCampaign(Guest* peep, int32_t campaignType)
 {
-    auto campaign = marketing_get_campaign(campaignType);
+    auto campaign = MarketingGetCampaign(campaignType);
     if (campaign == nullptr)
         return;
 
@@ -164,18 +183,18 @@ void marketing_set_guest_campaign(Guest* peep, int32_t campaignType)
     }
 }
 
-bool marketing_is_campaign_type_applicable(int32_t campaignType)
+bool MarketingIsCampaignTypeApplicable(int32_t campaignType)
 {
     switch (campaignType)
     {
         case ADVERTISING_CAMPAIGN_PARK_ENTRY_FREE:
         case ADVERTISING_CAMPAIGN_PARK_ENTRY_HALF_PRICE:
-            if (!park_entry_price_unlocked())
+            if (!Park::EntranceFeeUnlocked())
                 return false;
             return true;
 
         case ADVERTISING_CAMPAIGN_RIDE_FREE:
-            if (!park_ride_prices_unlocked())
+            if (!Park::RidePricesUnlocked())
                 return false;
 
             // fall-through
@@ -213,9 +232,9 @@ bool marketing_is_campaign_type_applicable(int32_t campaignType)
     }
 }
 
-MarketingCampaign* marketing_get_campaign(int32_t campaignType)
+MarketingCampaign* MarketingGetCampaign(int32_t campaignType)
 {
-    for (auto& campaign : gMarketingCampaigns)
+    for (auto& campaign : GetGameState().MarketingCampaigns)
     {
         if (campaign.Type == campaignType)
         {
@@ -225,21 +244,21 @@ MarketingCampaign* marketing_get_campaign(int32_t campaignType)
     return nullptr;
 }
 
-void marketing_new_campaign(const MarketingCampaign& campaign)
+void MarketingNewCampaign(const MarketingCampaign& campaign)
 {
-    // Do not allow same campaign twice, just overwrite
-    auto currentCampaign = marketing_get_campaign(campaign.Type);
+    // Do not allow the same campaign twice, just overwrite
+    auto currentCampaign = MarketingGetCampaign(campaign.Type);
     if (currentCampaign != nullptr)
     {
         *currentCampaign = campaign;
     }
     else
     {
-        gMarketingCampaigns.push_back(campaign);
+        GetGameState().MarketingCampaigns.push_back(campaign);
     }
 }
 
-void MarketingCancelCampaignsForRide(const ride_id_t rideId)
+void MarketingCancelCampaignsForRide(const RideId rideId)
 {
     auto isCampaignForRideFn = [&rideId](MarketingCampaign& campaign) {
         if (campaign.Type == ADVERTISING_CAMPAIGN_RIDE_FREE || campaign.Type == ADVERTISING_CAMPAIGN_RIDE)
@@ -249,7 +268,7 @@ void MarketingCancelCampaignsForRide(const ride_id_t rideId)
         return false;
     };
 
-    auto& v = gMarketingCampaigns;
+    auto& v = GetGameState().MarketingCampaigns;
     auto removedIt = std::remove_if(v.begin(), v.end(), isCampaignForRideFn);
     v.erase(removedIt, v.end());
 }

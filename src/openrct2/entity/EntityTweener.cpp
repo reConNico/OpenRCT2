@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -14,23 +14,28 @@
 #include "EntityList.h"
 #include "EntityRegistry.h"
 
+#include <algorithm>
 #include <cmath>
+
+void EntityTweener::AddEntity(EntityBase* entity)
+{
+    Entities.push_back(entity);
+    PrePos.emplace_back(entity->GetLocation());
+}
+
 void EntityTweener::PopulateEntities()
 {
     for (auto ent : EntityList<Guest>())
     {
-        Entities.push_back(ent);
-        PrePos.emplace_back(ent->GetLocation());
+        AddEntity(ent);
     }
     for (auto ent : EntityList<Staff>())
     {
-        Entities.push_back(ent);
-        PrePos.emplace_back(ent->GetLocation());
+        AddEntity(ent);
     }
     for (auto ent : EntityList<Vehicle>())
     {
-        Entities.push_back(ent);
-        PrePos.emplace_back(ent->GetLocation());
+        AddEntity(ent);
     }
 }
 
@@ -57,9 +62,16 @@ void EntityTweener::PostTick()
     }
 }
 
+static bool CanTweenEntity(EntityBase* ent)
+{
+    if (ent->Is<Guest>() || ent->Is<Staff>() || ent->Is<Vehicle>())
+        return true;
+    return false;
+}
+
 void EntityTweener::RemoveEntity(EntityBase* entity)
 {
-    if (!entity->Is<Peep>() && !entity->Is<Vehicle>())
+    if (!CanTweenEntity(entity))
     {
         // Only peeps and vehicles are tweened, bail if type is incorrect.
         return;
@@ -85,12 +97,9 @@ void EntityTweener::Tween(float alpha)
         if (posA == posB)
             continue;
 
-        EntitySetCoordinates(
-            { static_cast<int32_t>(std::round(posB.x * alpha + posA.x * inv)),
-              static_cast<int32_t>(std::round(posB.y * alpha + posA.y * inv)),
-              static_cast<int32_t>(std::round(posB.z * alpha + posA.z * inv)) },
-            ent);
-        ent->Invalidate();
+        ent->MoveTo({ static_cast<int32_t>(std::round(posB.x * alpha + posA.x * inv)),
+                      static_cast<int32_t>(std::round(posB.y * alpha + posA.y * inv)),
+                      static_cast<int32_t>(std::round(posB.z * alpha + posA.z * inv)) });
     }
 }
 
@@ -102,8 +111,7 @@ void EntityTweener::Restore()
         if (ent == nullptr)
             continue;
 
-        EntitySetCoordinates(PostPos[i], ent);
-        ent->Invalidate();
+        ent->MoveTo(PostPos[i]);
     }
 }
 

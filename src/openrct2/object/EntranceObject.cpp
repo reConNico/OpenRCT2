@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,12 +9,15 @@
 
 #include "EntranceObject.h"
 
+#include "../core/Guard.hpp"
 #include "../core/IStream.hpp"
 #include "../core/Json.hpp"
 #include "../core/String.hpp"
 #include "../drawing/Drawing.h"
-#include "../drawing/Image.h"
-#include "../localisation/Localisation.h"
+#include "../localisation/LocalisationService.h"
+#include "../paint/tile_element/Paint.TileElement.h"
+
+using namespace OpenRCT2;
 
 void EntranceObject::ReadLegacy(IReadObjectContext* context, OpenRCT2::IStream* stream)
 {
@@ -29,26 +32,25 @@ void EntranceObject::ReadLegacy(IReadObjectContext* context, OpenRCT2::IStream* 
 void EntranceObject::Load()
 {
     GetStringTable().Sort();
-    _legacyType.string_idx = language_allocate_object_string(GetName());
-    _legacyType.image_id = gfx_object_allocate_images(GetImageTable().GetImages(), GetImageTable().GetCount());
+    _legacyType.string_idx = LanguageAllocateObjectString(GetName());
+    _legacyType.image_id = LoadImages();
 }
 
 void EntranceObject::Unload()
 {
-    language_free_object_string(_legacyType.string_idx);
-    gfx_object_free_images(_legacyType.image_id, GetImageTable().GetCount());
+    LanguageFreeObjectString(_legacyType.string_idx);
+    UnloadImages();
 
     _legacyType.string_idx = 0;
     _legacyType.image_id = 0;
 }
 
-void EntranceObject::DrawPreview(rct_drawpixelinfo* dpi, int32_t width, int32_t height) const
+void EntranceObject::DrawPreview(DrawPixelInfo& dpi, int32_t width, int32_t height) const
 {
     auto screenCoords = ScreenCoordsXY{ width / 2, height / 2 };
-
-    gfx_draw_sprite(dpi, ImageId(_legacyType.image_id + 1), screenCoords + ScreenCoordsXY{ -32, 14 });
-    gfx_draw_sprite(dpi, ImageId(_legacyType.image_id + 0), screenCoords + ScreenCoordsXY{ 0, 28 });
-    gfx_draw_sprite(dpi, ImageId(_legacyType.image_id + 2), screenCoords + ScreenCoordsXY{ 32, 44 });
+    GfxDrawSprite(dpi, ImageId(_legacyType.image_id + 1), screenCoords + ScreenCoordsXY{ -32, 14 });
+    GfxDrawSprite(dpi, ImageId(_legacyType.image_id + 0), screenCoords + ScreenCoordsXY{ 0, 28 });
+    GfxDrawSprite(dpi, ImageId(_legacyType.image_id + 2), screenCoords + ScreenCoordsXY{ 32, 44 });
 }
 
 void EntranceObject::ReadJson(IReadObjectContext* context, json_t& root)
@@ -69,7 +71,7 @@ void EntranceObject::ReadJson(IReadObjectContext* context, json_t& root)
 ImageIndex EntranceObject::GetImage(uint8_t sequence, Direction direction) const
 {
     if (sequence > 2)
-        return ImageIndexUndefined;
+        return kImageIndexUndefined;
     return _legacyType.image_id + ((direction & 3) * 3) + sequence;
 }
 

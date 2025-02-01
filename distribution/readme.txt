@@ -1,5 +1,4 @@
-Last updated:    2021-11-21
-Release version: 0.3.5.1
+Last updated:    2024-11-19
 ------------------------------------------------------------------------
 
 
@@ -14,7 +13,8 @@ Table of contents
 6.0) Translation
 7.0) Troubleshooting
 8.0) Licensing
-9.0) Credits
+9.0) Privacy policy
+10.0) Credits
 
 1.0) About
 ---- -----
@@ -66,7 +66,7 @@ following information in your bug report:
 
 3.0) Supported platforms
 ---- -------------------
-OpenRCT2 is currently supported on Windows Vista and above, many distributions of
+OpenRCT2 is currently supported on Windows 7 and above, many distributions of
 Linux, macOS 10.13 or higher, Android, FreeBSD and OpenBSD. OpenRCT2 will only work on
 little-endian architectures.
 Further instructions can be found on GitHub.
@@ -81,7 +81,7 @@ extract OpenRCT2 in the given directory.
 OpenRCT2 requires an installation of RollerCoaster Tycoon 2 (RCT2) to run. You
 must have either installed the original RCT2 disc, the GOG version or the Steam
 version. Alternatively you can manually specify the location of where your RCT2
-data files are. These may be directly copied of the original disc and placed in
+data files are. These may be directly copied off of the original disc and placed in
 a directory of your choice.
 
 When you start OpenRCT2 for the first time, it will look for the RCT2 data files
@@ -101,7 +101,7 @@ in the following locations:
 
 If none of these locations are found, OpenRCT2 will ask you to manually specify
 the directory. Alternatively after running OpenRCT2 for the first time, you can
-edit openrct2.cfg in the OpenRCT2 sub directory of your documents folder to set
+edit config.ini in the OpenRCT2 sub directory of your documents folder to set
 the RCT2 install path.
 
 OpenRCT2 supports setting a DPI scale in increments of .25. To set it, open the Options menu.
@@ -154,9 +154,14 @@ SDL2             | zlib licence.
 zlib             | zlib licence.
 Google Test      | BSD 3 clause licence.
 Google Benchmark | Apache 2.0 licence.
+sfl              | zlib licence.
 
 Licences for sub-libraries used by the above may vary. For more information, visit the libraries' respective official websites.
 
-9.0) Credits
+9.0) Privacy policy
+
+For privacy policy, see the file 'PRIVACY.md'.
+
+10.0) Credits
 ---- -------
 For the full list of contributors to OpenRCT2, see the file 'contributors.md'.

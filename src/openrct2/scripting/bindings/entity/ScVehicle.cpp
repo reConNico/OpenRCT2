@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -49,7 +49,7 @@ namespace OpenRCT2::Scripting
         { "stopped_by_block_brake", Vehicle::Status::StoppedByBlockBrakes },
     });
 
-    ScVehicle::ScVehicle(uint16_t id)
+    ScVehicle::ScVehicle(EntityId id)
         : ScEntity(id)
     {
     }
@@ -71,14 +71,19 @@ namespace OpenRCT2::Scripting
         dukglue_register_property(ctx, &ScVehicle::acceleration_get, &ScVehicle::acceleration_set, "acceleration");
         dukglue_register_property(ctx, &ScVehicle::velocity_get, &ScVehicle::velocity_set, "velocity");
         dukglue_register_property(ctx, &ScVehicle::bankRotation_get, &ScVehicle::bankRotation_set, "bankRotation");
+        dukglue_register_property(
+            ctx, &ScVehicle::flag_get<VehicleFlags::CarIsReversed>, &ScVehicle::flag_set<VehicleFlags::CarIsReversed>,
+            "isReversed");
         dukglue_register_property(ctx, &ScVehicle::colours_get, &ScVehicle::colours_set, "colours");
         dukglue_register_property(ctx, &ScVehicle::trackLocation_get, &ScVehicle::trackLocation_set, "trackLocation");
         dukglue_register_property(ctx, &ScVehicle::trackProgress_get, nullptr, "trackProgress");
         dukglue_register_property(ctx, &ScVehicle::remainingDistance_get, nullptr, "remainingDistance");
+        dukglue_register_property(ctx, &ScVehicle::subposition_get, nullptr, "subposition");
         dukglue_register_property(
             ctx, &ScVehicle::poweredAcceleration_get, &ScVehicle::poweredAcceleration_set, "poweredAcceleration");
         dukglue_register_property(ctx, &ScVehicle::poweredMaxSpeed_get, &ScVehicle::poweredMaxSpeed_set, "poweredMaxSpeed");
         dukglue_register_property(ctx, &ScVehicle::status_get, &ScVehicle::status_set, "status");
+        dukglue_register_property(ctx, &ScVehicle::spin_get, &ScVehicle::spin_set, "spin");
         dukglue_register_property(ctx, &ScVehicle::guests_get, nullptr, "peeps");
         dukglue_register_property(ctx, &ScVehicle::guests_get, nullptr, "guests");
         dukglue_register_property(ctx, &ScVehicle::gForces_get, nullptr, "gForces");
@@ -90,12 +95,12 @@ namespace OpenRCT2::Scripting
         return ::GetEntity<Vehicle>(_id);
     }
 
-    uint8_t ScVehicle::rideObject_get() const
+    ObjectEntryIndex ScVehicle::rideObject_get() const
     {
         auto vehicle = GetVehicle();
         return vehicle != nullptr ? vehicle->ride_subtype : 0;
     }
-    void ScVehicle::rideObject_set(uint8_t value)
+    void ScVehicle::rideObject_set(ObjectEntryIndex value)
     {
         ThrowIfGameStateNotMutable();
         auto vehicle = GetVehicle();
@@ -138,7 +143,7 @@ namespace OpenRCT2::Scripting
     int32_t ScVehicle::ride_get() const
     {
         auto vehicle = GetVehicle();
-        return EnumValue(vehicle != nullptr ? vehicle->ride : RIDE_ID_NULL);
+        return (vehicle != nullptr ? vehicle->ride : RideId::GetNull()).ToUnderlying();
     }
     void ScVehicle::ride_set(int32_t value)
     {
@@ -146,14 +151,14 @@ namespace OpenRCT2::Scripting
         auto vehicle = GetVehicle();
         if (vehicle != nullptr)
         {
-            vehicle->ride = static_cast<ride_id_t>(value);
+            vehicle->ride = RideId::FromUnderlying(value);
         }
     }
 
     uint8_t ScVehicle::numSeats_get() const
     {
         auto vehicle = GetVehicle();
-        return vehicle != nullptr ? vehicle->num_seats & VEHICLE_SEAT_NUM_MASK : 0;
+        return vehicle != nullptr ? vehicle->num_seats & kVehicleSeatNumMask : 0;
     }
     void ScVehicle::numSeats_set(uint8_t value)
     {
@@ -161,8 +166,8 @@ namespace OpenRCT2::Scripting
         auto vehicle = GetVehicle();
         if (vehicle != nullptr)
         {
-            vehicle->num_seats &= ~VEHICLE_SEAT_NUM_MASK;
-            vehicle->num_seats |= value & VEHICLE_SEAT_NUM_MASK;
+            vehicle->num_seats &= ~kVehicleSeatNumMask;
+            vehicle->num_seats |= value & kVehicleSeatNumMask;
         }
     }
 
@@ -172,9 +177,9 @@ namespace OpenRCT2::Scripting
         auto vehicle = GetVehicle();
         if (vehicle != nullptr)
         {
-            if (vehicle->next_vehicle_on_train != SPRITE_INDEX_NULL)
+            if (!vehicle->next_vehicle_on_train.IsNull())
             {
-                return ToDuk<int32_t>(ctx, vehicle->next_vehicle_on_train);
+                return ToDuk<int32_t>(ctx, vehicle->next_vehicle_on_train.ToUnderlying());
             }
         }
         return ToDuk(ctx, nullptr);
@@ -187,57 +192,87 @@ namespace OpenRCT2::Scripting
         {
             if (value.type() == DukValue::Type::NUMBER)
             {
-                vehicle->next_vehicle_on_train = static_cast<uint16_t>(value.as_int());
+                vehicle->next_vehicle_on_train = EntityId::FromUnderlying(value.as_uint());
             }
             else
             {
-                vehicle->next_vehicle_on_train = SPRITE_INDEX_NULL;
+                vehicle->next_vehicle_on_train = EntityId::GetNull();
             }
         }
     }
 
-    uint16_t ScVehicle::previousCarOnRide_get() const
+    DukValue ScVehicle::previousCarOnRide_get() const
     {
-        auto vehicle = GetVehicle();
-        return vehicle != nullptr ? vehicle->prev_vehicle_on_ride : 0;
+        auto ctx = GetContext()->GetScriptEngine().GetContext();
+
+        const auto* vehicle = GetVehicle();
+        if (vehicle == nullptr)
+            return ToDuk(ctx, nullptr);
+
+        if (vehicle->prev_vehicle_on_ride.IsNull())
+            return ToDuk(ctx, nullptr);
+
+        return ToDuk(ctx, vehicle->prev_vehicle_on_ride.ToUnderlying());
     }
-    void ScVehicle::previousCarOnRide_set(uint16_t value)
+    void ScVehicle::previousCarOnRide_set(DukValue value)
     {
         ThrowIfGameStateNotMutable();
-        auto vehicle = GetVehicle();
-        if (vehicle != nullptr)
+        auto* vehicle = GetVehicle();
+        if (vehicle == nullptr)
+            return;
+
+        if (value.type() == DukValue::Type::NUMBER)
         {
-            vehicle->prev_vehicle_on_ride = value;
+            vehicle->prev_vehicle_on_ride = EntityId::FromUnderlying(value.as_uint());
+        }
+        else
+        {
+            vehicle->prev_vehicle_on_ride = EntityId::GetNull();
         }
     }
 
-    uint16_t ScVehicle::nextCarOnRide_get() const
+    DukValue ScVehicle::nextCarOnRide_get() const
     {
-        auto vehicle = GetVehicle();
-        return vehicle != nullptr ? vehicle->next_vehicle_on_ride : 0;
+        auto ctx = GetContext()->GetScriptEngine().GetContext();
+
+        const auto* vehicle = GetVehicle();
+        if (vehicle == nullptr)
+            return ToDuk(ctx, nullptr);
+
+        if (vehicle->next_vehicle_on_ride.IsNull())
+            return ToDuk(ctx, nullptr);
+
+        return ToDuk(ctx, vehicle->next_vehicle_on_ride.ToUnderlying());
     }
-    void ScVehicle::nextCarOnRide_set(uint16_t value)
+    void ScVehicle::nextCarOnRide_set(DukValue value)
     {
         ThrowIfGameStateNotMutable();
-        auto vehicle = GetVehicle();
-        if (vehicle != nullptr)
+        auto* vehicle = GetVehicle();
+        if (vehicle == nullptr)
+            return;
+
+        if (value.type() == DukValue::Type::NUMBER)
         {
-            vehicle->next_vehicle_on_ride = value;
+            vehicle->next_vehicle_on_ride = EntityId::FromUnderlying(value.as_uint());
+        }
+        else
+        {
+            vehicle->next_vehicle_on_ride = EntityId::GetNull();
         }
     }
 
-    StationIndex ScVehicle::currentStation_get() const
+    StationIndex::UnderlyingType ScVehicle::currentStation_get() const
     {
         auto vehicle = GetVehicle();
-        return vehicle != nullptr ? vehicle->current_station : 0;
+        return vehicle != nullptr ? vehicle->current_station.ToUnderlying() : 0;
     }
-    void ScVehicle::currentStation_set(StationIndex value)
+    void ScVehicle::currentStation_set(StationIndex::UnderlyingType value)
     {
         ThrowIfGameStateNotMutable();
         auto vehicle = GetVehicle();
         if (vehicle != nullptr)
         {
-            vehicle->current_station = value;
+            vehicle->current_station = StationIndex::FromUnderlying(value);
         }
     }
 
@@ -301,17 +336,38 @@ namespace OpenRCT2::Scripting
         }
     }
 
+    template<uint32_t flag>
+    bool ScVehicle::flag_get() const
+    {
+        auto vehicle = GetVehicle();
+        return vehicle != nullptr ? vehicle->HasFlag(flag) : false;
+    }
+
+    template<uint32_t flag>
+    void ScVehicle::flag_set(bool value)
+    {
+        ThrowIfGameStateNotMutable();
+        auto vehicle = GetVehicle();
+        if (vehicle != nullptr)
+        {
+            if (value)
+            {
+                vehicle->SetFlag(flag);
+            }
+            else
+            {
+                vehicle->ClearFlag(flag);
+            }
+        }
+    }
+
     DukValue ScVehicle::colours_get() const
     {
         auto ctx = GetContext()->GetScriptEngine().GetContext();
         auto vehicle = GetVehicle();
         if (vehicle != nullptr)
         {
-            VehicleColour colours;
-            colours.Body = vehicle->colours.body_colour;
-            colours.Trim = vehicle->colours.trim_colour;
-            colours.Ternary = vehicle->colours_extended;
-            return ToDuk<VehicleColour>(ctx, colours);
+            return ToDuk<VehicleColour>(ctx, vehicle->colours);
         }
         return ToDuk(ctx, nullptr);
     }
@@ -321,10 +377,7 @@ namespace OpenRCT2::Scripting
         auto vehicle = GetVehicle();
         if (vehicle != nullptr)
         {
-            auto colours = FromDuk<VehicleColour>(value);
-            vehicle->colours.body_colour = colours.Body;
-            vehicle->colours.trim_colour = colours.Trim;
-            vehicle->colours_extended = colours.Ternary;
+            vehicle->colours = FromDuk<VehicleColour>(value);
         }
     }
 
@@ -334,8 +387,13 @@ namespace OpenRCT2::Scripting
         auto vehicle = GetVehicle();
         if (vehicle != nullptr)
         {
-            auto coords = CoordsXYZD(vehicle->TrackLocation, vehicle->GetTrackDirection());
-            return ToDuk<CoordsXYZD>(ctx, coords);
+            DukObject dukCoords(ctx);
+            dukCoords.Set("x", vehicle->TrackLocation.x);
+            dukCoords.Set("y", vehicle->TrackLocation.y);
+            dukCoords.Set("z", vehicle->TrackLocation.z);
+            dukCoords.Set("direction", vehicle->GetTrackDirection());
+            dukCoords.Set("trackType", EnumValue(vehicle->GetTrackType()));
+            return dukCoords.Take();
         }
         return ToDuk(ctx, nullptr);
     }
@@ -345,9 +403,12 @@ namespace OpenRCT2::Scripting
         auto vehicle = GetVehicle();
         if (vehicle != nullptr)
         {
-            auto coords = FromDuk<CoordsXYZD>(value);
-            vehicle->TrackLocation = CoordsXYZ(coords.x, coords.y, coords.z);
-            vehicle->SetTrackDirection(coords.direction);
+            auto x = AsOrDefault(value["x"], 0);
+            auto y = AsOrDefault(value["y"], 0);
+            auto z = AsOrDefault(value["z"], 0);
+            vehicle->TrackLocation = CoordsXYZ(x, y, z);
+            vehicle->SetTrackDirection(AsOrDefault(value["direction"], 0));
+            vehicle->SetTrackType(static_cast<TrackElemType>(AsOrDefault(value["trackType"], 0)));
         }
     }
 
@@ -361,6 +422,12 @@ namespace OpenRCT2::Scripting
     {
         auto vehicle = GetVehicle();
         return vehicle != nullptr ? vehicle->remaining_distance : 0;
+    }
+
+    uint8_t ScVehicle::subposition_get() const
+    {
+        auto vehicle = GetVehicle();
+        return vehicle != nullptr ? static_cast<uint8_t>(vehicle->TrackSubposition) : 0;
     }
 
     uint8_t ScVehicle::poweredAcceleration_get() const
@@ -412,6 +479,25 @@ namespace OpenRCT2::Scripting
         }
     }
 
+    uint8_t ScVehicle::spin_get() const
+    {
+        auto vehicle = GetVehicle();
+        if (vehicle != nullptr)
+        {
+            return vehicle->spin_sprite;
+        }
+        return 0;
+    }
+    void ScVehicle::spin_set(const uint8_t value)
+    {
+        ThrowIfGameStateNotMutable();
+        auto vehicle = GetVehicle();
+        if (vehicle != nullptr)
+        {
+            vehicle->spin_sprite = value;
+        }
+    }
+
     std::vector<DukValue> ScVehicle::guests_get() const
     {
         auto ctx = GetContext()->GetScriptEngine().GetContext();
@@ -423,13 +509,13 @@ namespace OpenRCT2::Scripting
             for (size_t i = 0; i < std::size(vehicle->peep); i++)
             {
                 auto peep = vehicle->peep[i];
-                if (peep == SPRITE_INDEX_NULL)
+                if (peep.IsNull())
                 {
                     result.push_back(ToDuk(ctx, nullptr));
                 }
                 else
                 {
-                    result.push_back(ToDuk<int32_t>(ctx, peep));
+                    result.push_back(ToDuk<int32_t>(ctx, peep.ToUnderlying()));
                     len = i + 1;
                 }
             }
@@ -459,7 +545,6 @@ namespace OpenRCT2::Scripting
             vehicle->MoveRelativeDistance(value);
         }
     }
-
 } // namespace OpenRCT2::Scripting
 
 #endif

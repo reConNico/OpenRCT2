@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,506 +11,470 @@
 
 #include "../interface/Window.h"
 
-#include <algorithm>
 #include <memory>
+#include <openrct2-ui/windows/Windows.h>
 #include <openrct2/Context.h>
+#include <openrct2/Diagnostic.h>
 #include <openrct2/Game.h>
 #include <openrct2/GameState.h>
 #include <openrct2/OpenRCT2.h>
 #include <openrct2/ParkImporter.h>
-#include <openrct2/common.h>
 #include <openrct2/core/Console.hpp>
 #include <openrct2/core/Guard.hpp>
 #include <openrct2/core/Path.hpp>
 #include <openrct2/core/String.hpp>
 #include <openrct2/entity/EntityRegistry.h>
 #include <openrct2/interface/Viewport.h>
-#include <openrct2/interface/Window.h>
+#include <openrct2/localisation/StringIds.h>
 #include <openrct2/management/NewsItem.h>
 #include <openrct2/object/ObjectManager.h>
 #include <openrct2/scenario/ScenarioRepository.h>
 #include <openrct2/scenario/ScenarioSources.h>
-#include <openrct2/title/TitleScreen.h>
-#include <openrct2/title/TitleSequence.h>
-#include <openrct2/title/TitleSequenceManager.h>
-#include <openrct2/title/TitleSequencePlayer.h>
-#include <openrct2/ui/UiContext.h>
+#include <openrct2/scenes/title/TitleScene.h>
+#include <openrct2/scenes/title/TitleSequence.h>
+#include <openrct2/scenes/title/TitleSequenceManager.h>
+#include <openrct2/scenes/title/TitleSequencePlayer.h>
 #include <openrct2/ui/WindowManager.h>
 #include <openrct2/windows/Intent.h>
 #include <openrct2/world/Map.h>
 #include <openrct2/world/Scenery.h>
+#include <stdexcept>
 
-using namespace OpenRCT2;
-
-class TitleSequencePlayer final : public ITitleSequencePlayer
+namespace OpenRCT2::Title
 {
-private:
-    GameState& _gameState;
-
-    std::unique_ptr<TitleSequence> _sequence;
-    int32_t _position = 0;
-    int32_t _waitCounter = 0;
-
-    int32_t _lastScreenWidth = 0;
-    int32_t _lastScreenHeight = 0;
-    CoordsXY _viewCentreLocation = {};
-
-public:
-    explicit TitleSequencePlayer(GameState& gameState)
-        : _gameState(gameState)
+    class TitleSequencePlayer final : public ITitleSequencePlayer
     {
-    }
+    private:
+        std::unique_ptr<TitleSequence> _sequence;
+        int32_t _position = 0;
+        int32_t _waitCounter = 0;
+        bool _initialLoadCommand = true;
 
-    ~TitleSequencePlayer() override
-    {
-        Eject();
-    }
+        int32_t _previousWindowWidth = 0;
+        int32_t _previousWindowHeight = 0;
+        ScreenCoordsXY _previousViewPosition = {};
 
-    int32_t GetCurrentPosition() const override
-    {
-        return _position;
-    }
-
-    void Eject() override
-    {
-        _sequence = nullptr;
-    }
-
-    bool Begin(size_t titleSequenceId) override
-    {
-        size_t numSequences = TitleSequenceManager::GetCount();
-        if (titleSequenceId >= numSequences)
+    public:
+        explicit TitleSequencePlayer()
         {
-            return false;
         }
 
-        auto seqItem = TitleSequenceManager::GetItem(titleSequenceId);
-        auto sequence = LoadTitleSequence(seqItem->Path.c_str());
-        if (sequence == nullptr)
+        ~TitleSequencePlayer() override
         {
-            return false;
+            Eject();
         }
 
-        Eject();
-        _sequence = std::move(sequence);
-
-        Reset();
-        return true;
-    }
-
-    bool Update() override
-    {
-        int32_t entryPosition = _position;
-        FixViewLocation();
-
-        if (_sequence == nullptr)
+        int32_t GetCurrentPosition() const override
         {
-            SetViewLocation(TileCoordsXY(75, 75).ToCoordsXY());
-            return false;
+            return _position;
         }
 
-        // Check that position is valid
-        if (_position >= static_cast<int32_t>(_sequence->Commands.size()))
+        void Eject() override
         {
-            _position = 0;
-            return false;
+            _sequence = nullptr;
         }
 
-        // Don't execute next command until we are done with the current wait command
-        if (_waitCounter != 0)
+        bool Begin(size_t titleSequenceId) override
         {
-            _waitCounter--;
-            if (_waitCounter == 0)
+            StoreCurrentViewLocation();
+
+            size_t numSequences = TitleSequenceManager::GetCount();
+            if (titleSequenceId >= numSequences)
             {
-                const auto& command = _sequence->Commands[_position];
-                if (command.Type == TitleScript::Wait)
-                {
-                    IncrementPosition();
-                }
+                return false;
             }
+
+            auto seqItem = TitleSequenceManager::GetItem(titleSequenceId);
+            auto sequence = LoadTitleSequence(seqItem->Path);
+            if (sequence == nullptr)
+            {
+                return false;
+            }
+
+            Eject();
+            _sequence = std::move(sequence);
+
+            Reset();
+            return true;
         }
-        else
+
+        bool Update() override
         {
+            RestoreViewLocationIfResized();
+
+            if (_sequence == nullptr)
+            {
+                return false;
+            }
+
+            if (_sequence->Commands.empty())
+            {
+                return false;
+            }
+
+            // Run commands in order, until we reach one that is not instantly done
+            int32_t entryPosition = _position;
             while (true)
             {
-                const auto& command = _sequence->Commands[_position];
-                if (ExecuteCommand(command))
+                auto& currentCommand = _sequence->Commands[_position];
+                try
                 {
-                    if (command.Type == TitleScript::Wait)
+                    int framesToWait = std::visit([&](auto& command) { return command(_waitCounter); }, currentCommand);
+                    if (framesToWait > _waitCounter)
                     {
+                        _waitCounter++;
                         break;
                     }
-                    if (command.Type != TitleScript::Restart)
+
+                    // TODO: Make the loading interface simpler so these blocks can be moved to their respective command classes
+                    if (std::holds_alternative<LoadParkCommand>(currentCommand))
                     {
+                        bool loadSuccess = false;
+                        const auto saveIndex = std::get<LoadParkCommand>(currentCommand).SaveIndex;
+                        auto parkHandle = TitleSequenceGetParkHandle(*_sequence, saveIndex);
+                        if (parkHandle != nullptr)
+                        {
+                            GameNotifyMapChange();
+                            loadSuccess = LoadParkFromStream(parkHandle->Stream.get(), parkHandle->HintPath);
+                        }
+                        if (!loadSuccess)
+                        {
+                            if (_sequence->Saves.size() > saveIndex)
+                            {
+                                const auto& path = _sequence->Saves[saveIndex];
+                                throw std::domain_error("Failed to load: \"" + path + "\" for the title sequence.");
+                            }
+
+                            throw std::out_of_range("Failed to load park; index out of range.");
+                        }
+
+                        GameNotifyMapChanged();
+                    }
+                    else if (std::holds_alternative<LoadScenarioCommand>(currentCommand))
+                    {
+                        auto& scenarioName = std::get<LoadScenarioCommand>(currentCommand).Scenario;
+                        bool loadSuccess = false;
+                        auto scenario = GetScenarioRepository()->GetByInternalName(scenarioName);
+                        if (scenario != nullptr)
+                        {
+                            GameNotifyMapChange();
+                            loadSuccess = LoadParkFromFile(scenario->Path);
+                        }
+
+                        if (!loadSuccess)
+                        {
+                            auto message = std::string("Failed to load: \"") + scenarioName + "\" for the title sequence.";
+                            throw std::domain_error(message);
+                        }
+
+                        GameNotifyMapChanged();
+                    }
+
+                    IncrementPosition();
+                }
+                catch (std::exception& e)
+                {
+                    const char* commandName = std::visit(
+                        [](auto&& command) { return std::decay_t<decltype(command)>::Name; }, currentCommand);
+                    Console::Error::WriteLine("%s (command %i) failed with error: %s", commandName, _position, e.what());
+
+                    if (TitleSequenceIsLoadCommand(currentCommand))
+                    {
+                        Console::Error::WriteLine("  Skipping to the next load command.");
+                        SkipToNextLoadCommand();
+                    }
+                    else
+                    {
+                        Console::Error::WriteLine("  Skipping to the next command.");
                         IncrementPosition();
                     }
-                    if (_position == entryPosition)
-                    {
-                        Console::Error::WriteLine("Infinite loop detected in title sequence.");
-                        Console::Error::WriteLine("  A wait command may be missing.");
-                        return false;
-                    }
+                }
+
+                if (_position == entryPosition)
+                {
+                    Console::Error::WriteLine("Infinite loop detected in title sequence.");
+                    Console::Error::WriteLine("  A wait command may be missing.");
+                    return false;
+                }
+            }
+
+            // Store current window size and screen position in case the window resizes and the main focus changes
+            StoreCurrentViewLocation();
+
+            return true;
+        }
+
+        void Reset() override
+        {
+            _position = 0;
+            _waitCounter = 0;
+            _initialLoadCommand = true;
+        }
+
+        void Seek(int32_t targetPosition) override
+        {
+            if (targetPosition < 0 || targetPosition >= static_cast<int32_t>(_sequence->Commands.size()))
+            {
+                throw std::runtime_error("Invalid position.");
+            }
+            if (_position >= targetPosition)
+            {
+                Reset();
+            }
+
+            if (std::holds_alternative<RestartCommand>(_sequence->Commands[targetPosition]))
+            {
+                targetPosition = 0;
+            }
+
+            // Set position to the last LOAD command before target position
+            for (int32_t i = targetPosition; i >= 0; i--)
+            {
+                const TitleCommand& command = _sequence->Commands[i];
+                if ((_position == i && _position != targetPosition) || TitleSequenceIsLoadCommand(command))
+                {
+                    // Break if we have a new load command or if we're already in the range of the correct load command
+                    _position = i;
+                    break;
+                }
+            }
+
+            // Keep updating until we reach target position
+            gInUpdateCode = true;
+
+            while (_position < targetPosition)
+            {
+                if (Update())
+                {
+                    gameStateUpdateLogic();
                 }
                 else
                 {
-                    if (!SkipToNextLoadCommand() || _position == entryPosition)
-                    {
-                        Console::Error::WriteLine("Unable to load any parks from %s.", _sequence->Name.c_str());
-                        return false;
-                    }
+                    break;
                 }
             }
-        }
-        return true;
-    }
 
-    void Reset() override
-    {
-        _position = 0;
-        _waitCounter = 0;
-    }
+            gInUpdateCode = false;
 
-    void Seek(int32_t targetPosition) override
-    {
-        if (targetPosition < 0 || targetPosition >= static_cast<int32_t>(_sequence->Commands.size()))
-        {
-            throw std::runtime_error("Invalid position.");
-        }
-        if (_position >= targetPosition)
-        {
-            Reset();
+            _waitCounter = 0;
         }
 
-        if (_sequence->Commands[targetPosition].Type == TitleScript::Restart)
+    private:
+        void IncrementPosition()
         {
-            targetPosition = 0;
-        }
-        // Set position to the last LOAD command before target position
-        for (int32_t i = targetPosition; i >= 0; i--)
-        {
-            const TitleCommand& command = _sequence->Commands[i];
-            if ((_position == i && _position != targetPosition) || TitleSequenceIsLoadCommand(command))
+            _position++;
+            if (_position >= static_cast<int32_t>(_sequence->Commands.size()))
             {
-                // Break if we have a new load command or if we're already in the range of the correct load command
-                _position = i;
-                break;
+                _position = 0;
             }
+            _waitCounter = 0;
         }
 
-        // Keep updating until we reach target position
-        gInUpdateCode = true;
-
-        while (_position < targetPosition)
+        bool SkipToNextLoadCommand()
         {
-            if (Update())
+            int32_t entryPosition = _position;
+            const TitleCommand* command;
+            do
             {
-                _gameState.UpdateLogic();
-            }
-            else
-            {
-                break;
-            }
+                IncrementPosition();
+                command = &_sequence->Commands[_position];
+            } while (!TitleSequenceIsLoadCommand(*command) && _position != entryPosition);
+            return _position != entryPosition;
         }
 
-        gInUpdateCode = false;
-
-        _waitCounter = 0;
-    }
-
-private:
-    void IncrementPosition()
-    {
-        _position++;
-        if (_position >= static_cast<int32_t>(_sequence->Commands.size()))
+        void ReportProgress(uint8_t progress)
         {
-            _position = 0;
+            if (!_initialLoadCommand)
+                return;
+
+            if (progress == 0)
+                GetContext()->OpenProgress(STR_LOADING_TITLE_SEQUENCE);
+
+            GetContext()->SetProgress(progress, 100, STR_STRING_M_PERCENT);
+
+            if (progress == 100)
+                GetContext()->CloseProgress();
         }
-    }
 
-    bool SkipToNextLoadCommand()
-    {
-        int32_t entryPosition = _position;
-        const TitleCommand* command;
-        do
+        bool LoadParkFromFile(const u8string& path)
         {
-            IncrementPosition();
-            command = &_sequence->Commands[_position];
-        } while (!TitleSequenceIsLoadCommand(*command) && _position != entryPosition);
-        return _position != entryPosition;
-    }
-
-    bool ExecuteCommand(const TitleCommand& command)
-    {
-        switch (command.Type)
-        {
-            case TitleScript::End:
-                _waitCounter = 1;
-                break;
-            case TitleScript::Wait:
-                // The waitCounter is measured in 25-ms game ticks. Previously it was seconds * 40 ticks/second, now it is ms /
-                // 25 ms/tick
-                _waitCounter = std::max<int32_t>(1, command.Milliseconds / static_cast<uint32_t>(GAME_UPDATE_TIME_MS));
-                break;
-            case TitleScript::Location:
+            LOG_VERBOSE("TitleSequencePlayer::LoadParkFromFile(%s)", path.c_str());
+            bool success = false;
+            try
             {
-                auto loc = TileCoordsXY(command.X, command.Y).ToCoordsXY().ToTileCentre();
-                SetViewLocation(loc);
-                break;
-            }
-            case TitleScript::Undefined:
-                break;
-            case TitleScript::Loop:
-                break;
-            case TitleScript::EndLoop:
-                break;
-            case TitleScript::Rotate:
-                RotateView(command.Rotations);
-                break;
-            case TitleScript::Zoom:
-                SetViewZoom(ZoomLevel{ static_cast<int8_t>(command.Zoom) });
-                break;
-            case TitleScript::Speed:
-                gGameSpeed = std::clamp<uint8_t>(command.Speed, 1, 4);
-                break;
-            case TitleScript::Follow:
-                FollowSprite(command.SpriteIndex);
-                break;
-            case TitleScript::Restart:
-                Reset();
-                break;
-            case TitleScript::Load:
-            {
-                bool loadSuccess = false;
-                uint8_t saveIndex = command.SaveIndex;
-                auto parkHandle = TitleSequenceGetParkHandle(*_sequence, saveIndex);
-                if (parkHandle != nullptr)
+                if (gPreviewingTitleSequenceInGame)
                 {
-                    loadSuccess = LoadParkFromStream(parkHandle->Stream.get(), parkHandle->HintPath);
+                    gLoadKeepWindowsOpen = true;
+                    CloseParkSpecificWindows();
+                    GetContext()->LoadParkFromFile(path);
                 }
-                if (!loadSuccess)
+                else
                 {
-                    if (_sequence->Saves.size() > saveIndex)
-                    {
-                        const auto& path = _sequence->Saves[saveIndex];
-                        Console::Error::WriteLine("Failed to load: \"%s\" for the title sequence.", path.c_str());
-                    }
-                    return false;
+                    // Inhibit viewport rendering while we're loading
+                    WindowSetFlagForAllViewports(VIEWPORT_FLAG_RENDERING_INHIBITED, true);
+
+                    ReportProgress(0);
+                    auto parkImporter = ParkImporter::Create(path);
+
+                    auto result = parkImporter->Load(path);
+                    ReportProgress(10);
+
+                    auto& objectManager = GetContext()->GetObjectManager();
+                    objectManager.LoadObjects(result.RequiredObjects, true);
+                    ReportProgress(90);
+
+                    // TODO: Have a separate GameState and exchange once loaded.
+                    auto& gameState = GetGameState();
+                    parkImporter->Import(gameState);
+                    ReportProgress(100);
+
+                    MapAnimationAutoCreate();
                 }
-                break;
+                PrepareParkForPlayback();
+                _initialLoadCommand = false;
+                success = true;
             }
-            case TitleScript::LoadSc:
+            catch (const std::exception&)
             {
-                bool loadSuccess = false;
-                auto scenario = GetScenarioRepository()->GetByInternalName(command.Scenario);
-                if (scenario != nullptr)
+                Console::Error::WriteLine("Unable to load park: %s", path.c_str());
+                GetContext()->CloseProgress();
+            }
+
+            // Reset viewport rendering inhibition
+            WindowSetFlagForAllViewports(VIEWPORT_FLAG_RENDERING_INHIBITED, false);
+
+            gLoadKeepWindowsOpen = false;
+            return success;
+        }
+
+        /**
+         * @param stream The stream to read the park data from.
+         * @param hintPath Hint path, the extension is grabbed to determine what importer to use.
+         */
+        bool LoadParkFromStream(OpenRCT2::IStream* stream, const std::string& hintPath)
+        {
+            LOG_VERBOSE("TitleSequencePlayer::LoadParkFromStream(%s)", hintPath.c_str());
+            bool success = false;
+            try
+            {
+                if (gPreviewingTitleSequenceInGame)
                 {
-                    loadSuccess = LoadParkFromFile(scenario->path);
+                    gLoadKeepWindowsOpen = true;
+                    CloseParkSpecificWindows();
+                    ContextLoadParkFromStream(stream);
                 }
-                if (!loadSuccess)
+                else
                 {
-                    Console::Error::WriteLine("Failed to load: \"%s\" for the title sequence.", command.Scenario);
-                    return false;
+                    // Inhibit viewport rendering while we're loading
+                    WindowSetFlagForAllViewports(VIEWPORT_FLAG_RENDERING_INHIBITED, true);
+
+                    ReportProgress(0);
+                    bool isScenario = ParkImporter::ExtensionIsScenario(hintPath);
+                    auto parkImporter = ParkImporter::Create(hintPath);
+
+                    auto result = parkImporter->LoadFromStream(stream, isScenario);
+                    ReportProgress(30);
+
+                    auto& objectManager = GetContext()->GetObjectManager();
+                    objectManager.LoadObjects(result.RequiredObjects, true);
+                    ReportProgress(70);
+
+                    // TODO: Have a separate GameState and exchange once loaded.
+                    auto& gameState = GetGameState();
+                    parkImporter->Import(gameState);
+                    ReportProgress(100);
+
+                    MapAnimationAutoCreate();
                 }
-                break;
+                PrepareParkForPlayback();
+                _initialLoadCommand = false;
+                success = true;
             }
-        }
-        return true;
-    }
-
-    void SetViewZoom(ZoomLevel zoom)
-    {
-        rct_window* w = window_get_main();
-        if (w != nullptr && w->viewport != nullptr)
-        {
-            window_zoom_set(w, zoom, false);
-        }
-    }
-
-    void RotateView(uint32_t count)
-    {
-        rct_window* w = window_get_main();
-        if (w != nullptr)
-        {
-            for (uint32_t i = 0; i < count; i++)
+            catch (const std::exception&)
             {
-                window_rotate_camera(w, 1);
+                Console::Error::WriteLine("Unable to load park: %s", hintPath.c_str());
+                GetContext()->CloseProgress();
             }
-        }
-    }
 
-    void FollowSprite(uint16_t spriteIndex)
-    {
-        rct_window* w = window_get_main();
-        if (w != nullptr)
-        {
-            window_follow_sprite(w, spriteIndex);
-        }
-    }
+            // Reset viewport rendering inhibition
+            WindowSetFlagForAllViewports(VIEWPORT_FLAG_RENDERING_INHIBITED, false);
 
-    void UnfollowSprite()
-    {
-        rct_window* w = window_get_main();
-        if (w != nullptr)
-        {
-            window_unfollow_sprite(w);
+            gLoadKeepWindowsOpen = false;
+            return success;
         }
-    }
 
-    bool LoadParkFromFile(const utf8* path)
-    {
-        log_verbose("TitleSequencePlayer::LoadParkFromFile(%s)", path);
-        bool success = false;
-        try
+        void CloseParkSpecificWindows()
         {
-            if (gPreviewingTitleSequenceInGame)
+            auto* windowMgr = Ui::GetWindowManager();
+            windowMgr->CloseByClass(WindowClass::ConstructRide);
+            windowMgr->CloseByClass(WindowClass::DemolishRidePrompt);
+            windowMgr->CloseByClass(WindowClass::EditorInventionListDrag);
+            windowMgr->CloseByClass(WindowClass::EditorInventionList);
+            windowMgr->CloseByClass(WindowClass::EditorObjectSelection);
+            windowMgr->CloseByClass(WindowClass::EditorObjectiveOptions);
+            windowMgr->CloseByClass(WindowClass::EditorScenarioOptions);
+            windowMgr->CloseByClass(WindowClass::Finances);
+            windowMgr->CloseByClass(WindowClass::FirePrompt);
+            windowMgr->CloseByClass(WindowClass::GuestList);
+            windowMgr->CloseByClass(WindowClass::InstallTrack);
+            windowMgr->CloseByClass(WindowClass::Peep);
+            windowMgr->CloseByClass(WindowClass::Ride);
+            windowMgr->CloseByClass(WindowClass::RideConstruction);
+            windowMgr->CloseByClass(WindowClass::RideList);
+            windowMgr->CloseByClass(WindowClass::Scenery);
+            windowMgr->CloseByClass(WindowClass::Staff);
+            windowMgr->CloseByClass(WindowClass::TrackDeletePrompt);
+            windowMgr->CloseByClass(WindowClass::TrackDesignList);
+            windowMgr->CloseByClass(WindowClass::TrackDesignPlace);
+        }
+
+        void PrepareParkForPlayback()
+        {
+            auto windowManager = Ui::GetWindowManager();
+            auto& gameState = GetGameState();
+            windowManager->SetMainView(gameState.SavedView, gameState.SavedViewZoom, gameState.SavedViewRotation);
+            ResetEntitySpatialIndices();
+            ResetAllSpriteQuadrantPlacements();
+            auto intent = Intent(INTENT_ACTION_REFRESH_NEW_RIDES);
+            ContextBroadcastIntent(&intent);
+            Ui::Windows::WindowScenerySetDefaultPlacementConfiguration();
+            News::InitQueue();
+            LoadPalette();
+            gScreenAge = 0;
+            gGamePaused = false;
+            gGameSpeed = 1;
+        }
+
+        void StoreCurrentViewLocation()
+        {
+            WindowBase* w = WindowGetMain();
+            if (w != nullptr && w->viewport_smart_follow_sprite.IsNull())
             {
-                gLoadKeepWindowsOpen = true;
-                CloseParkSpecificWindows();
-                context_load_park_from_file(path);
+                _previousWindowWidth = w->width;
+                _previousWindowHeight = w->height;
+                _previousViewPosition = w->savedViewPos;
             }
-            else
+        }
+
+        /**
+         * Fixes the view location for when the game window has changed size.
+         */
+        void RestoreViewLocationIfResized()
+        {
+            WindowBase* w = WindowGetMain();
+            if (w != nullptr && w->viewport_smart_follow_sprite.IsNull())
             {
-                auto parkImporter = ParkImporter::Create(path);
-                auto result = parkImporter->Load(path);
-
-                auto& objectManager = GetContext()->GetObjectManager();
-                objectManager.LoadObjects(result.RequiredObjects);
-
-                parkImporter->Import();
-            }
-            PrepareParkForPlayback();
-            success = true;
-        }
-        catch (const std::exception&)
-        {
-            Console::Error::WriteLine("Unable to load park: %s", path);
-        }
-        gLoadKeepWindowsOpen = false;
-        return success;
-    }
-
-    /**
-     * @param stream The stream to read the park data from.
-     * @param hintPath Hint path, the extension is grabbed to determine what importer to use.
-     */
-    bool LoadParkFromStream(OpenRCT2::IStream* stream, const std::string& hintPath)
-    {
-        log_verbose("TitleSequencePlayer::LoadParkFromStream(%s)", hintPath.c_str());
-        bool success = false;
-        try
-        {
-            if (gPreviewingTitleSequenceInGame)
-            {
-                gLoadKeepWindowsOpen = true;
-                CloseParkSpecificWindows();
-                context_load_park_from_stream(stream);
-            }
-            else
-            {
-                std::string extension = Path::GetExtension(hintPath);
-                bool isScenario = ParkImporter::ExtensionIsScenario(hintPath);
-                auto parkImporter = ParkImporter::Create(hintPath);
-                auto result = parkImporter->LoadFromStream(stream, isScenario);
-
-                auto& objectManager = GetContext()->GetObjectManager();
-                objectManager.LoadObjects(result.RequiredObjects);
-
-                parkImporter->Import();
-            }
-            PrepareParkForPlayback();
-            success = true;
-        }
-        catch (const std::exception&)
-        {
-            Console::Error::WriteLine("Unable to load park: %s", hintPath.c_str());
-        }
-        gLoadKeepWindowsOpen = false;
-        return success;
-    }
-
-    void CloseParkSpecificWindows()
-    {
-        window_close_by_class(WC_CONSTRUCT_RIDE);
-        window_close_by_class(WC_DEMOLISH_RIDE_PROMPT);
-        window_close_by_class(WC_EDITOR_INVENTION_LIST_DRAG);
-        window_close_by_class(WC_EDITOR_INVENTION_LIST);
-        window_close_by_class(WC_EDITOR_OBJECT_SELECTION);
-        window_close_by_class(WC_EDITOR_OBJECTIVE_OPTIONS);
-        window_close_by_class(WC_EDITOR_SCENARIO_OPTIONS);
-        window_close_by_class(WC_FINANCES);
-        window_close_by_class(WC_FIRE_PROMPT);
-        window_close_by_class(WC_GUEST_LIST);
-        window_close_by_class(WC_INSTALL_TRACK);
-        window_close_by_class(WC_PEEP);
-        window_close_by_class(WC_RIDE);
-        window_close_by_class(WC_RIDE_CONSTRUCTION);
-        window_close_by_class(WC_RIDE_LIST);
-        window_close_by_class(WC_SCENERY);
-        window_close_by_class(WC_STAFF);
-        window_close_by_class(WC_TRACK_DELETE_PROMPT);
-        window_close_by_class(WC_TRACK_DESIGN_LIST);
-        window_close_by_class(WC_TRACK_DESIGN_PLACE);
-    }
-
-    void PrepareParkForPlayback()
-    {
-        auto windowManager = GetContext()->GetUiContext()->GetWindowManager();
-        windowManager->SetMainView(gSavedView, gSavedViewZoom, gSavedViewRotation);
-        ResetEntitySpatialIndices();
-        reset_all_sprite_quadrant_placements();
-        auto intent = Intent(INTENT_ACTION_REFRESH_NEW_RIDES);
-        context_broadcast_intent(&intent);
-        scenery_set_default_placement_configuration();
-        News::InitQueue();
-        load_palette();
-        gScreenAge = 0;
-        gGameSpeed = 1;
-    }
-
-    /**
-     * Sets the map location to the given (big) coordinates. Z is automatic.
-     * @param loc X and Y position in big coordinates.
-     */
-    void SetViewLocation(const CoordsXY& loc)
-    {
-        // Update viewport
-        rct_window* w = window_get_main();
-        if (w != nullptr)
-        {
-            int32_t z = tile_element_height(loc);
-
-            // Prevent scroll adjustment due to window placement when in-game
-            auto oldScreenFlags = gScreenFlags;
-            gScreenFlags = SCREEN_FLAGS_TITLE_DEMO;
-            w->SetLocation({ loc, z });
-            gScreenFlags = oldScreenFlags;
-
-            viewport_update_position(w);
-
-            // Save known tile position in case of window resize
-            _lastScreenWidth = w->width;
-            _lastScreenHeight = w->height;
-            _viewCentreLocation = loc;
-        }
-    }
-
-    /**
-     * Fixes the view location for when the game window has changed size.
-     */
-    void FixViewLocation()
-    {
-        rct_window* w = window_get_main();
-        if (w != nullptr && w->viewport_smart_follow_sprite == SPRITE_INDEX_NULL)
-        {
-            if (w->width != _lastScreenWidth || w->height != _lastScreenHeight)
-            {
-                SetViewLocation(_viewCentreLocation);
+                if (w->width != _previousWindowWidth || w->height != _previousWindowHeight)
+                {
+                    w->savedViewPos.x += (_previousWindowWidth - w->width) / 2;
+                    w->savedViewPos.y += (_previousWindowHeight - w->height) / 2;
+                }
             }
         }
-    }
-};
+    };
 
-std::unique_ptr<ITitleSequencePlayer> CreateTitleSequencePlayer(GameState& gameState)
-{
-    return std::make_unique<TitleSequencePlayer>(gameState);
-}
+    std::unique_ptr<ITitleSequencePlayer> CreateTitleSequencePlayer()
+    {
+        return std::make_unique<TitleSequencePlayer>();
+    }
+} // namespace OpenRCT2::Title

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -12,14 +12,13 @@
 #include <gtest/gtest.h>
 #include <openrct2/Cheats.h>
 #include <openrct2/Context.h>
+#include <openrct2/Diagnostic.h>
 #include <openrct2/Game.h>
 #include <openrct2/GameState.h>
 #include <openrct2/GameStateSnapshots.h>
 #include <openrct2/OpenRCT2.h>
-#include <openrct2/ParkFile.h>
 #include <openrct2/ParkImporter.h>
 #include <openrct2/audio/AudioContext.h>
-#include <openrct2/config/Config.h>
 #include <openrct2/core/Crypt.h>
 #include <openrct2/core/File.h>
 #include <openrct2/core/MemoryStream.h>
@@ -29,7 +28,9 @@
 #include <openrct2/entity/EntityTweener.h>
 #include <openrct2/network/network.h>
 #include <openrct2/object/ObjectManager.h>
-#include <openrct2/platform/platform.h>
+#include <openrct2/park/ParkFile.h>
+#include <openrct2/platform/Platform.h>
+#include <openrct2/rct2/RCT2.h>
 #include <openrct2/ride/Ride.h>
 #include <openrct2/scenario/Scenario.h>
 #include <openrct2/world/MapAnimation.h>
@@ -63,12 +64,11 @@ static void GameInit(bool retainSpatialIndices)
     if (!retainSpatialIndices)
         ResetEntitySpatialIndices();
 
-    reset_all_sprite_quadrant_placements();
-    scenery_set_default_placement_configuration();
-    load_palette();
+    ResetAllSpriteQuadrantPlacements();
+    LoadPalette();
     EntityTweener::Get().Reset();
-    AutoCreateMapAnimations();
-    fix_invalid_vehicle_sprite_sizes();
+    MapAnimationAutoCreate();
+    FixInvalidVehicleSpriteSizes();
 
     gGameSpeed = 1;
 }
@@ -82,7 +82,10 @@ static bool ImportS6(MemoryStream& stream, std::unique_ptr<IContext>& context, b
     auto importer = ParkImporter::CreateS6(context->GetObjectRepository());
     auto loadResult = importer->LoadFromStream(&stream, false);
     objManager.LoadObjects(loadResult.RequiredObjects);
-    importer->Import();
+
+    // TODO: Have a separate GameState and exchange once loaded.
+    auto& gameState = GetGameState();
+    importer->Import(gameState);
 
     GameInit(retainSpatialIndices);
 
@@ -98,7 +101,10 @@ static bool ImportPark(MemoryStream& stream, std::unique_ptr<IContext>& context,
     auto importer = ParkImporter::CreateParkFile(context->GetObjectRepository());
     auto loadResult = importer->LoadFromStream(&stream, false);
     objManager.LoadObjects(loadResult.RequiredObjects);
-    importer->Import();
+
+    // TODO: Have a separate GameState and exchange once loaded.
+    auto& gameState = GetGameState();
+    importer->Import(gameState);
 
     GameInit(retainSpatialIndices);
 
@@ -111,7 +117,9 @@ static bool ExportSave(MemoryStream& stream, std::unique_ptr<IContext>& context)
 
     auto exporter = std::make_unique<ParkFileExporter>();
     exporter->ExportObjectsList = objManager.GetPackableObjects();
-    exporter->Export(stream);
+
+    auto& gameState = GetGameState();
+    exporter->Export(gameState, stream);
 
     return true;
 }
@@ -122,17 +130,16 @@ static void RecordGameStateSnapshot(std::unique_ptr<IContext>& context, MemorySt
 
     auto& snapshot = snapshots->CreateSnapshot();
     snapshots->Capture(snapshot);
-    snapshots->LinkSnapshot(snapshot, gCurrentTicks, scenario_rand_state().s0);
+    snapshots->LinkSnapshot(snapshot, GetGameState().CurrentTicks, ScenarioRandState().s0);
     DataSerialiser snapShotDs(true, snapshotStream);
     snapshots->SerialiseSnapshot(snapshot, snapShotDs);
 }
 
 static void AdvanceGameTicks(uint32_t ticks, std::unique_ptr<IContext>& context)
 {
-    auto* gameState = context->GetGameState();
     for (uint32_t i = 0; i < ticks; i++)
     {
-        gameState->UpdateLogic();
+        gameStateUpdateLogic();
     }
 }
 
@@ -140,7 +147,7 @@ static void CompareStates(MemoryStream& importBuffer, MemoryStream& exportBuffer
 {
     if (importBuffer.GetLength() != exportBuffer.GetLength())
     {
-        log_warning(
+        LOG_WARNING(
             "Inconsistent export size! Import Size: %llu bytes, Export Size: %llu bytes",
             static_cast<unsigned long long>(importBuffer.GetLength()),
             static_cast<unsigned long long>(exportBuffer.GetLength()));
@@ -162,22 +169,22 @@ static void CompareStates(MemoryStream& importBuffer, MemoryStream& exportBuffer
 
     try
     {
-        GameStateCompareData_t cmpData = snapshots->Compare(importSnapshot, exportSnapshot);
+        GameStateCompareData cmpData = snapshots->Compare(importSnapshot, exportSnapshot);
 
         // Find out if there are any differences between the two states
         auto res = std::find_if(
             cmpData.spriteChanges.begin(), cmpData.spriteChanges.end(),
-            [](const GameStateSpriteChange_t& diff) { return diff.changeType != GameStateSpriteChange_t::EQUAL; });
+            [](const GameStateSpriteChange& diff) { return diff.changeType != GameStateSpriteChange::EQUAL; });
 
         if (res != cmpData.spriteChanges.end())
         {
-            log_warning("Snapshot data differences. %s", snapshots->GetCompareDataText(cmpData).c_str());
+            LOG_WARNING("Snapshot data differences. %s", snapshots->GetCompareDataText(cmpData).c_str());
             FAIL();
         }
     }
     catch (const std::runtime_error& err)
     {
-        log_warning("Snapshot data failed to be read. Snapshot not compared. %s", err.what());
+        LOG_WARNING("Snapshot data failed to be read. Snapshot not compared. %s", err.what());
         FAIL();
     }
 }
@@ -186,8 +193,6 @@ TEST(S6ImportExportBasic, all)
 {
     gOpenRCT2Headless = true;
     gOpenRCT2NoGraphics = true;
-
-    core_init();
 
     MemoryStream importBuffer;
     MemoryStream exportBuffer;
@@ -232,8 +237,6 @@ TEST(S6ImportExportAdvanceTicks, all)
 {
     gOpenRCT2Headless = true;
     gOpenRCT2NoGraphics = true;
-
-    core_init();
 
     MemoryStream importBuffer;
     MemoryStream exportBuffer;

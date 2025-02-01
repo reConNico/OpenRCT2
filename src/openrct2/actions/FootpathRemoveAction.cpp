@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,16 +10,19 @@
 #include "FootpathRemoveAction.h"
 
 #include "../Cheats.h"
+#include "../GameState.h"
 #include "../OpenRCT2.h"
 #include "../core/MemoryStream.h"
-#include "../interface/Window.h"
 #include "../localisation/StringIds.h"
 #include "../management/Finance.h"
 #include "../world/Footpath.h"
 #include "../world/Location.hpp"
 #include "../world/Park.h"
-#include "../world/Wall.h"
+#include "../world/tile_element/BannerElement.h"
+#include "../world/tile_element/PathElement.h"
 #include "BannerRemoveAction.h"
+
+using namespace OpenRCT2;
 
 FootpathRemoveAction::FootpathRemoveAction(const CoordsXYZ& location)
     : _loc(location)
@@ -53,10 +56,10 @@ GameActions::Result FootpathRemoveAction::Query() const
     if (!LocationValid(_loc))
     {
         return GameActions::Result(
-            GameActions::Status::NotOwned, STR_CANT_REMOVE_FOOTPATH_FROM_HERE, STR_LAND_NOT_OWNED_BY_PARK);
+            GameActions::Status::InvalidParameters, STR_CANT_REMOVE_FOOTPATH_FROM_HERE, STR_OFF_EDGE_OF_MAP);
     }
 
-    if (!((gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) || gCheatsSandboxMode) && !map_is_location_owned(_loc))
+    if (!((gScreenFlags & SCREEN_FLAGS_SCENARIO_EDITOR) || GetGameState().Cheats.sandboxMode) && !MapIsLocationOwned(_loc))
     {
         return GameActions::Result(
             GameActions::Status::NotOwned, STR_CANT_REMOVE_FOOTPATH_FROM_HERE, STR_LAND_NOT_OWNED_BY_PARK);
@@ -65,7 +68,8 @@ GameActions::Result FootpathRemoveAction::Query() const
     TileElement* footpathElement = GetFootpathElement();
     if (footpathElement == nullptr)
     {
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REMOVE_FOOTPATH_FROM_HERE, STR_NONE);
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_CANT_REMOVE_FOOTPATH_FROM_HERE, STR_ERR_PATH_ELEMENT_NOT_FOUND);
     }
 
     res.Cost = GetRefundPrice(footpathElement);
@@ -82,38 +86,39 @@ GameActions::Result FootpathRemoveAction::Execute() const
 
     if (!(GetFlags() & GAME_COMMAND_FLAG_GHOST))
     {
-        footpath_interrupt_peeps(_loc);
-        footpath_remove_litter(_loc);
+        FootpathInterruptPeeps(_loc);
+        FootpathRemoveLitter(_loc);
     }
 
     TileElement* footpathElement = GetFootpathElement();
     if (footpathElement != nullptr)
     {
-        footpath_queue_chain_reset();
+        FootpathQueueChainReset();
         auto bannerRes = RemoveBannersAtElement(_loc, footpathElement);
         if (bannerRes.Error == GameActions::Status::Ok)
         {
             res.Cost += bannerRes.Cost;
         }
-        footpath_remove_edges_at(_loc, footpathElement);
-        map_invalidate_tile_full(_loc);
-        tile_element_remove(footpathElement);
-        footpath_update_queue_chains();
+        FootpathRemoveEdgesAt(_loc, footpathElement);
+        MapInvalidateTileFull(_loc);
+        TileElementRemove(footpathElement);
+        FootpathUpdateQueueChains();
 
+        auto& gameState = GetGameState();
         // Remove the spawn point (if there is one in the current tile)
-        gPeepSpawns.erase(
+        gameState.PeepSpawns.erase(
             std::remove_if(
-                gPeepSpawns.begin(), gPeepSpawns.end(),
+                gameState.PeepSpawns.begin(), gameState.PeepSpawns.end(),
                 [this](const CoordsXYZ& spawn) {
                     {
                         return spawn.ToTileStart() == _loc.ToTileStart();
                     }
                 }),
-            gPeepSpawns.end());
+            gameState.PeepSpawns.end());
     }
     else
     {
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REMOVE_FOOTPATH_FROM_HERE, STR_NONE);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REMOVE_FOOTPATH_FROM_HERE, kStringIdNone);
     }
 
     res.Cost += GetRefundPrice(footpathElement);
@@ -125,7 +130,8 @@ TileElement* FootpathRemoveAction::GetFootpathElement() const
 {
     bool getGhostPath = GetFlags() & GAME_COMMAND_FLAG_GHOST;
 
-    TileElement* tileElement = map_get_footpath_element(_loc);
+    // FIXME: This is a hack to get the footpath element. It should be done in a better way.
+    TileElement* tileElement = MapGetFootpathElement(_loc)->as<TileElement>();
     TileElement* footpathElement = nullptr;
     if (tileElement != nullptr)
     {
@@ -150,9 +156,9 @@ TileElement* FootpathRemoveAction::GetFootpathElement() const
     return footpathElement;
 }
 
-money32 FootpathRemoveAction::GetRefundPrice(TileElement* footpathElement) const
+money64 FootpathRemoveAction::GetRefundPrice(TileElement* footpathElement) const
 {
-    money32 cost = -MONEY(10, 00);
+    money64 cost = -10.00_GBP;
     return cost;
 }
 

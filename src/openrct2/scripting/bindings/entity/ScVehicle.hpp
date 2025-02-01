@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,23 +11,25 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "../../../ride/Ride.h"
-#    include "ScEntity.hpp"
+    #include "../../../ride/Ride.h"
+    #include "ScEntity.hpp"
+
+    #include <optional>
 
 namespace OpenRCT2::Scripting
 {
     class ScVehicle : public ScEntity
     {
     public:
-        ScVehicle(uint16_t id);
+        ScVehicle(EntityId id);
 
         static void Register(duk_context* ctx);
 
     private:
         Vehicle* GetVehicle() const;
 
-        uint8_t rideObject_get() const;
-        void rideObject_set(uint8_t value);
+        ObjectEntryIndex rideObject_get() const;
+        void rideObject_set(ObjectEntryIndex value);
 
         uint8_t vehicleObject_get() const;
         void vehicleObject_set(uint8_t value);
@@ -44,14 +46,14 @@ namespace OpenRCT2::Scripting
         DukValue nextCarOnTrain_get() const;
         void nextCarOnTrain_set(DukValue value);
 
-        uint16_t previousCarOnRide_get() const;
-        void previousCarOnRide_set(uint16_t value);
+        DukValue previousCarOnRide_get() const;
+        void previousCarOnRide_set(DukValue value);
 
-        uint16_t nextCarOnRide_get() const;
-        void nextCarOnRide_set(uint16_t value);
+        DukValue nextCarOnRide_get() const;
+        void nextCarOnRide_set(DukValue value);
 
-        StationIndex currentStation_get() const;
-        void currentStation_set(StationIndex value);
+        StationIndex::UnderlyingType currentStation_get() const;
+        void currentStation_set(StationIndex::UnderlyingType value);
 
         uint16_t mass_get() const;
         void mass_set(uint16_t value);
@@ -65,6 +67,11 @@ namespace OpenRCT2::Scripting
         uint8_t bankRotation_get() const;
         void bankRotation_set(uint8_t value);
 
+        template<uint32_t flag>
+        bool flag_get() const;
+        template<uint32_t flag>
+        void flag_set(bool value);
+
         DukValue colours_get() const;
         void colours_set(const DukValue& value);
 
@@ -75,6 +82,8 @@ namespace OpenRCT2::Scripting
 
         int32_t remainingDistance_get() const;
 
+        uint8_t subposition_get() const;
+
         uint8_t poweredAcceleration_get() const;
         void poweredAcceleration_set(uint8_t value);
 
@@ -83,6 +92,9 @@ namespace OpenRCT2::Scripting
 
         std::string status_get() const;
         void status_set(const std::string& value);
+
+        uint8_t spin_get() const;
+        void spin_set(uint8_t value);
 
         std::vector<DukValue> guests_get() const;
 

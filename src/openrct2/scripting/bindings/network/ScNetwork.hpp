@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,19 +11,21 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "../../Duktape.hpp"
-#    include "ScPlayer.hpp"
-#    include "ScPlayerGroup.hpp"
-#    include "ScSocket.hpp"
+    #include "../../Duktape.hpp"
+    #include "ScPlayer.hpp"
+    #include "ScPlayerGroup.hpp"
+    #include "ScSocket.hpp"
+
+    #include <memory>
 
 namespace OpenRCT2::Scripting
 {
     class ScNetwork
     {
     private:
-#    ifdef __clang__
+    #ifdef __clang__
         [[maybe_unused]]
-#    endif
+    #endif
         duk_context* _context;
 
     public:
@@ -41,31 +43,31 @@ namespace OpenRCT2::Scripting
 
         std::shared_ptr<ScPlayer> currentPlayer_get() const;
 
-        std::shared_ptr<ScPlayer> getPlayer(int32_t index) const;
+        std::shared_ptr<ScPlayer> getPlayer(int32_t id) const;
 
         DukValue stats_get() const;
 
-        std::shared_ptr<ScPlayerGroup> getGroup(int32_t index) const;
+        std::shared_ptr<ScPlayerGroup> getGroup(int32_t id) const;
 
         void addGroup();
 
-        void removeGroup(int32_t index);
+        void removeGroup(int32_t id);
 
-        void kickPlayer(int32_t index);
+        void kickPlayer(int32_t id);
 
         void sendMessage(std::string message, DukValue players);
 
-#    ifndef DISABLE_NETWORK
+    #ifndef DISABLE_NETWORK
         std::shared_ptr<ScListener> createListener();
-#    else
+    #else
         void createListener();
-#    endif
+    #endif
 
-#    ifndef DISABLE_NETWORK
+    #ifndef DISABLE_NETWORK
         std::shared_ptr<ScSocket> createSocket();
-#    else
+    #else
         void createSocket();
-#    endif
+    #endif
 
         static void Register(duk_context* ctx);
     };

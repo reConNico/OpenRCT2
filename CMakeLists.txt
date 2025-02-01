@@ -1,23 +1,31 @@
 # CMAKE project for openrct2
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.10)
+
 if (CMAKE_BINARY_DIR STREQUAL CMAKE_SOURCE_DIR)
     message(FATAL_ERROR "Building in-source is not supported! Create a build dir and remove ${CMAKE_SOURCE_DIR}/CMakeCache.txt")
+endif()
+
+if (CMAKE_COMPILER_IS_GNUCXX AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "12")
+	message(FATAL_ERROR "GCC 12+ required. Older GCC are known to fail compilation")
 endif()
 
 # Note: Searching for CCache must be before project() so project() can use CCache too
 # if it is available
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-find_package(CCache)
+option(OPENRCT2_USE_CCACHE "Use CCache to improve recompilation speed (optional)" ON)
 
-if (CCache_FOUND)
-    option(OPENRCT2_USE_CCACHE "Use CCache to improve recompilation speed (optional)" ON)
-    if (OPENRCT2_USE_CCACHE)
-        # Use e.g. "ccache clang++" instead of "clang++"
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCache_EXECUTABLE}")
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK    "${CCache_EXECUTABLE}")
-    endif (OPENRCT2_USE_CCACHE)
-endif (CCache_FOUND)
+if (OPENRCT2_USE_CCACHE)
+    find_package(CCache)
+
+    if (CCache_FOUND)
+         # Use e.g. "ccache clang++" instead of "clang++"
+         set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCache_EXECUTABLE}")
+         set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK    "${CCache_EXECUTABLE}")
+    else()
+        message("Usage of CCache was enabled, but CCache was not found, so CCache is not being enabled.")
+    endif()
+endif (OPENRCT2_USE_CCACHE)
 
 if (APPLE)
     execute_process(COMMAND /usr/bin/uname -m OUTPUT_VARIABLE SYSTEM_MACOS_ARCH OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -52,22 +60,30 @@ endif ()
 include(CheckCXXCompilerFlag)
 include(GNUInstallDirs)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
-set(TITLE_SEQUENCE_VERSION "0.1.2c")
+set(TITLE_SEQUENCE_VERSION "0.4.14")
 set(TITLE_SEQUENCE_URL  "https://github.com/OpenRCT2/title-sequences/releases/download/v${TITLE_SEQUENCE_VERSION}/title-sequences.zip")
-set(TITLE_SEQUENCE_SHA1 "304d13a126c15bf2c86ff13b81a2f2cc1856ac8d")
+set(TITLE_SEQUENCE_SHA1 "6c04781b959b468e1f65ec2d2f21f5aaa5e5724d")
 
-set(OBJECTS_VERSION "1.2.4")
+set(OBJECTS_VERSION "1.5.1")
 set(OBJECTS_URL  "https://github.com/OpenRCT2/objects/releases/download/v${OBJECTS_VERSION}/objects.zip")
-set(OBJECTS_SHA1 "c82605035f120188b7334a781a786ced9588e9af")
+set(OBJECTS_SHA1 "e922b9fd779e7752176f1d0d8766c2ee6ad1e41b")
 
-set(REPLAYS_VERSION "0.0.62")
+set(OPENSFX_VERSION "1.0.5")
+set(OPENSFX_URL  "https://github.com/OpenRCT2/OpenSoundEffects/releases/download/v${OPENSFX_VERSION}/opensound.zip")
+set(OPENSFX_SHA1 "b1b1f1b241d2cbff63a1889c4dc5a09bdf769bfb")
+
+set(OPENMSX_VERSION "1.6")
+set(OPENMSX_URL  "https://github.com/OpenRCT2/OpenMusic/releases/download/v${OPENMSX_VERSION}/openmusic.zip")
+set(OPENMSX_SHA1 "ba170fa6d777b309c15420f4b6eb3fa25082a9d1")
+
+set(REPLAYS_VERSION "0.0.86")
 set(REPLAYS_URL  "https://github.com/OpenRCT2/replays/releases/download/v${REPLAYS_VERSION}/replays.zip")
-set(REPLAYS_SHA1 "0B234FA152AFA49F5204ADA97CBAAE39A538961B")
+set(REPLAYS_SHA1 "637E73F20C03DCD52ACA36FAEE15DADB31797FE0")
 
 option(FORCE32 "Force 32-bit build. It will add `-m32` to compiler flags.")
 option(WITH_TESTS "Build tests")
@@ -75,6 +91,8 @@ option(PORTABLE "Create a portable build (-rpath=$ORIGIN)" OFF)
 option(APPIMAGE "Create an appimage build (-rpath=$ORIGIN/../lib)" OFF)
 option(DOWNLOAD_TITLE_SEQUENCES "Download title sequences during installation." ON)
 option(DOWNLOAD_OBJECTS "Download objects during installation." ON)
+option(DOWNLOAD_OPENSFX "Download OpenSoundEffects during installation." ON)
+option(DOWNLOAD_OPENMSX "Download OpenMusic during installation." ON)
 CMAKE_DEPENDENT_OPTION(DOWNLOAD_REPLAYS "Download replays during installation." ON
     "WITH_TESTS" OFF)
 CMAKE_DEPENDENT_OPTION(MACOS_USE_DEPENDENCIES "Use OpenRCT2 dependencies instead of system libraries" ON
@@ -87,29 +105,22 @@ option(STATIC "Create a static build.")
 option(USE_MMAP "Use mmap to try loading rct2's data segment into memory.")
 
 option(DISABLE_DISCORD_RPC "Disable Discord-RPC support." OFF)
-option(DISABLE_GOOGLE_BENCHMARK "Disable Google Benchmarks support." OFF)
+# Currently unused, disable by default.
+option(DISABLE_GOOGLE_BENCHMARK "Disable Google Benchmarks support." ON)
 option(DISABLE_HTTP "Disable HTTP support.")
 option(DISABLE_NETWORK "Disable multiplayer functionality. Mainly for testing.")
 option(DISABLE_TTF "Disable support for TTF provided by freetype2.")
-option(ENABLE_LIGHTFX "Enable lighting effects." ON)
 option(ENABLE_SCRIPTING "Enable script / plugin support." ON)
-if (MINGW)
-    option(MINGW_TARGET_NT5_1 "Use only NT5.1 APIs and libraries." OFF)
-endif ()
-
+option(ENABLE_ASAN "Enable the AddressSanitizer.")
+option(ENABLE_UBSAN "Enable the UndefinedBehaviourSanitizer.")
+option(ENABLE_HEADERS_CHECK "Check if include directives in header files are correct. Only works with clang" OFF)
 option(DISABLE_GUI "Don't build GUI. (Headless only.)")
+
 
 if (FORCE32)
     set(TARGET_M "-m32")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TARGET_M}")
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${TARGET_M}")
-endif ()
-
-if (MINGW_TARGET_NT5_1)
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_WIN32_WINNT=0x501")
-	if (STATIC)
-	    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCURL_STATICLIB=1 -DZIP_STATIC=1 -static")
-	endif ()
 endif ()
 
 if (PORTABLE OR WIN32)
@@ -122,12 +133,13 @@ if (APPIMAGE)
 endif ()
 
 if (MACOS_USE_DEPENDENCIES)
+    message("Using OpenRCT2 dependencies instead of system libraries")
     # if we're building on macOS, then we need the dependencies
     include(cmake/download.cmake)
     
-    set(MACOS_DYLIBS_VERSION "29")
+    set(MACOS_DYLIBS_VERSION "37")
     set(MACOS_DYLIBS_ZIPFILE "openrct2-libs-v${MACOS_DYLIBS_VERSION}-universal-macos-dylibs.zip")
-    set(MACOS_DYLIBS_SHA1 "86cf2db4d87173112a00042418d0d18cae360e41")
+    set(MACOS_DYLIBS_SHA1 "6d633a881fc243e960e29d9c371915a7cdeeb880")
     set(MACOS_DYLIBS_DIR "${ROOT_DIR}/lib/macos")
     set(MACOS_DYLIBS_URL "https://github.com/OpenRCT2/Dependencies/releases/download/v${MACOS_DYLIBS_VERSION}/${MACOS_DYLIBS_ZIPFILE}")
 
@@ -144,6 +156,7 @@ if (MACOS_USE_DEPENDENCIES)
     # if we're making the OpenRCT2.app bundle, rpath will be handled by fixup_bundle
     # if we're building the CLI executable, we need to do it ourselves
     if (NOT MACOS_BUNDLE)
+        message("Setting rpath for macOS dylibs")
         # the RPATH to be used when installing, but only if it's not a system directory
         list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
         if("${isSystemDir}" STREQUAL "-1")
@@ -274,6 +287,9 @@ if (MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4244") # C4244: 'conversion_type': conversion from 'type1' to 'type2', possible loss of data
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4068") # C4068: unknown pragma
 
+    # Enable char8_t<->char conversion
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:char8_t-")
+
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
     add_definitions(-D_SCL_SECURE_NO_WARNINGS)
     if (CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR STREQUAL "AMD64")
@@ -325,8 +341,11 @@ else ()
     # Compiler flags
     set(DEBUG_LEVEL 0 CACHE STRING "Select debug level for compilation. Use value in range 0–3.")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstrict-aliasing -Werror -Wundef -Wmissing-declarations -Winit-self -Wall -Wextra -Wshadow")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas -Wno-missing-braces -Wno-comment -Wnonnull -Wno-unused-parameter")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-pragmas -Wno-missing-braces -Wno-comment -Wnonnull -Wno-unused-parameter -Wno-attributes")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDEBUG=${DEBUG_LEVEL}")
+
+    # Enable char8_t<->char conversion
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-char8_t -Wno-deprecated-declarations")
 
     if(APPLE)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=objc-method-access")
@@ -378,11 +397,16 @@ endif ()
 if (DISABLE_TTF)
     target_compile_options(libopenrct2 PUBLIC -DNO_TTF)
 endif ()
-if (ENABLE_LIGHTFX)
-    target_compile_options(libopenrct2 PUBLIC -D__ENABLE_LIGHTFX__)
-endif ()
 if (ENABLE_SCRIPTING)
     target_compile_options(libopenrct2 PUBLIC -DENABLE_SCRIPTING)
+endif ()
+if (ENABLE_ASAN)
+    target_compile_options(libopenrct2 PUBLIC -fsanitize=address)
+    target_link_options(libopenrct2 PUBLIC -fsanitize=address)
+endif ()
+if (ENABLE_UBSAN)
+    target_compile_options(libopenrct2 PUBLIC -fsanitize=undefined)
+    target_link_options(libopenrct2 PUBLIC -fsanitize=undefined)
 endif ()
 
 
@@ -390,7 +414,7 @@ endif ()
 if (NOT (MACOS_BUNDLE AND (NOT CMAKE_OSX_ARCHITECTURES MATCHES "${SYSTEM_MACOS_ARCH}")))
     add_custom_command(
         OUTPUT g2.dat
-        COMMAND ./openrct2-cli sprite build \"${CMAKE_BINARY_DIR}/g2.dat\" \"${ROOT_DIR}/resources/g2/sprites.json\"
+        COMMAND ./openrct2-cli sprite build ${CMAKE_BINARY_DIR}/g2.dat ${ROOT_DIR}/resources/g2/sprites.json
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     add_custom_target(g2 DEPENDS ${PROJECT_NAME} g2.dat)
@@ -401,10 +425,7 @@ endif ()
 # Include tests
 if (WITH_TESTS)
     enable_testing()
-    if (UNIX AND (NOT USE_MMAP))
-        include("${ROOT_DIR}/test/testpaint/CMakeLists.txt" NO_POLICY_SCOPE)
-    endif ()
-    include("${ROOT_DIR}/test/tests/CMakeLists.txt" NO_POLICY_SCOPE)
+    add_subdirectory("test/tests")
 endif ()
 
 # macOS bundle "install" is handled in src/openrct2-ui/CMakeLists.txt
@@ -412,8 +433,10 @@ endif ()
 if (NOT MACOS_BUNDLE OR (MACOS_BUNDLE AND WITH_TESTS))
     # Install
     # Don't recurse, grab all *.txt and *.md files
+    add_definitions(-DDOCDIR="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DOCDIR}")
     file(GLOB DOC_FILES "${ROOT_DIR}/distribution/*.txt")
     list(APPEND DOC_FILES "${ROOT_DIR}/contributors.md"
+                        "${ROOT_DIR}/PRIVACY.md"
                         "${ROOT_DIR}/licence.txt"
                         "${ROOT_DIR}/distribution/scripting.md"
                         "${ROOT_DIR}/distribution/openrct2.d.ts")
@@ -447,6 +470,28 @@ if (NOT MACOS_BUNDLE OR (MACOS_BUNDLE AND WITH_TESTS))
                 SKIP_IF_EXISTS ${CMAKE_SOURCE_DIR}/data/object/
                 ZIP_URL ${OBJECTS_URL}
                 SHA1 ${OBJECTS_SHA1}
+            )")
+    endif ()
+    if (DOWNLOAD_OPENSFX)
+        install(CODE "
+            include(${ROOT_DIR}/cmake/download.cmake)
+            download_openrct2_zip(
+                ZIP_VERSION ${OPENSFX_VERSION}
+                SKIP_IF_EXISTS ${CMAKE_SOURCE_DIR}/data/assetpack/openrct2.sound.parkap
+                DOWNLOAD_DIR \$ENV{DESTDIR}${CMAKE_INSTALL_FULL_DATADIR}/${PROJECT_NAME}/
+                ZIP_URL ${OPENSFX_URL}
+                SHA1 ${OPENSFX_SHA1}
+            )")
+    endif ()
+    if (DOWNLOAD_OPENMSX)
+        install(CODE "
+            include(${ROOT_DIR}/cmake/download.cmake)
+            download_openrct2_zip(
+                ZIP_VERSION ${OPENMSX_VERSION}
+                SKIP_IF_EXISTS ${CMAKE_SOURCE_DIR}/data/assetpack/openrct2.music.alternative.parkap
+                DOWNLOAD_DIR \$ENV{DESTDIR}${CMAKE_INSTALL_FULL_DATADIR}/${PROJECT_NAME}/
+                ZIP_URL ${OPENMSX_URL}
+                SHA1 ${OPENMSX_SHA1}
             )")
     endif ()
     if (DOWNLOAD_REPLAYS)

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,8 +11,8 @@
 
 #include <SDL.h>
 #include <algorithm>
+#include <openrct2/Diagnostic.h>
 #include <openrct2/Game.h>
-#include <openrct2/common.h>
 #include <openrct2/config/Config.h>
 #include <openrct2/core/Guard.hpp>
 #include <openrct2/drawing/IDrawingEngine.h>
@@ -64,13 +64,13 @@ public:
 
         if (_surface == nullptr || _palette == nullptr || _RGBASurface == nullptr)
         {
-            log_fatal("%p || %p || %p == nullptr %s", _surface, _palette, _RGBASurface, SDL_GetError());
+            LOG_FATAL("%p || %p || %p == nullptr %s", _surface, _palette, _RGBASurface, SDL_GetError());
             exit(-1);
         }
 
         if (SDL_SetSurfacePalette(_surface, _palette))
         {
-            log_fatal("SDL_SetSurfacePalette failed %s", SDL_GetError());
+            LOG_FATAL("SDL_SetSurfacePalette failed %s", SDL_GetError());
             exit(-1);
         }
 
@@ -107,7 +107,7 @@ private:
         {
             if (SDL_LockSurface(_surface) < 0)
             {
-                log_error("locking failed %s", SDL_GetError());
+                LOG_ERROR("locking failed %s", SDL_GetError());
                 return;
             }
         }
@@ -121,22 +121,27 @@ private:
             SDL_UnlockSurface(_surface);
         }
 
+// On macOS with high DPI ("retina") screens this renders only to a quarter of the screen.
+// A workaround is to always scale the surface, but that incurs an additonal copy.
+// https://github.com/OpenRCT2/OpenRCT2/issues/21772
+#if !defined(__APPLE__)
         // Copy the surface to the window
-        if (gConfigGeneral.window_scale == 1 || gConfigGeneral.window_scale <= 0)
+        if (Config::Get().general.WindowScale == 1 || Config::Get().general.WindowScale <= 0)
         {
             SDL_Surface* windowSurface = SDL_GetWindowSurface(_window);
             if (SDL_BlitSurface(_surface, nullptr, windowSurface, nullptr))
             {
-                log_fatal("SDL_BlitSurface %s", SDL_GetError());
+                LOG_FATAL("SDL_BlitSurface %s", SDL_GetError());
                 exit(1);
             }
         }
         else
+#endif
         {
             // first blit to rgba surface to change the pixel format
             if (SDL_BlitSurface(_surface, nullptr, _RGBASurface, nullptr))
             {
-                log_fatal("SDL_BlitSurface %s", SDL_GetError());
+                LOG_FATAL("SDL_BlitSurface %s", SDL_GetError());
                 exit(1);
             }
 
@@ -144,13 +149,13 @@ private:
             // about blit configurations being incompatible.
             if (SDL_BlitScaled(_RGBASurface, nullptr, SDL_GetWindowSurface(_window), nullptr))
             {
-                log_fatal("SDL_BlitScaled %s", SDL_GetError());
+                LOG_FATAL("SDL_BlitScaled %s", SDL_GetError());
                 exit(1);
             }
         }
         if (SDL_UpdateWindowSurface(_window))
         {
-            log_fatal("SDL_UpdateWindowSurface %s", SDL_GetError());
+            LOG_FATAL("SDL_UpdateWindowSurface %s", SDL_GetError());
             exit(1);
         }
     }

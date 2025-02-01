@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,9 +9,10 @@
 
 #pragma once
 
-#include "../common.h"
 #include "IDrawingContext.h"
 #include "IDrawingEngine.h"
+
+#include <memory>
 
 namespace OpenRCT2
 {
@@ -44,9 +45,9 @@ namespace OpenRCT2
                 uint8_t Colour;
             };
 
-            static constexpr uint32_t MaxWeatherPixels = 0xFFFE;
+            static constexpr uint32_t kMaxWeatherPixels = 0xFFFE;
 
-            size_t _weatherPixelsCapacity = MaxWeatherPixels;
+            size_t _weatherPixelsCapacity = kMaxWeatherPixels;
             uint32_t _weatherPixelsCount = 0;
             WeatherPixel* _weatherPixels = nullptr;
 
@@ -54,14 +55,14 @@ namespace OpenRCT2
             X8WeatherDrawer();
             ~X8WeatherDrawer();
             void Draw(
-                rct_drawpixelinfo* dpi, int32_t x, int32_t y, int32_t width, int32_t height, int32_t xStart, int32_t yStart,
+                DrawPixelInfo& dpi, int32_t x, int32_t y, int32_t width, int32_t height, int32_t xStart, int32_t yStart,
                 const uint8_t* weatherpattern) override;
-            void Restore(rct_drawpixelinfo* dpi);
+            void Restore(DrawPixelInfo& dpi);
         };
 
 #ifdef __WARN_SUGGEST_FINAL_TYPES__
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wsuggest-final-types"
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wsuggest-final-types"
 #endif
         class X8DrawingEngine : public IDrawingEngine
         {
@@ -74,11 +75,9 @@ namespace OpenRCT2
 
             DirtyGrid _dirtyGrid = {};
 
-            rct_drawpixelinfo _bitsDPI = {};
+            DrawPixelInfo _bitsDPI = {};
 
-#ifdef __ENABLE_LIGHTFX__
             bool _lastLightFXenabled = false;
-#endif
 
             X8WeatherDrawer _weatherDrawer;
             X8DrawingContext* _drawingContext;
@@ -87,13 +86,13 @@ namespace OpenRCT2
             explicit X8DrawingEngine(const std::shared_ptr<Ui::IUiContext>& uiContext);
 
 #ifdef __WARN_SUGGEST_FINAL_METHODS__
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wsuggest-final-methods"
-#    pragma GCC diagnostic ignored "-Wsuggest-final-types"
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wsuggest-final-methods"
+    #pragma GCC diagnostic ignored "-Wsuggest-final-types"
 #endif
             ~X8DrawingEngine() override;
 #ifdef __WARN_SUGGEST_FINAL_METHODS__
-#    pragma GCC diagnostic pop
+    #pragma GCC diagnostic pop
 #endif
 
             void Initialise() override;
@@ -108,11 +107,11 @@ namespace OpenRCT2
             void CopyRect(int32_t x, int32_t y, int32_t width, int32_t height, int32_t dx, int32_t dy) override;
             std::string Screenshot() override;
             IDrawingContext* GetDrawingContext() override;
-            rct_drawpixelinfo* GetDrawingPixelInfo() override;
+            DrawPixelInfo* GetDrawingPixelInfo() override;
             DRAWING_ENGINE_FLAGS GetFlags() override;
             void InvalidateImage(uint32_t image) override;
 
-            rct_drawpixelinfo* GetDPI();
+            DrawPixelInfo* GetDPI();
 
         protected:
             void ConfigureBits(uint32_t width, uint32_t height, uint32_t pitch);
@@ -120,13 +119,12 @@ namespace OpenRCT2
 
         private:
             void ConfigureDirtyGrid();
-            static void ResetWindowVisbilities();
             void DrawAllDirtyBlocks();
             uint32_t GetNumDirtyRows(const uint32_t x, const uint32_t y, const uint32_t columns);
             void DrawDirtyBlocks(uint32_t x, uint32_t y, uint32_t columns, uint32_t rows);
         };
 #ifdef __WARN_SUGGEST_FINAL_TYPES__
-#    pragma GCC diagnostic pop
+    #pragma GCC diagnostic pop
 #endif
 
         class X8DrawingContext final : public IDrawingContext
@@ -137,24 +135,20 @@ namespace OpenRCT2
         public:
             explicit X8DrawingContext(X8DrawingEngine* engine);
 
-            IDrawingEngine* GetEngine() override;
-
-            void Clear(rct_drawpixelinfo* dpi, uint8_t paletteIndex) override;
-            void FillRect(rct_drawpixelinfo* dpi, uint32_t colour, int32_t x, int32_t y, int32_t w, int32_t h) override;
+            void Clear(DrawPixelInfo& dpi, uint8_t paletteIndex) override;
+            void FillRect(DrawPixelInfo& dpi, uint32_t colour, int32_t x, int32_t y, int32_t w, int32_t h) override;
             void FilterRect(
-                rct_drawpixelinfo* dpi, FilterPaletteID palette, int32_t left, int32_t top, int32_t right,
-                int32_t bottom) override;
-            void DrawLine(rct_drawpixelinfo* dpi, uint32_t colour, const ScreenLine& line) override;
-            void DrawSprite(rct_drawpixelinfo* dpi, ImageId imageId, int32_t x, int32_t y) override;
+                DrawPixelInfo& dpi, FilterPaletteID palette, int32_t left, int32_t top, int32_t right, int32_t bottom) override;
+            void DrawLine(DrawPixelInfo& dpi, uint32_t colour, const ScreenLine& line) override;
+            void DrawSprite(DrawPixelInfo& dpi, const ImageId imageId, int32_t x, int32_t y) override;
             void DrawSpriteRawMasked(
-                rct_drawpixelinfo* dpi, int32_t x, int32_t y, ImageId maskImage, ImageId colourImage) override;
-            void DrawSpriteSolid(rct_drawpixelinfo* dpi, ImageId image, int32_t x, int32_t y, uint8_t colour) override;
-            void DrawGlyph(rct_drawpixelinfo* dpi, uint32_t image, int32_t x, int32_t y, const PaletteMap& paletteMap) override;
-            void DrawBitmap(
-                rct_drawpixelinfo* dpi, uint32_t image, const void* pixels, int32_t width, int32_t height, int32_t x,
-                int32_t y) override
-            {
-            }
+                DrawPixelInfo& dpi, int32_t x, int32_t y, const ImageId maskImage, const ImageId colourImage) override;
+            void DrawSpriteSolid(DrawPixelInfo& dpi, const ImageId image, int32_t x, int32_t y, uint8_t colour) override;
+            void DrawGlyph(
+                DrawPixelInfo& dpi, const ImageId image, int32_t x, int32_t y, const PaletteMap& paletteMap) override;
+            void DrawTTFBitmap(
+                DrawPixelInfo& dpi, TextDrawInfo* info, TTFSurface* surface, int32_t x, int32_t y,
+                uint8_t hintingThreshold) override;
         };
     } // namespace Drawing
 } // namespace OpenRCT2

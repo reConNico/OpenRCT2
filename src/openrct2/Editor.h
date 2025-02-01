@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,10 +9,11 @@
 
 #pragma once
 
-#include "common.h"
 #include "object/Object.h"
 
-namespace Editor
+struct ResultWithMessage;
+
+namespace OpenRCT2::Editor
 {
     void Load();
     void ConvertSaveToScenario();
@@ -20,15 +21,15 @@ namespace Editor
     void LoadTrackManager();
     bool LoadLandscape(const utf8* path);
 
-    std::pair<bool, rct_string_id> CheckPark();
-    std::pair<ObjectType, rct_string_id> CheckObjectSelection();
+    ResultWithMessage CheckPark();
+    std::pair<ObjectType, StringId> CheckObjectSelection();
 
     void OpenWindowsForCurrentStep();
 
     uint8_t GetSelectedObjectFlags(ObjectType objectType, size_t index);
     void ClearSelectedObject(ObjectType objectType, size_t index, uint32_t flags);
     void SetSelectedObject(ObjectType objectType, size_t index, uint32_t flags);
-} // namespace Editor
+} // namespace OpenRCT2::Editor
 
 enum class EditorStep : uint8_t
 {
@@ -43,6 +44,4 @@ enum class EditorStep : uint8_t
     Invalid = 255,         // 255
 };
 
-extern EditorStep gEditorStep;
-
-void editor_open_windows_for_current_step();
+void EditorOpenWindowsForCurrentStep();

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,13 +10,20 @@
 #include "Fountain.h"
 
 #include "../Game.h"
+#include "../GameState.h"
 #include "../core/DataSerialiser.h"
+#include "../object/PathAdditionEntry.h"
 #include "../paint/Paint.h"
+#include "../profiling/Profiling.h"
 #include "../scenario/Scenario.h"
 #include "../world/Footpath.h"
+#include "../world/Location.hpp"
 #include "../world/Map.h"
 #include "../world/Scenery.h"
+#include "../world/tile_element/PathElement.h"
 #include "EntityRegistry.h"
+
+using namespace OpenRCT2;
 
 enum class PATTERN
 {
@@ -30,29 +37,29 @@ enum class PATTERN
     FAST_RANDOM_CHASERS,
 };
 
-static constexpr const std::array _fountainDirectionsNegative = {
-    CoordsXY{ -COORDS_XY_STEP, 0 },
-    CoordsXY{ -COORDS_XY_STEP, -COORDS_XY_STEP },
+static constexpr std::array _fountainDirectionsNegative = {
+    CoordsXY{ -kCoordsXYStep, 0 },
+    CoordsXY{ -kCoordsXYStep, -kCoordsXYStep },
     CoordsXY{ 0, 0 },
-    CoordsXY{ -COORDS_XY_STEP, 0 },
+    CoordsXY{ -kCoordsXYStep, 0 },
     CoordsXY{ 0, 0 },
-    CoordsXY{ 0, -COORDS_XY_STEP },
-    CoordsXY{ 0, -COORDS_XY_STEP },
-    CoordsXY{ -COORDS_XY_STEP, -COORDS_XY_STEP },
+    CoordsXY{ 0, -kCoordsXYStep },
+    CoordsXY{ 0, -kCoordsXYStep },
+    CoordsXY{ -kCoordsXYStep, -kCoordsXYStep },
 };
 
-static constexpr const std::array _fountainDirectionsPositive = {
-    CoordsXY{ COORDS_XY_STEP, 0 },
+static constexpr std::array _fountainDirectionsPositive = {
+    CoordsXY{ kCoordsXYStep, 0 },
     CoordsXY{ 0, 0 },
-    CoordsXY{ 0, COORDS_XY_STEP },
-    CoordsXY{ COORDS_XY_STEP, COORDS_XY_STEP },
-    CoordsXY{ COORDS_XY_STEP, COORDS_XY_STEP },
-    CoordsXY{ COORDS_XY_STEP, 0 },
+    CoordsXY{ 0, kCoordsXYStep },
+    CoordsXY{ kCoordsXYStep, kCoordsXYStep },
+    CoordsXY{ kCoordsXYStep, kCoordsXYStep },
+    CoordsXY{ kCoordsXYStep, 0 },
     CoordsXY{ 0, 0 },
-    CoordsXY{ 0, COORDS_XY_STEP },
+    CoordsXY{ 0, kCoordsXYStep },
 };
-constexpr auto _FountainChanceOfStoppingEdgeMode = 0x3333;   // 0.200
-constexpr auto _FountainChanceOfStoppingRandomMode = 0x2000; // 0.125
+static constexpr auto kFountainChanceOfStoppingEdgeMode = 0x3333;   // 0.200
+static constexpr auto kFountainChanceOfStoppingRandomMode = 0x2000; // 0.125
 
 // rct2: 0x0097F040
 const uint8_t _fountainDirections[] = {
@@ -76,23 +83,26 @@ const uint8_t _fountainPatternFlags[] = {
     FOUNTAIN_FLAG::FAST,                                                   // FAST_RANDOM_CHASERS
 };
 
-template<> bool EntityBase::Is<JumpingFountain>() const
+template<>
+bool EntityBase::Is<JumpingFountain>() const
 {
     return Type == EntityType::JumpingFountain;
 }
 
 void JumpingFountain::StartAnimation(const JumpingFountainType newType, const CoordsXY& newLoc, const TileElement* tileElement)
 {
+    const auto currentTicks = GetGameState().CurrentTicks;
+
     int32_t randomIndex;
     auto newZ = tileElement->GetBaseZ();
 
     // Change pattern approximately every 51 seconds
-    uint32_t pattern = (gCurrentTicks >> 11) & 7;
+    uint32_t pattern = (currentTicks >> 11) & 7;
     switch (static_cast<PATTERN>(pattern))
     {
         case PATTERN::CYCLIC_SQUARES:
             // 0, 1, 2, 3
-            for (int32_t i = 0; i < 4; i++)
+            for (int32_t i = 0; i < kNumOrthogonalDirections; i++)
             {
                 JumpingFountain::Create(
                     newType, { newLoc + _fountainDirectionsPositive[i], newZ }, _fountainDirections[i],
@@ -101,8 +111,8 @@ void JumpingFountain::StartAnimation(const JumpingFountainType newType, const Co
             break;
         case PATTERN::BOUNCING_PAIRS:
             // random [0, 2 or 1, 3]
-            randomIndex = scenario_rand() & 1;
-            for (int32_t i = randomIndex; i < 4; i += 2)
+            randomIndex = ScenarioRand() & 1;
+            for (int32_t i = randomIndex; i < kNumOrthogonalDirections; i += 2)
             {
                 JumpingFountain::Create(
                     newType, { newLoc + _fountainDirectionsPositive[i], newZ }, _fountainDirections[i],
@@ -111,7 +121,7 @@ void JumpingFountain::StartAnimation(const JumpingFountainType newType, const Co
             break;
         case PATTERN::RACING_PAIRS:
             // random [0 - 3 and 4 - 7]
-            randomIndex = scenario_rand() & 3;
+            randomIndex = ScenarioRand() & 3;
             JumpingFountain::Create(
                 newType, { newLoc + _fountainDirectionsPositive[randomIndex], newZ }, _fountainDirections[randomIndex],
                 _fountainDirectionFlags[randomIndex] | _fountainPatternFlags[pattern], 0);
@@ -122,7 +132,7 @@ void JumpingFountain::StartAnimation(const JumpingFountainType newType, const Co
             break;
         default:
             // random [0 - 7]
-            randomIndex = scenario_rand() & 7;
+            randomIndex = ScenarioRand() & 7;
             JumpingFountain::Create(
                 newType, { newLoc + _fountainDirectionsPositive[randomIndex], newZ }, _fountainDirections[randomIndex],
                 _fountainDirectionFlags[randomIndex] | _fountainPatternFlags[pattern], 0);
@@ -139,10 +149,10 @@ void JumpingFountain::Create(
     {
         jumpingFountain->Iteration = iteration;
         jumpingFountain->FountainFlags = newFlags;
-        jumpingFountain->sprite_direction = direction << 3;
-        jumpingFountain->sprite_width = 33;
-        jumpingFountain->sprite_height_negative = 36;
-        jumpingFountain->sprite_height_positive = 12;
+        jumpingFountain->Orientation = direction << 3;
+        jumpingFountain->SpriteData.Width = 33;
+        jumpingFountain->SpriteData.HeightMin = 36;
+        jumpingFountain->SpriteData.HeightMax = 12;
         jumpingFountain->MoveTo(newLoc);
         jumpingFountain->FountainType = newType;
         jumpingFountain->NumTicksAlive = 0;
@@ -201,7 +211,7 @@ JumpingFountainType JumpingFountain::GetType() const
 void JumpingFountain::AdvanceAnimation()
 {
     const JumpingFountainType newType = GetType();
-    const int32_t direction = (sprite_direction >> 3) & 7;
+    const int32_t direction = (Orientation >> 3) & 7;
     const CoordsXY newLoc = CoordsXY{ x, y } + CoordsDirectionDelta[direction];
 
     int32_t availableDirections = 0;
@@ -246,10 +256,10 @@ void JumpingFountain::AdvanceAnimation()
 
 bool JumpingFountain::IsJumpingFountain(const JumpingFountainType newType, const CoordsXYZ& newLoc)
 {
-    const int32_t pathBitFlagMask = newType == JumpingFountainType::Snow ? PATH_BIT_FLAG_JUMPING_FOUNTAIN_SNOW
-                                                                         : PATH_BIT_FLAG_JUMPING_FOUNTAIN_WATER;
+    const int32_t pathAdditionFlagMask = newType == JumpingFountainType::Snow ? PATH_ADDITION_FLAG_JUMPING_FOUNTAIN_SNOW
+                                                                              : PATH_ADDITION_FLAG_JUMPING_FOUNTAIN_WATER;
 
-    TileElement* tileElement = map_get_first_element_at(newLoc);
+    TileElement* tileElement = MapGetFirstElementAt(newLoc);
     if (tileElement == nullptr)
         return false;
     do
@@ -263,8 +273,8 @@ bool JumpingFountain::IsJumpingFountain(const JumpingFountainType newType, const
         if (!tileElement->AsPath()->HasAddition())
             continue;
 
-        auto* pathBitEntry = tileElement->AsPath()->GetAdditionEntry();
-        if (pathBitEntry != nullptr && pathBitEntry->flags & pathBitFlagMask)
+        auto* pathAdditionEntry = tileElement->AsPath()->GetAdditionEntry();
+        if (pathAdditionEntry != nullptr && pathAdditionEntry->flags & pathAdditionFlagMask)
         {
             return true;
         }
@@ -275,7 +285,7 @@ bool JumpingFountain::IsJumpingFountain(const JumpingFountainType newType, const
 
 void JumpingFountain::GoToEdge(const CoordsXYZ& newLoc, const int32_t availableDirections) const
 {
-    int32_t direction = (sprite_direction >> 3) << 1;
+    int32_t direction = (Orientation >> 3) << 1;
     if (availableDirections & (1 << direction))
     {
         CreateNext(newLoc, direction);
@@ -289,8 +299,8 @@ void JumpingFountain::GoToEdge(const CoordsXYZ& newLoc, const int32_t availableD
         return;
     }
 
-    const uint32_t randomIndex = scenario_rand();
-    if ((randomIndex & 0xFFFF) < _FountainChanceOfStoppingEdgeMode)
+    const uint32_t randomIndex = ScenarioRand();
+    if ((randomIndex & 0xFFFF) < kFountainChanceOfStoppingEdgeMode)
     {
         return;
     }
@@ -315,7 +325,7 @@ void JumpingFountain::Bounce(const CoordsXYZ& newLoc, const int32_t availableDir
     Iteration++;
     if (Iteration < 8)
     {
-        int32_t direction = ((sprite_direction >> 3) ^ 2) << 1;
+        int32_t direction = ((Orientation >> 3) ^ 2) << 1;
         if (availableDirections & (1 << direction))
         {
             CreateNext(newLoc, direction);
@@ -336,7 +346,7 @@ void JumpingFountain::Split(const CoordsXYZ& newLoc, int32_t availableDirections
     if (Iteration < 3)
     {
         const auto newType = GetType();
-        int32_t direction = ((sprite_direction >> 3) ^ 2) << 1;
+        int32_t direction = ((Orientation >> 3) ^ 2) << 1;
         availableDirections &= ~(1 << direction);
         availableDirections &= ~(1 << (direction + 1));
 
@@ -359,8 +369,8 @@ void JumpingFountain::Split(const CoordsXYZ& newLoc, int32_t availableDirections
 
 void JumpingFountain::Random(const CoordsXYZ& newLoc, int32_t availableDirections) const
 {
-    const uint32_t randomIndex = scenario_rand();
-    if ((randomIndex & 0xFFFF) >= _FountainChanceOfStoppingRandomMode)
+    const uint32_t randomIndex = ScenarioRand();
+    if ((randomIndex & 0xFFFF) >= kFountainChanceOfStoppingRandomMode)
     {
         int32_t direction = randomIndex & 7;
         while (!(availableDirections & (1 << direction)))
@@ -394,13 +404,15 @@ void JumpingFountain::Serialise(DataSerialiser& stream)
     stream << Iteration;
 }
 
-void JumpingFountain::Paint(paint_session* session, int32_t imageDirection) const
+void JumpingFountain::Paint(PaintSession& session, int32_t imageDirection) const
 {
-    // TODO: Move into sprites.h
-    constexpr uint32_t JumpingFountainSnowBaseImage = 23037;
-    constexpr uint32_t JumpingFountainWaterBaseImage = 22973;
+    PROFILED_FUNCTION();
 
-    rct_drawpixelinfo& dpi = session->DPI;
+    // TODO: Move into sprites.h
+    constexpr uint32_t kJumpingFountainSnowBaseImage = 23037;
+    constexpr uint32_t kJumpingFountainWaterBaseImage = 22973;
+
+    DrawPixelInfo& dpi = session.DPI;
     if (dpi.zoom_level > ZoomLevel{ 0 })
     {
         return;
@@ -412,7 +424,7 @@ void JumpingFountain::Paint(paint_session* session, int32_t imageDirection) cons
     // Fountain is firing anti clockwise
     bool reversed = (FountainFlags & FOUNTAIN_FLAG::DIRECTION);
     // Fountain rotation
-    bool rotated = (sprite_direction / 16) & 1;
+    bool rotated = (Orientation / 16) & 1;
     bool isAntiClockwise = (imageDirection / 2) & 1; // Clockwise or Anti-clockwise
 
     // These cancel each other out
@@ -421,20 +433,20 @@ void JumpingFountain::Paint(paint_session* session, int32_t imageDirection) cons
         isAntiClockwise = !isAntiClockwise;
     }
 
-    uint32_t baseImageId = (FountainType == JumpingFountainType::Snow) ? JumpingFountainSnowBaseImage
-                                                                       : JumpingFountainWaterBaseImage;
-    uint32_t imageId = baseImageId + imageDirection * 16 + frame;
+    uint32_t baseImageId = (FountainType == JumpingFountainType::Snow) ? kJumpingFountainSnowBaseImage
+                                                                       : kJumpingFountainWaterBaseImage;
+    auto imageId = ImageId(baseImageId + imageDirection * 16 + frame);
     constexpr std::array antiClockWiseBoundingBoxes = {
-        CoordsXY{ -COORDS_XY_STEP, -3 },
+        CoordsXY{ -kCoordsXYStep, -3 },
         CoordsXY{ 0, -3 },
     };
     constexpr std::array clockWiseBoundingBoxes = {
-        CoordsXY{ -COORDS_XY_STEP, 3 },
+        CoordsXY{ -kCoordsXYStep, 3 },
         CoordsXY{ 0, 3 },
     };
 
     auto bb = isAntiClockwise ? antiClockWiseBoundingBoxes : clockWiseBoundingBoxes;
 
     PaintAddImageAsParentRotated(
-        session, imageDirection, imageId, 0, 0, 32, 1, 3, height, bb[imageDirection & 1].x, bb[imageDirection & 1].y, height);
+        session, imageDirection, imageId, { 0, 0, height }, { { bb[imageDirection & 1], height }, { 32, 1, 3 } });
 }

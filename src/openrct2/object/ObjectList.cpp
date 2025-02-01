@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,54 +11,47 @@
 
 #include "../Context.h"
 #include "../Game.h"
+#include "../core/EnumUtils.hpp"
+#include "../core/SawyerCoding.h"
 #include "../object/Object.h"
-#include "../util/SawyerCoding.h"
-#include "../util/Util.h"
+#include "ObjectLimits.h"
 #include "ObjectManager.h"
 #include "ObjectRepository.h"
 
-#include <algorithm>
 #include <array>
 #include <cstring>
 
-// 98DA00
-int32_t object_entry_group_counts[] = {
-    MAX_RIDE_OBJECTS,          // rides
-    MAX_SMALL_SCENERY_OBJECTS, // small scenery
-    MAX_LARGE_SCENERY_OBJECTS, // large scenery
-    MAX_WALL_SCENERY_OBJECTS,  // walls
-    MAX_BANNER_OBJECTS,        // banners
-    MAX_PATH_OBJECTS,          // paths
-    MAX_PATH_ADDITION_OBJECTS, // path bits
-    MAX_SCENERY_GROUP_OBJECTS, // scenery sets
-    MAX_PARK_ENTRANCE_OBJECTS, // park entrance
-    MAX_WATER_OBJECTS,         // water
-    MAX_SCENARIO_TEXT_OBJECTS, // scenario text
-    MAX_TERRAIN_SURFACE_OBJECTS,
-    MAX_TERRAIN_EDGE_OBJECTS,
-    MAX_STATION_OBJECTS,
-    MAX_MUSIC_OBJECTS,
-    MAX_FOOTPATH_SURFACE_OBJECTS,
-    MAX_FOOTPATH_RAILINGS_OBJECTS,
+// 0x0098DA00
+static constexpr std::array<int32_t, EnumValue(ObjectType::Count)> kObjectEntryGroupCounts = {
+    kMaxRideObjects,         // rides
+    kMaxSmallSceneryObjects, // small scenery
+    kMaxLargeSceneryObjects, // large scenery
+    kMaxWallSceneryObjects,  // walls
+    kMaxBannerObjects,       // banners
+    kMaxPathObjects,         // paths
+    kMaxPathAdditionObjects, // path additions
+    kMaxSceneryGroupObjects, // scenery sets
+    kMaxParkEntranceObjects, // park entrance
+    kMaxWaterObjects,        // water
+    kMaxScenarioTextObjects, // scenario text
+    kMaxTerrainSurfaceObjects, kMaxTerrainEdgeObjects,     kMaxStationObjects,
+    kMaxMusicObjects,          kMaxFootpathSurfaceObjects, kMaxFootpathRailingsObjects,
+    kMaxAudioObjects,          kMaxPeepNamesObjects,       kMaxPeepAnimationsObjects,
 };
-static_assert(std::size(object_entry_group_counts) == EnumValue(ObjectType::Count));
+static_assert(std::size(kObjectEntryGroupCounts) == EnumValue(ObjectType::Count));
 
-// 98DA2C
-// clang-format off
-int32_t object_entry_group_encoding[] = {
-    CHUNK_ENCODING_RLE,
-    CHUNK_ENCODING_RLE,
-    CHUNK_ENCODING_RLE,
-    CHUNK_ENCODING_RLE,
-    CHUNK_ENCODING_RLE,
-    CHUNK_ENCODING_RLE,
-    CHUNK_ENCODING_RLE,
-    CHUNK_ENCODING_RLE,
-    CHUNK_ENCODING_RLE,
-    CHUNK_ENCODING_RLE,
-    CHUNK_ENCODING_ROTATE,
-};
-// clang-format on
+size_t getObjectEntryGroupCount(ObjectType objectType)
+{
+    return kObjectEntryGroupCounts[EnumValue(objectType)];
+}
+
+size_t getObjectTypeLimit(ObjectType type)
+{
+    auto index = EnumValue(type);
+    if (index >= EnumValue(ObjectType::Count))
+        return 0;
+    return static_cast<size_t>(kObjectEntryGroupCounts[index]);
+}
 
 ObjectList::const_iterator::const_iterator(const ObjectList* parent, bool end)
 {
@@ -177,32 +170,47 @@ void ObjectList::SetObject(ObjectType type, ObjectEntryIndex index, std::string_
     SetObject(index, entry);
 }
 
-ObjectEntryIndex ObjectList::Find(ObjectType type, std::string_view identifier)
+ObjectEntryIndex ObjectList::Find(ObjectType type, std::string_view identifier) const
 {
     auto& subList = GetList(type);
     for (size_t i = 0; i < subList.size(); i++)
     {
-        if (subList[i].Identifier == identifier)
+        if (subList[i].Generation == ObjectGeneration::JSON && subList[i].Identifier == identifier)
         {
             return static_cast<ObjectEntryIndex>(i);
         }
     }
-    return OBJECT_ENTRY_INDEX_NULL;
+    return kObjectEntryIndexNull;
+}
+
+// Intended to be used to find non-custom legacy objects. For internal use only.
+ObjectEntryIndex ObjectList::FindLegacy(ObjectType type, std::string_view identifier) const
+{
+    auto& subList = GetList(type);
+    for (size_t i = 0; i < subList.size(); i++)
+    {
+        if (subList[i].Generation == ObjectGeneration::DAT && subList[i].Entry.GetName() == identifier
+            && subList[i].Entry.GetSourceGame() != ObjectSourceGame::Custom)
+        {
+            return static_cast<ObjectEntryIndex>(i);
+        }
+    }
+    return kObjectEntryIndexNull;
 }
 
 /**
  *
  *  rct2: 0x006AB344
  */
-void object_create_identifier_name(char* string_buffer, size_t size, const rct_object_entry* object)
+void ObjectCreateIdentifierName(char* string_buffer, size_t size, const RCTObjectEntry* object)
 {
     snprintf(string_buffer, size, "%.8s/%4X%4X", object->name, object->flags, object->checksum);
 }
 
-void get_type_entry_index(size_t index, ObjectType* outObjectType, ObjectEntryIndex* outEntryIndex)
+void ObjectGetTypeEntryIndex(size_t index, ObjectType* outObjectType, ObjectEntryIndex* outEntryIndex)
 {
     uint8_t objectType = EnumValue(ObjectType::Ride);
-    for (size_t groupCount : object_entry_group_counts)
+    for (size_t groupCount : kObjectEntryGroupCounts)
     {
         if (index >= groupCount)
         {
@@ -221,14 +229,14 @@ void get_type_entry_index(size_t index, ObjectType* outObjectType, ObjectEntryIn
         *outEntryIndex = static_cast<ObjectEntryIndex>(index);
 }
 
-void object_entry_get_name_fixed(utf8* buffer, size_t bufferSize, const rct_object_entry* entry)
+void ObjectEntryGetNameFixed(utf8* buffer, size_t bufferSize, const RCTObjectEntry* entry)
 {
-    bufferSize = std::min(static_cast<size_t>(DAT_NAME_LENGTH) + 1, bufferSize);
+    bufferSize = std::min(static_cast<size_t>(kDatNameLength) + 1, bufferSize);
     std::memcpy(buffer, entry->name, bufferSize - 1);
     buffer[bufferSize - 1] = 0;
 }
 
-void* object_entry_get_chunk(ObjectType objectType, ObjectEntryIndex index)
+void* ObjectEntryGetChunk(ObjectType objectType, ObjectEntryIndex index)
 {
     auto& objectMgr = OpenRCT2::GetContext()->GetObjectManager();
     auto* object = objectMgr.GetLoadedObject(objectType, index);
@@ -239,7 +247,7 @@ void* object_entry_get_chunk(ObjectType objectType, ObjectEntryIndex index)
     return nullptr;
 }
 
-const Object* object_entry_get_object(ObjectType objectType, ObjectEntryIndex index)
+const Object* ObjectEntryGetObject(ObjectType objectType, ObjectEntryIndex index)
 {
     auto& objectMgr = OpenRCT2::GetContext()->GetObjectManager();
     return objectMgr.GetLoadedObject(objectType, index);

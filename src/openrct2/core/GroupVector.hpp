@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -8,30 +8,36 @@
  *****************************************************************************/
 
 #pragma once
+
 #include <algorithm>
+#include <cstdint>
+#include <cstdio>
 #include <vector>
 
-template<typename Handle, typename V> class GroupVector
+template<typename Handle, typename V>
+class GroupVector
 {
     std::vector<std::vector<V>> _data;
 
 public:
     bool Contains(Handle handle, V value)
     {
-        if (handle >= _data.size())
+        const auto index = static_cast<size_t>(handle);
+        if (index >= _data.size())
             return false;
 
-        const auto& values = _data[handle];
+        const auto& values = _data[index];
         return std::find(values.begin(), values.end(), value) != values.end();
     }
 
     void Add(Handle handle, V value)
     {
-        if (handle >= _data.size())
+        const auto index = static_cast<size_t>(handle);
+        if (index >= _data.size())
         {
-            _data.resize(handle + 1);
+            _data.resize(index + 1);
         }
-        auto& values = _data[handle];
+        auto& values = _data[index];
 
         auto it = std::find(values.begin(), values.end(), value);
         if (it != values.end())
@@ -42,18 +48,20 @@ public:
 
     void Set(Handle handle, std::vector<V>&& values)
     {
-        if (handle >= _data.size())
+        const auto index = static_cast<size_t>(handle);
+        if (index >= _data.size())
         {
-            _data.resize(handle + 1);
+            _data.resize(index + 1);
         }
-        _data[handle] = values;
+        _data[index] = values;
     }
 
     std::vector<V>* GetAll(Handle handle)
     {
-        if (handle < _data.size())
+        const auto index = static_cast<size_t>(handle);
+        if (index < _data.size())
         {
-            return &_data[handle];
+            return &_data[index];
         }
         return nullptr;
     }
@@ -65,9 +73,10 @@ public:
 
     void RemoveHandle(Handle handle)
     {
-        if (handle < _data.size())
+        const auto index = static_cast<size_t>(handle);
+        if (index < _data.size())
         {
-            _data[handle].clear();
+            _data[index].clear();
         }
     }
 

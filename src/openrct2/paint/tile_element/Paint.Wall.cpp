@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -7,36 +7,42 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
+#include "../Paint.h"
+
 #include "../../Game.h"
-#include "../../common.h"
+#include "../../GameState.h"
 #include "../../config/Config.h"
 #include "../../drawing/Drawing.h"
 #include "../../interface/Colour.h"
 #include "../../interface/Viewport.h"
-#include "../../localisation/Localisation.h"
+#include "../../localisation/Formatting.h"
+#include "../../localisation/StringIds.h"
+#include "../../object/WallSceneryEntry.h"
+#include "../../profiling/Profiling.h"
 #include "../../ride/Track.h"
 #include "../../ride/TrackDesign.h"
 #include "../../world/Banner.h"
 #include "../../world/Map.h"
 #include "../../world/Scenery.h"
 #include "../../world/TileInspector.h"
-#include "../../world/Wall.h"
-#include "../Paint.h"
+#include "../../world/tile_element/WallElement.h"
 #include "Paint.TileElement.h"
 
-static constexpr const uint8_t DirectionToDoorImageOffset0[] = {
+using namespace OpenRCT2;
+
+static constexpr uint8_t DirectionToDoorImageOffset0[] = {
     2, 2, 22, 26, 30, 34, 34, 34, 34, 34, 30, 26, 22, 2, 6, 2, 2, 2, 6, 10, 14, 18, 18, 18, 18, 18, 14, 10, 6, 2, 22, 2,
 };
 
-static constexpr const uint8_t DirectionToDoorImageOffset1[] = {
+static constexpr uint8_t DirectionToDoorImageOffset1[] = {
     0, 0, 4, 8, 12, 16, 16, 16, 16, 16, 12, 8, 4, 0, 20, 0, 0, 0, 20, 24, 28, 32, 32, 32, 32, 32, 28, 24, 20, 0, 4, 0,
 };
 
-static constexpr const uint8_t DirectionToDoorImageOffset2[] = {
+static constexpr uint8_t DirectionToDoorImageOffset2[] = {
     2, 2, 6, 10, 14, 18, 18, 18, 18, 18, 14, 10, 6, 2, 22, 2, 2, 2, 22, 26, 30, 34, 34, 34, 34, 34, 30, 26, 22, 2, 6, 2,
 };
 
-static constexpr const uint8_t DirectionToDoorImageOffset3[] = {
+static constexpr uint8_t DirectionToDoorImageOffset3[] = {
     0, 0, 20, 24, 28, 32, 32, 32, 32, 32, 28, 24, 20, 0, 4, 0, 0, 0, 4, 8, 12, 16, 16, 16, 16, 16, 12, 8, 4, 0, 20, 0,
 };
 
@@ -44,27 +50,31 @@ static constexpr const uint8_t* DirectionToDoorImageOffset[] = { DirectionToDoor
                                                                  DirectionToDoorImageOffset2, DirectionToDoorImageOffset3 };
 
 static void PaintWallDoor(
-    paint_session* session, const WallSceneryEntry& wallEntry, ImageId imageId, CoordsXYZ offset, CoordsXYZ bbLengthR1,
-    CoordsXYZ bbOffsetR1, CoordsXYZ bbLengthR2, CoordsXYZ bbOffsetR2, CoordsXYZ bbLengthL, CoordsXYZ bbOffsetL)
+    PaintSession& session, const WallSceneryEntry& wallEntry, ImageId imageId, CoordsXYZ offset, BoundBoxXYZ bbR1,
+    BoundBoxXYZ bbR2, BoundBoxXYZ bbL)
 {
+    PROFILED_FUNCTION();
+
     auto newImageId0 = imageId;
     auto newImageId1 = imageId.WithIndexOffset(1);
-    if (wallEntry.flags & WALL_SCENERY_IS_DOUBLE_SIDED)
+    if (wallEntry.flags & WALL_SCENERY_CANT_BUILD_ON_SLOPE)
     {
-        PaintAddImageAsParent(session, newImageId0, offset, bbLengthR1, bbOffsetR1);
-        PaintAddImageAsParent(session, newImageId1, offset, bbLengthR2, bbOffsetR2);
+        PaintAddImageAsParent(session, newImageId0, offset, bbR1);
+        PaintAddImageAsParent(session, newImageId1, offset, bbR2);
     }
     else
     {
-        PaintAddImageAsParent(session, newImageId0, offset, bbLengthL, bbOffsetL);
-        PaintAddImageAsChild(session, newImageId1, offset, bbLengthL, bbOffsetL);
+        PaintAddImageAsParent(session, newImageId0, offset, bbL);
+        PaintAddImageAsChild(session, newImageId1, offset, bbL);
     }
 }
 
 static void PaintWallDoor(
-    paint_session* session, const WallSceneryEntry& wallEntry, const WallElement& wallElement, ImageId imageTemplate,
+    PaintSession& session, const WallSceneryEntry& wallEntry, const WallElement& wallElement, ImageId imageTemplate,
     Direction direction, int32_t height)
 {
+    PROFILED_FUNCTION();
+
     auto bbHeight = wallEntry.height * 8 - 2;
     auto animationFrame = wallElement.GetAnimationFrame();
 
@@ -77,93 +87,74 @@ static void PaintWallDoor(
     {
         case 0:
         {
-            CoordsXYZ bbLengthR1 = { 1, 3, bbHeight - 5 };
-            CoordsXYZ bbOffsetR1 = { 1, 1, height + 1 };
-            CoordsXYZ bbLengthR2 = { 1, 28, 3 };
-            CoordsXYZ bbOffsetR2 = { 1, 1, height + bbHeight - 9 };
+            BoundBoxXYZ bbR1 = { { 1, 1, height + 1 }, { 1, 3, bbHeight - 5 } };
+            BoundBoxXYZ bbR2 = { { 1, 1, height + bbHeight - 4 }, { 1, 28, 3 } };
 
-            CoordsXYZ bbLengthL = { 1, 28, bbHeight };
-            CoordsXYZ bbOffsetL = { 1, 1, height + 1 };
+            BoundBoxXYZ bbL = { { 1, 1, height + 1 }, { 1, 28, bbHeight } };
 
             CoordsXYZ offset = { 0, 0, height };
 
-            PaintWallDoor(
-                session, wallEntry, imageTemplate.WithIndex(imageId), offset, bbLengthR1, bbOffsetR1, bbLengthR2, bbOffsetR2,
-                bbLengthL, bbOffsetL);
+            PaintWallDoor(session, wallEntry, imageTemplate.WithIndex(imageId), offset, bbR1, bbR2, bbL);
             break;
         }
         case 1:
         {
-            CoordsXYZ bbLengthR1 = { 3, 3, bbHeight - 5 };
-            CoordsXYZ bbOffsetR1 = { 1, 30, height + 1 };
-            CoordsXYZ bbLengthR2 = { 29, 3, 2 };
-            CoordsXYZ bbOffsetR2 = { 1, 30, height + bbHeight - 8 };
-
-            CoordsXYZ bbLengthL = { 29, 1, bbHeight };
-            CoordsXYZ bbOffsetL = { 2, 30, height + 1 };
+            BoundBoxXYZ bbR1 = { { 1, 30, height + 1 }, { 3, 3, bbHeight - 5 } };
+            BoundBoxXYZ bbR2 = { { 1, 30, height + bbHeight - 3 }, { 29, 3, 2 } };
+            BoundBoxXYZ bbL = { { 2, 30, height + 1 }, { 29, 1, bbHeight } };
 
             CoordsXYZ offset = { 1, 31, height };
 
-            PaintWallDoor(
-                session, wallEntry, imageTemplate.WithIndex(imageId), offset, bbLengthR1, bbOffsetR1, bbLengthR2, bbOffsetR2,
-                bbLengthL, bbOffsetL);
+            PaintWallDoor(session, wallEntry, imageTemplate.WithIndex(imageId), offset, bbR1, bbR2, bbL);
             break;
         }
         case 2:
         {
-            CoordsXYZ bbLengthR1 = { 3, 3, bbHeight - 5 };
-            CoordsXYZ bbOffsetR1 = { 30, 1, height + 1 };
-            CoordsXYZ bbLengthR2 = { 3, 29, 2 };
-            CoordsXYZ bbOffsetR2 = { 30, 1, height + bbHeight - 8 };
-
-            CoordsXYZ bbLengthL = { 1, 29, bbHeight };
-            CoordsXYZ bbOffsetL = { 30, 2, height + 1 };
+            BoundBoxXYZ bbR1 = { { 30, 1, height + 1 }, { 3, 3, bbHeight - 5 } };
+            BoundBoxXYZ bbR2 = { { 30, 1, height + bbHeight - 3 }, { 3, 29, 2 } };
+            BoundBoxXYZ bbL = { { 30, 2, height + 1 }, { 1, 29, bbHeight } };
 
             CoordsXYZ offset = { 31, 0, height };
 
-            PaintWallDoor(
-                session, wallEntry, imageTemplate.WithIndex(imageId), offset, bbLengthR1, bbOffsetR1, bbLengthR2, bbOffsetR2,
-                bbLengthL, bbOffsetL);
+            PaintWallDoor(session, wallEntry, imageTemplate.WithIndex(imageId), offset, bbR1, bbR2, bbL);
             break;
         }
         case 3:
         {
-            CoordsXYZ bbLengthR1 = { 3, 1, bbHeight - 5 };
-            CoordsXYZ bbOffsetR1 = { 1, 1, height + 1 };
-            CoordsXYZ bbLengthR2 = { 28, 1, 3 };
-            CoordsXYZ bbOffsetR2 = { 1, 1, height + bbHeight - 9 };
-
-            CoordsXYZ bbLengthL = { 28, 1, bbHeight };
-            CoordsXYZ bbOffsetL = { 1, 1, height + 1 };
+            BoundBoxXYZ bbR1 = { { 1, 1, height + 1 }, { 3, 1, bbHeight - 5 } };
+            BoundBoxXYZ bbR2 = { { 1, 1, height + bbHeight - 4 }, { 28, 1, 3 } };
+            BoundBoxXYZ bbL = { { 1, 1, height + 1 }, { 28, 1, bbHeight } };
 
             CoordsXYZ offset = { 2, 1, height };
 
-            PaintWallDoor(
-                session, wallEntry, imageTemplate.WithIndex(imageId), offset, bbLengthR1, bbOffsetR1, bbLengthR2, bbOffsetR2,
-                bbLengthL, bbOffsetL);
+            PaintWallDoor(session, wallEntry, imageTemplate.WithIndex(imageId), offset, bbR1, bbR2, bbL);
             break;
         }
     }
 }
 
 static void PaintWallWall(
-    paint_session* session, const WallSceneryEntry& wallEntry, ImageId imageTemplate, uint32_t imageOffset, CoordsXYZ offset,
-    CoordsXYZ bounds, CoordsXYZ boundsOffset, bool isGhost)
+    PaintSession& session, const WallSceneryEntry& wallEntry, ImageId imageTemplate, uint32_t imageOffset, CoordsXYZ offset,
+    BoundBoxXYZ boundBox, bool isGhost)
 {
-    auto frameNum = (wallEntry.flags2 & WALL_SCENERY_2_ANIMATED) ? (gCurrentTicks & 7) * 2 : 0;
+    PROFILED_FUNCTION();
+
+    auto frameNum = (wallEntry.flags2 & WALL_SCENERY_2_ANIMATED) ? (GetGameState().CurrentTicks & 7) * 2 : 0;
     auto imageIndex = wallEntry.image + imageOffset + frameNum;
-    PaintAddImageAsParent(session, imageTemplate.WithIndex(imageIndex), offset, bounds, boundsOffset);
+    PaintAddImageAsParent(session, imageTemplate.WithIndex(imageIndex), offset, boundBox);
     if ((wallEntry.flags & WALL_SCENERY_HAS_GLASS) && !isGhost)
     {
-        auto glassImageId = ImageId(imageIndex + 6).WithTransparancy(imageTemplate.GetPrimary());
-        PaintAddImageAsChild(session, glassImageId, offset, bounds, boundsOffset);
+        auto glassImageId = ImageId(imageIndex + 6).WithTransparency(imageTemplate.GetPrimary());
+        PaintAddImageAsChild(session, glassImageId, offset, boundBox);
     }
 }
 
 static void PaintWallScrollingText(
-    paint_session* session, const WallSceneryEntry& wallEntry, const WallElement& wallElement, Direction direction,
+    PaintSession& session, const WallSceneryEntry& wallEntry, const WallElement& wallElement, Direction direction,
     int32_t height, const CoordsXYZ& boundsOffset, bool isGhost)
 {
+    PROFILED_FUNCTION();
+
     if (direction != 0 && direction != 3)
         return;
 
@@ -172,7 +163,7 @@ static void PaintWallScrollingText(
         return;
 
     scrollingMode = wallEntry.scrolling_mode + ((direction + 1) & 3);
-    if (scrollingMode >= MAX_SCROLLING_TEXT_MODES)
+    if (scrollingMode >= kMaxScrollingTextModes)
         return;
 
     auto banner = wallElement.GetBanner();
@@ -185,28 +176,31 @@ static void PaintWallScrollingText(
     auto ft = Formatter();
     banner->FormatTextTo(ft);
     char signString[256];
-    if (gConfigGeneral.upper_case_banners)
+    if (Config::Get().general.UpperCaseBanners)
     {
-        format_string_to_upper(signString, sizeof(signString), STR_SCROLLING_SIGN_TEXT, ft.Data());
+        FormatStringToUpper(signString, sizeof(signString), STR_SCROLLING_SIGN_TEXT, ft.Data());
     }
     else
     {
-        format_string(signString, sizeof(signString), STR_SCROLLING_SIGN_TEXT, ft.Data());
+        OpenRCT2::FormatStringLegacy(signString, sizeof(signString), STR_SCROLLING_SIGN_TEXT, ft.Data());
     }
 
-    auto stringWidth = gfx_get_string_width(signString, FontSpriteBase::TINY);
-    auto scroll = stringWidth > 0 ? (gCurrentTicks / 2) % stringWidth : 0;
-    auto imageId = scrolling_text_setup(session, STR_SCROLLING_SIGN_TEXT, ft, scroll, scrollingMode, textPaletteIndex);
-    PaintAddImageAsChild(session, imageId, { 0, 0, height + 8 }, { 1, 1, 13 }, boundsOffset);
+    auto stringWidth = GfxGetStringWidth(signString, FontStyle::Tiny);
+    auto scroll = stringWidth > 0 ? (GetGameState().CurrentTicks / 2) % stringWidth : 0;
+    auto imageId = ScrollingTextSetup(session, STR_SCROLLING_SIGN_TEXT, ft, scroll, scrollingMode, textPaletteIndex);
+    PaintAddImageAsChild(session, imageId, { 0, 0, height + 8 }, { boundsOffset, { 1, 1, 13 } });
 }
 
 static void PaintWallWall(
-    paint_session* session, const WallSceneryEntry& wallEntry, const WallElement& wallElement, ImageId imageTemplate,
+    PaintSession& session, const WallSceneryEntry& wallEntry, const WallElement& wallElement, ImageId imageTemplate,
     Direction direction, int32_t height, bool isGhost)
 {
+    PROFILED_FUNCTION();
+
     uint8_t bbHeight = wallEntry.height * 8 - 2;
     ImageIndex imageOffset = 0;
-    CoordsXYZ offset, bounds, boundsOffset;
+    CoordsXYZ offset;
+    BoundBoxXYZ boundBox;
     switch (direction)
     {
         case 0:
@@ -224,8 +218,7 @@ static void PaintWallWall(
             }
 
             offset = { 0, 0, height };
-            bounds = { 1, 28, bbHeight };
-            boundsOffset = { 1, 1, height + 1 };
+            boundBox = { { 1, 1, height + 1 }, { 1, 28, bbHeight } };
             break;
 
         case 1:
@@ -258,8 +251,7 @@ static void PaintWallWall(
             }
 
             offset = { 1, 31, height };
-            bounds = { 29, 1, bbHeight };
-            boundsOffset = { 2, 30, height + 1 };
+            boundBox = { { 2, 30, height + 1 }, { 29, 1, bbHeight } };
             break;
 
         case 2:
@@ -282,8 +274,7 @@ static void PaintWallWall(
             }
 
             offset = { 31, 0, height };
-            bounds = { 1, 29, bbHeight };
-            boundsOffset = { 30, 2, height + 1 };
+            boundBox = { { 30, 2, height + 1 }, { 1, 29, bbHeight } };
             break;
 
         case 3:
@@ -301,24 +292,30 @@ static void PaintWallWall(
             }
 
             offset = { 2, 1, height };
-            bounds = { 28, 1, bbHeight };
-            boundsOffset = { 1, 1, height + 1 };
+            boundBox = { { 1, 1, height + 1 }, { 28, 1, bbHeight } };
             break;
     }
 
-    PaintWallWall(session, wallEntry, imageTemplate, imageOffset, offset, bounds, boundsOffset, isGhost);
-    PaintWallScrollingText(session, wallEntry, wallElement, direction, height, boundsOffset, isGhost);
+    PaintWallWall(session, wallEntry, imageTemplate, imageOffset, offset, boundBox, isGhost);
+    PaintWallScrollingText(session, wallEntry, wallElement, direction, height, boundBox.offset, isGhost);
 }
 
-void PaintWall(paint_session* session, uint8_t direction, int32_t height, const WallElement& wallElement)
+void PaintWall(PaintSession& session, uint8_t direction, int32_t height, const WallElement& wallElement)
 {
+    PROFILED_FUNCTION();
+
+    if (session.ViewFlags & VIEWPORT_FLAG_HIGHLIGHT_PATH_ISSUES)
+    {
+        return;
+    }
+
     auto* wallEntry = wallElement.GetEntry();
     if (wallEntry == nullptr)
     {
         return;
     }
 
-    session->InteractionType = ViewportInteractionItem::Wall;
+    session.InteractionType = ViewportInteractionItem::Wall;
 
     ImageId imageTemplate;
     if (wallEntry->flags & WALL_SCENERY_HAS_PRIMARY_COLOUR)
@@ -329,17 +326,17 @@ void PaintWall(paint_session* session, uint8_t direction, int32_t height, const 
     {
         imageTemplate = imageTemplate.WithSecondary(wallElement.GetSecondaryColour());
     }
-    if (wallEntry->flags & WALL_SCENERY_HAS_TERNARY_COLOUR)
+    if (wallEntry->flags & WALL_SCENERY_HAS_TERTIARY_COLOUR)
     {
         imageTemplate = imageTemplate.WithTertiary(wallElement.GetTertiaryColour());
     }
 
-    paint_util_set_general_support_height(session, 8 * wallElement.clearance_height, 0x20);
+    PaintUtilSetGeneralSupportHeight(session, 8 * wallElement.ClearanceHeight);
 
     auto isGhost = false;
-    if (gTrackDesignSaveMode || (session->ViewFlags & VIEWPORT_FLAG_HIGHLIGHT_PATH_ISSUES))
+    if (gTrackDesignSaveMode)
     {
-        if (!track_design_save_contains_tile_element(reinterpret_cast<const TileElement*>(&wallElement)))
+        if (!TrackDesignSaveContainsTileElement(reinterpret_cast<const TileElement*>(&wallElement)))
         {
             imageTemplate = ImageId().WithRemap(FilterPaletteID::Palette46);
             isGhost = true;
@@ -348,13 +345,13 @@ void PaintWall(paint_session* session, uint8_t direction, int32_t height, const 
 
     if (wallElement.IsGhost())
     {
-        session->InteractionType = ViewportInteractionItem::None;
-        imageTemplate = ImageId().WithRemap(FilterPaletteID::Palette44);
+        session.InteractionType = ViewportInteractionItem::None;
+        imageTemplate = ImageId().WithRemap(FilterPaletteID::PaletteGhost);
         isGhost = true;
     }
-    else if (OpenRCT2::TileInspector::IsElementSelected(reinterpret_cast<const TileElement*>(&wallElement)))
+    else if (session.SelectedElement == reinterpret_cast<const TileElement*>(&wallElement))
     {
-        imageTemplate = ImageId().WithRemap(FilterPaletteID::Palette44);
+        imageTemplate = ImageId().WithRemap(FilterPaletteID::PaletteGhost);
         isGhost = true;
     }
 

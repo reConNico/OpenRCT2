@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,23 +9,24 @@
 
 #pragma once
 
-#include "../common.h"
+#include "../core/StringTypes.h"
 
-struct source_desc
+struct SourceDescriptor
 {
     const utf8* title;
     uint8_t id;
     uint8_t source;
     int32_t index;
     uint8_t category;
+    u8string_view textObjectId;
 };
 
-namespace ScenarioSources
+namespace OpenRCT2::ScenarioSources
 {
-    bool TryGetByName(const utf8* name, source_desc* outDesc);
-    bool TryGetById(uint8_t id, source_desc* outDesc);
-    void NormaliseName(utf8* buffer, size_t bufferSize, const utf8* name);
-} // namespace ScenarioSources
+    bool TryGetByName(const utf8* name, SourceDescriptor* outDesc);
+    bool TryGetById(uint8_t id, SourceDescriptor* outDesc);
+    u8string NormaliseName(u8string_view input);
+} // namespace OpenRCT2::ScenarioSources
 
 // RCT1 scenario index map
 enum

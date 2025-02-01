@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -20,8 +20,8 @@
 #include <openrct2/core/FileSystem.hpp>
 #include <openrct2/core/Json.hpp>
 #include <openrct2/core/String.hpp>
-#include <openrct2/interface/Window.h>
 #include <openrct2/localisation/Language.h>
+#include <openrct2/ui/WindowManager.h>
 
 using namespace OpenRCT2::Ui;
 
@@ -122,6 +122,7 @@ void ShortcutManager::RegisterShortcut(RegisteredShortcut&& shortcut)
         auto id = std::make_unique<std::string>(shortcut.Id);
         auto idView = std::string_view(*id);
         _ids.push_back(std::move(id));
+        shortcut.OrderIndex = Shortcuts.size();
         Shortcuts[idView] = shortcut;
     }
 }
@@ -173,7 +174,9 @@ void ShortcutManager::ProcessEvent(const InputEvent& e)
                 shortcut->Current.push_back(std::move(shortcutInput.value()));
             }
             _pendingShortcutChange.clear();
-            window_close_by_class(WC_CHANGE_KEYBOARD_SHORTCUT);
+
+            auto* windowMgr = Ui::GetWindowManager();
+            windowMgr->CloseByClass(WindowClass::ChangeKeyboardShortcut);
             SaveUserBindings();
         }
     }
@@ -226,26 +229,26 @@ void ShortcutManager::LoadUserBindings()
 
 std::optional<ShortcutInput> ShortcutManager::ConvertLegacyBinding(uint16_t binding)
 {
-    constexpr uint16_t nullBinding = 0xFFFF;
-    constexpr uint16_t shift = 0x100;
-    constexpr uint16_t ctrl = 0x200;
-    constexpr uint16_t alt = 0x400;
-    constexpr uint16_t cmd = 0x800;
+    constexpr uint16_t kNullBinding = 0xFFFF;
+    constexpr uint16_t kShift = 0x100;
+    constexpr uint16_t kCtrl = 0x200;
+    constexpr uint16_t kAlt = 0x400;
+    constexpr uint16_t kCmd = 0x800;
 
-    if (binding == nullBinding)
+    if (binding == kNullBinding)
     {
         return std::nullopt;
     }
 
     ShortcutInput result;
     result.Kind = InputDeviceKind::Keyboard;
-    if (binding & shift)
+    if (binding & kShift)
         result.Modifiers |= KMOD_SHIFT;
-    if (binding & ctrl)
+    if (binding & kCtrl)
         result.Modifiers |= KMOD_CTRL;
-    if (binding & alt)
+    if (binding & kAlt)
         result.Modifiers |= KMOD_ALT;
-    if (binding & cmd)
+    if (binding & kCmd)
         result.Modifiers |= KMOD_GUI;
     result.Button = SDL_GetKeyFromScancode(static_cast<SDL_Scancode>(binding & 0xFF));
     return result;
@@ -253,14 +256,14 @@ std::optional<ShortcutInput> ShortcutManager::ConvertLegacyBinding(uint16_t bind
 
 void ShortcutManager::LoadLegacyBindings(const fs::path& path)
 {
-    constexpr int32_t SUPPORTED_FILE_VERSION = 1;
-    constexpr int32_t MAX_LEGACY_SHORTCUTS = 85;
+    constexpr int32_t kSupportedFileVersion = 1;
+    constexpr int32_t kMaxLegacyShortcuts = 85;
 
     auto fs = FileStream(path, FILE_MODE_OPEN);
     auto version = fs.ReadValue<uint16_t>();
-    if (version == SUPPORTED_FILE_VERSION)
+    if (version == kSupportedFileVersion)
     {
-        for (size_t i = 0; i < MAX_LEGACY_SHORTCUTS; i++)
+        for (size_t i = 0; i < kMaxLegacyShortcuts; i++)
         {
             auto value = fs.ReadValue<uint16_t>();
             auto shortcutId = GetLegacyShortcutId(i);
@@ -283,7 +286,7 @@ void ShortcutManager::LoadLegacyBindings(const fs::path& path)
 
 void ShortcutManager::LoadUserBindings(const fs::path& path)
 {
-    auto root = Json::ReadFromFile(path);
+    auto root = Json::ReadFromFile(path.u8string());
     if (root.is_object())
     {
         for (auto it = root.begin(); it != root.end(); ++it)
@@ -329,7 +332,7 @@ void ShortcutManager::SaveUserBindings(const fs::path& path)
     json_t root;
     if (fs::exists(path))
     {
-        root = Json::ReadFromFile(path);
+        root = Json::ReadFromFile(path.u8string());
     }
 
     for (const auto& shortcut : Shortcuts)
@@ -349,97 +352,97 @@ void ShortcutManager::SaveUserBindings(const fs::path& path)
         }
     }
 
-    Json::WriteToFile(path, root);
+    Json::WriteToFile(path.u8string(), root);
 }
 
 std::string_view ShortcutManager::GetLegacyShortcutId(size_t index)
 {
-    static constexpr std::string_view LegacyMap[] = {
-        ShortcutId::InterfaceCloseTop,
-        ShortcutId::InterfaceCloseAll,
-        ShortcutId::InterfaceCancelConstruction,
-        ShortcutId::InterfacePause,
-        ShortcutId::ViewGeneralZoomOut,
-        ShortcutId::ViewGeneralZoomIn,
-        ShortcutId::ViewGeneralRotateClockwise,
-        ShortcutId::ViewGeneralRotateAnticlockwise,
-        ShortcutId::InterfaceRotateConstruction,
-        ShortcutId::ViewToggleUnderground,
-        ShortcutId::ViewToggleBaseLand,
-        ShortcutId::ViewToggleVerticalLand,
-        ShortcutId::ViewToggleRides,
-        ShortcutId::ViewToggleScenery,
-        ShortcutId::ViewToggleSupports,
-        ShortcutId::ViewTogglePeeps,
-        ShortcutId::ViewToggleLandHeightMarkers,
-        ShortcutId::ViewToggleTrackHeightMarkers,
-        ShortcutId::ViewToggleFootpathHeightMarkers,
-        ShortcutId::InterfaceOpenLand,
-        ShortcutId::InterfaceOpenWater,
-        ShortcutId::InterfaceOpenScenery,
-        ShortcutId::InterfaceOpenFootpaths,
-        ShortcutId::InterfaceOpenNewRide,
-        ShortcutId::InterfaceOpenFinances,
-        ShortcutId::InterfaceOpenResearch,
-        ShortcutId::InterfaceOpenRides,
-        ShortcutId::InterfaceOpenPark,
-        ShortcutId::InterfaceOpenGuests,
-        ShortcutId::InterfaceOpenStaff,
-        ShortcutId::InterfaceOpenMessages,
-        ShortcutId::InterfaceOpenMap,
-        ShortcutId::InterfaceScreenshot,
-        ShortcutId::InterfaceDecreaseSpeed,
-        ShortcutId::InterfaceIncreaseSpeed,
-        ShortcutId::InterfaceOpenCheats,
-        ShortcutId::InterfaceToggleToolbars,
-        ShortcutId::ViewScrollUp,
-        ShortcutId::ViewScrollLeft,
-        ShortcutId::ViewScrollDown,
-        ShortcutId::ViewScrollRight,
-        ShortcutId::MultiplayerChat,
-        ShortcutId::InterfaceSaveGame,
-        ShortcutId::InterfaceShowOptions,
-        ShortcutId::InterfaceMute,
-        ShortcutId::ScaleToggleWindowMode,
-        ShortcutId::MultiplayerShow,
+    static constexpr std::string_view _legacyMap[] = {
+        ShortcutId::kInterfaceCloseTop,
+        ShortcutId::kInterfaceCloseAll,
+        ShortcutId::kInterfaceCancelConstruction,
+        ShortcutId::kInterfacePause,
+        ShortcutId::kViewGeneralZoomOut,
+        ShortcutId::kViewGeneralZoomIn,
+        ShortcutId::kViewGeneralRotateClockwise,
+        ShortcutId::kViewGeneralRotateAnticlockwise,
+        ShortcutId::kInterfaceRotateConstruction,
+        ShortcutId::kViewToggleUnderground,
+        ShortcutId::kViewToggleBaseLand,
+        ShortcutId::kViewToggleVerticalLand,
+        ShortcutId::kViewToggleRides,
+        ShortcutId::kViewToggleScenery,
+        ShortcutId::kViewToggleSupports,
+        ShortcutId::kViewToggleGuests,
+        ShortcutId::kViewToggleLandHeightMarkers,
+        ShortcutId::kViewToggleTrackHeightMarkers,
+        ShortcutId::kViewToggleFootpathHeightMarkers,
+        ShortcutId::kInterfaceOpenLand,
+        ShortcutId::kInterfaceOpenWater,
+        ShortcutId::kInterfaceOpenScenery,
+        ShortcutId::kInterfaceOpenFootpaths,
+        ShortcutId::kInterfaceOpenNewRide,
+        ShortcutId::kInterfaceOpenFinances,
+        ShortcutId::kInterfaceOpenResearch,
+        ShortcutId::kInterfaceOpenRides,
+        ShortcutId::kInterfaceOpenPark,
+        ShortcutId::kInterfaceOpenGuests,
+        ShortcutId::kInterfaceOpenStaff,
+        ShortcutId::kInterfaceOpenMessages,
+        ShortcutId::kInterfaceOpenMap,
+        ShortcutId::kInterfaceScreenshot,
+        ShortcutId::kInterfaceDecreaseSpeed,
+        ShortcutId::kInterfaceIncreaseSpeed,
+        ShortcutId::kInterfaceOpenCheats,
+        ShortcutId::kInterfaceToggleToolbars,
+        ShortcutId::kViewScrollUp,
+        ShortcutId::kViewScrollLeft,
+        ShortcutId::kViewScrollDown,
+        ShortcutId::kViewScrollRight,
+        ShortcutId::kInterfaceMultiplayerChat,
+        ShortcutId::kInterfaceSaveGame,
+        ShortcutId::kInterfaceShowOptions,
+        ShortcutId::kInterfaceMute,
+        ShortcutId::kInterfaceScaleToggleWindowMode,
+        ShortcutId::kInterfaceMultiplayerShow,
         std::string_view(),
-        ShortcutId::DebugTogglePaintDebugWindow,
-        ShortcutId::ViewToggleFootpaths,
-        ShortcutId::WindowRideConstructionTurnLeft,
-        ShortcutId::WindowRideConstructionTurnRight,
-        ShortcutId::WindowRideConstructionDefault,
-        ShortcutId::WindowRideConstructionSlopeDown,
-        ShortcutId::WindowRideConstructionSlopeUp,
-        ShortcutId::WindowRideConstructionChainLift,
-        ShortcutId::WindowRideConstructionBankLeft,
-        ShortcutId::WindowRideConstructionBankRight,
-        ShortcutId::WindowRideConstructionPrevious,
-        ShortcutId::WindowRideConstructionNext,
-        ShortcutId::WindowRideConstructionBuild,
-        ShortcutId::WindowRideConstructionDemolish,
-        ShortcutId::InterfaceLoadGame,
-        ShortcutId::InterfaceClearScenery,
-        ShortcutId::ViewToggleGridlines,
-        ShortcutId::ViewToggleCutAway,
-        ShortcutId::ViewToogleFootpathIssues,
-        ShortcutId::InterfaceOpenTileInspector,
-        ShortcutId::DebugAdvanceTick,
-        ShortcutId::InterfaceSceneryPicker,
-        ShortcutId::InterfaceScaleIncrease,
-        ShortcutId::InterfaceScaleDecrease,
-        ShortcutId::WindowTileInspectorToggleInvisibility,
-        ShortcutId::WindowTileInspectorCopy,
-        ShortcutId::WindowTileInspectorPaste,
-        ShortcutId::WindowTileInspectorRemove,
-        ShortcutId::WindowTileInspectorMoveUp,
-        ShortcutId::WindowTileInspectorMoveDown,
-        ShortcutId::WindowTileInspectorIncreaseX,
-        ShortcutId::WindowTileInspectorDecreaseX,
-        ShortcutId::WindowTileInspectorIncreaseY,
-        ShortcutId::WindowTileInspectorDecreaseY,
-        ShortcutId::WindowTileInspectorIncreaseHeight,
-        ShortcutId::WindowTileInspectorDecreaseHeight,
-        ShortcutId::InterfaceDisableClearance,
+        ShortcutId::kDebugTogglePaintDebugWindow,
+        ShortcutId::kViewToggleFootpaths,
+        ShortcutId::kWindowRideConstructionTurnLeft,
+        ShortcutId::kWindowRideConstructionTurnRight,
+        ShortcutId::kWindowRideConstructionDefault,
+        ShortcutId::kWindowRideConstructionSlopeDown,
+        ShortcutId::kWindowRideConstructionSlopeUp,
+        ShortcutId::kWindowRideConstructionChainLift,
+        ShortcutId::kWindowRideConstructionBankLeft,
+        ShortcutId::kWindowRideConstructionBankRight,
+        ShortcutId::kWindowRideConstructionPrevious,
+        ShortcutId::kWindowRideConstructionNext,
+        ShortcutId::kWindowRideConstructionBuild,
+        ShortcutId::kWindowRideConstructionDemolish,
+        ShortcutId::kInterfaceLoadGame,
+        ShortcutId::kInterfaceClearScenery,
+        ShortcutId::kViewToggleGridlines,
+        ShortcutId::kViewToggleCutAway,
+        ShortcutId::kViewToggleFootpathIssues,
+        ShortcutId::kInterfaceOpenTileInspector,
+        ShortcutId::kDebugAdvanceTick,
+        ShortcutId::kInterfaceSceneryPicker,
+        ShortcutId::kInterfaceScaleIncrease,
+        ShortcutId::kInterfaceScaleDecrease,
+        ShortcutId::kWindowTileInspectorToggleInvisibility,
+        ShortcutId::kWindowTileInspectorCopy,
+        ShortcutId::kWindowTileInspectorPaste,
+        ShortcutId::kWindowTileInspectorRemove,
+        ShortcutId::kWindowTileInspectorMoveUp,
+        ShortcutId::kWindowTileInspectorMoveDown,
+        ShortcutId::kWindowTileInspectorIncreaseX,
+        ShortcutId::kWindowTileInspectorDecreaseX,
+        ShortcutId::kWindowTileInspectorIncreaseY,
+        ShortcutId::kWindowTileInspectorDecreaseY,
+        ShortcutId::kWindowTileInspectorIncreaseHeight,
+        ShortcutId::kWindowTileInspectorDecreaseHeight,
+        ShortcutId::kInterfaceDisableClearance,
     };
-    return index < std::size(LegacyMap) ? LegacyMap[index] : std::string_view();
+    return index < std::size(_legacyMap) ? _legacyMap[index] : std::string_view();
 }

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,10 +11,18 @@
 
 #include "../network/network.h"
 
+using namespace OpenRCT2;
+
 PlayerSetGroupAction::PlayerSetGroupAction(NetworkPlayerId_t playerId, uint8_t groupId)
     : _playerId(playerId)
     , _groupId(groupId)
 {
+}
+
+void PlayerSetGroupAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit("playerId", _playerId);
+    visitor.Visit("groupId", _groupId);
 }
 
 uint16_t PlayerSetGroupAction::GetActionFlags() const
@@ -30,10 +38,10 @@ void PlayerSetGroupAction::Serialise(DataSerialiser& stream)
 }
 GameActions::Result PlayerSetGroupAction::Query() const
 {
-    return network_set_player_group(GetPlayer(), _playerId, _groupId, false);
+    return NetworkSetPlayerGroup(GetPlayer(), _playerId, _groupId, false);
 }
 
 GameActions::Result PlayerSetGroupAction::Execute() const
 {
-    return network_set_player_group(GetPlayer(), _playerId, _groupId, true);
+    return NetworkSetPlayerGroup(GetPlayer(), _playerId, _groupId, true);
 }

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,75 +10,70 @@
 #include "Input.h"
 
 #include "Context.h"
+#include "Game.h"
 
-InputState _inputState;
-uint8_t _inputFlags;
-uint8_t gInputPlaceObjectModifier;
-
-widget_ref gHoverWidget;
-widget_ref gPressedWidget;
-
-uint16_t _tooltipNotShownTicks;
-
-Tool gCurrentToolId;
-widget_ref gCurrentToolWidget;
-
-/**
- *
- *  rct2: 0x006E3B43
- */
-void title_handle_keyboard_input()
+namespace OpenRCT2
 {
-    context_input_handle_keyboard(true);
-}
+    InputState _inputState;
+    uint8_t _inputFlags;
 
-/**
- *
- *  rct2: 0x006E3B43
- */
-void game_handle_keyboard_input()
-{
-    context_input_handle_keyboard(false);
-}
+    WidgetRef gHoverWidget;
+    WidgetRef gPressedWidget;
 
-void input_set_flag(INPUT_FLAGS flag, bool on)
-{
-    if (on)
+    uint32_t _tooltipNotShownTimeout;
+
+    /**
+     *
+     *  rct2: 0x006E3B43
+     */
+    void TitleHandleKeyboardInput()
     {
-        _inputFlags |= flag;
+        ContextInputHandleKeyboard(true);
     }
-    else
+
+    /**
+     *
+     *  rct2: 0x006E3B43
+     */
+    void GameHandleKeyboardInput()
     {
-        _inputFlags &= ~flag;
+        ContextInputHandleKeyboard(false);
     }
-}
 
-bool input_test_flag(INPUT_FLAGS flag)
-{
-    return _inputFlags & flag;
-}
+    void InputSetFlag(INPUT_FLAGS flag, bool on)
+    {
+        if (on)
+        {
+            _inputFlags |= flag;
+        }
+        else
+        {
+            _inputFlags &= ~flag;
+        }
+    }
 
-void input_reset_flags()
-{
-    _inputFlags = 0;
-}
+    bool InputTestFlag(INPUT_FLAGS flag)
+    {
+        return _inputFlags & flag;
+    }
 
-void input_set_state(InputState state)
-{
-    _inputState = state;
-}
+    void InputResetFlags()
+    {
+        _inputFlags = 0;
+    }
 
-InputState input_get_state()
-{
-    return _inputState;
-}
+    void InputSetState(InputState state)
+    {
+        _inputState = state;
+    }
 
-void reset_tooltip_not_shown()
-{
-    _tooltipNotShownTicks = 0;
-}
+    InputState InputGetState()
+    {
+        return _inputState;
+    }
 
-void input_reset_place_obj_modifier()
-{
-    gInputPlaceObjectModifier = PLACE_OBJECT_MODIFIER_NONE;
-}
+    void ResetTooltipNotShown()
+    {
+        _tooltipNotShownTimeout = gCurrentRealTimeTicks + 50;
+    }
+} // namespace OpenRCT2

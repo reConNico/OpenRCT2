@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -7,20 +7,20 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
-// Ignore isatty warning on WIN32
-#ifndef _CRT_NONSTDC_NO_WARNINGS
-#    define _CRT_NONSTDC_NO_WARNINGS
-#endif
+#include "StdInOutConsole.h"
 
 #include "../Context.h"
 #include "../OpenRCT2.h"
-#include "../platform/Platform2.h"
+#include "../config/ConfigTypes.h"
+#include "../platform/Platform.h"
 #include "../scripting/ScriptEngine.h"
-#include "InteractiveConsole.h"
 
 #include <linenoise.hpp>
 
-using namespace OpenRCT2;
+// Ignore isatty warning on WIN32
+#ifdef _MSC_VER
+    #pragma warning(disable : 4996)
+#endif
 
 void StdInOutConsole::Start()
 {
@@ -47,7 +47,7 @@ void StdInOutConsole::Start()
             {
                 if (lastPromptQuit)
                 {
-                    openrct2_finish();
+                    OpenRCT2Finish();
                     break;
                 }
 
@@ -68,7 +68,7 @@ void StdInOutConsole::Start()
 std::future<void> StdInOutConsole::Eval(const std::string& s)
 {
 #ifdef ENABLE_SCRIPTING
-    auto& scriptEngine = GetContext()->GetScriptEngine();
+    auto& scriptEngine = OpenRCT2::GetContext()->GetScriptEngine();
     return scriptEngine.Eval(s);
 #else
     // Push on-demand evaluations onto a queue so that it can be processed deterministically
@@ -105,7 +105,7 @@ void StdInOutConsole::Clear()
 
 void StdInOutConsole::Close()
 {
-    openrct2_finish();
+    OpenRCT2Finish();
 }
 
 void StdInOutConsole::WriteLine(const std::string& s, FormatToken colourFormat)
@@ -123,7 +123,7 @@ void StdInOutConsole::WriteLine(const std::string& s, FormatToken colourFormat)
             break;
     }
 
-    if (!Platform::IsColourTerminalSupported())
+    if (!OpenRCT2::Platform::IsColourTerminalSupported())
     {
         std::printf("%s\n", s.c_str());
         std::fflush(stdout);

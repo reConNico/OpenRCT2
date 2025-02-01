@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,35 +9,33 @@
 
 #ifndef DISABLE_OPENGL
 
-#    include "../DrawingEngineFactory.hpp"
-#    include "ApplyPaletteShader.h"
-#    include "DrawCommands.h"
-#    include "DrawLineShader.h"
-#    include "DrawRectShader.h"
-#    include "GLSLTypes.h"
-#    include "OpenGLAPI.h"
-#    include "OpenGLFramebuffer.h"
-#    include "SwapFramebuffer.h"
-#    include "TextureCache.h"
-#    include "TransparencyDepth.h"
+    #include "../DrawingEngineFactory.hpp"
+    #include "ApplyPaletteShader.h"
+    #include "DrawCommands.h"
+    #include "DrawLineShader.h"
+    #include "DrawRectShader.h"
+    #include "GLSLTypes.h"
+    #include "OpenGLAPI.h"
+    #include "OpenGLFramebuffer.h"
+    #include "SwapFramebuffer.h"
+    #include "TextureCache.h"
+    #include "TransparencyDepth.h"
 
-#    include <SDL.h>
-#    include <algorithm>
-#    include <cmath>
-#    include <openrct2-ui/interface/Window.h>
-#    include <openrct2/Intro.h>
-#    include <openrct2/config/Config.h>
-#    include <openrct2/core/Console.hpp>
-#    include <openrct2/drawing/Drawing.h>
-#    include <openrct2/drawing/IDrawingContext.h>
-#    include <openrct2/drawing/IDrawingEngine.h>
-#    include <openrct2/drawing/LightFX.h>
-#    include <openrct2/drawing/Weather.h>
-#    include <openrct2/interface/Screenshot.h>
-#    include <openrct2/ui/UiContext.h>
-#    include <openrct2/util/Util.h>
-#    include <openrct2/world/Climate.h>
-#    include <unordered_map>
+    #include <SDL.h>
+    #include <algorithm>
+    #include <cassert>
+    #include <cmath>
+    #include <openrct2-ui/interface/Window.h>
+    #include <openrct2/config/Config.h>
+    #include <openrct2/core/Console.hpp>
+    #include <openrct2/drawing/Drawing.h>
+    #include <openrct2/drawing/IDrawingContext.h>
+    #include <openrct2/drawing/IDrawingEngine.h>
+    #include <openrct2/drawing/LightFX.h>
+    #include <openrct2/drawing/Weather.h>
+    #include <openrct2/interface/Screenshot.h>
+    #include <openrct2/ui/UiContext.h>
+    #include <openrct2/world/Climate.h>
 
 using namespace OpenRCT2;
 using namespace OpenRCT2::Drawing;
@@ -49,30 +47,32 @@ struct OpenGLVersion
     GLint Minor;
 };
 
-constexpr OpenGLVersion OPENGL_MINIMUM_REQUIRED_VERSION = { 3, 3 };
+constexpr OpenGLVersion kOpenGLMinimumRequiredVersion = { 3, 3 };
+
+constexpr uint8_t kCSInside = 0b0000;
+constexpr uint8_t kCSLeft = 0b0001;
+constexpr uint8_t kCSRight = 0b0010;
+constexpr uint8_t kCSTop = 0b0100;
+constexpr uint8_t kCSBottom = 0b1000;
 
 class OpenGLDrawingEngine;
 
 class OpenGLDrawingContext final : public IDrawingContext
 {
 private:
-    OpenGLDrawingEngine* _engine = nullptr;
-    ApplyTransparencyShader* _applyTransparencyShader = nullptr;
-    DrawLineShader* _drawLineShader = nullptr;
-    DrawRectShader* _drawRectShader = nullptr;
-    SwapFramebuffer* _swapFramebuffer = nullptr;
+    OpenGLDrawingEngine& _engine;
+    std::unique_ptr<ApplyTransparencyShader> _applyTransparencyShader;
+    std::unique_ptr<DrawLineShader> _drawLineShader;
+    std::unique_ptr<DrawRectShader> _drawRectShader;
+    std::unique_ptr<SwapFramebuffer> _swapFramebuffer;
 
-    TextureCache* _textureCache = nullptr;
-
-    int32_t _offsetX = 0;
-    int32_t _offsetY = 0;
-    int32_t _clipLeft = 0;
-    int32_t _clipTop = 0;
-    int32_t _clipRight = 0;
-    int32_t _clipBottom = 0;
-    ScreenCoordsXY _spriteOffset;
+    std::unique_ptr<TextureCache> _textureCache;
 
     int32_t _drawCount = 0;
+
+    #ifndef NO_TTF
+    uint32_t _ttfGlId = 0;
+    #endif
 
     struct
     {
@@ -81,14 +81,17 @@ private:
         RectCommandBatch transparent;
     } _commandBuffers;
 
+    static uint8_t ComputeOutCode(ScreenCoordsXY, ScreenCoordsXY, ScreenCoordsXY);
+    static bool CohenSutherlandLineClip(ScreenLine&, const DrawPixelInfo&);
+    [[nodiscard]] ScreenRect CalculateClipping(const DrawPixelInfo& dpi) const;
+
 public:
-    explicit OpenGLDrawingContext(OpenGLDrawingEngine* engine);
+    explicit OpenGLDrawingContext(OpenGLDrawingEngine& engine);
     ~OpenGLDrawingContext() override;
 
-    IDrawingEngine* GetEngine() override;
     TextureCache* GetTextureCache() const
     {
-        return _textureCache;
+        return _textureCache.get();
     }
     const OpenGLFramebuffer& GetFinalFramebuffer() const
     {
@@ -100,25 +103,24 @@ public:
     void ResetPalette();
     void StartNewDraw();
 
-    void Clear(rct_drawpixelinfo* dpi, uint8_t paletteIndex) override;
-    void FillRect(rct_drawpixelinfo* dpi, uint32_t colour, int32_t x, int32_t y, int32_t w, int32_t h) override;
+    void Clear(DrawPixelInfo& dpi, uint8_t paletteIndex) override;
+    void FillRect(DrawPixelInfo& dpi, uint32_t colour, int32_t x, int32_t y, int32_t w, int32_t h) override;
     void FilterRect(
-        rct_drawpixelinfo* dpi, FilterPaletteID palette, int32_t left, int32_t top, int32_t right, int32_t bottom) override;
-    void DrawLine(rct_drawpixelinfo* dpi, uint32_t colour, const ScreenLine& line) override;
-    void DrawSprite(rct_drawpixelinfo* dpi, ImageId imageId, int32_t x, int32_t y) override;
-    void DrawSpriteRawMasked(rct_drawpixelinfo* dpi, int32_t x, int32_t y, ImageId maskImage, ImageId colourImage) override;
-    void DrawSpriteSolid(rct_drawpixelinfo* dpi, ImageId image, int32_t x, int32_t y, uint8_t colour) override;
-    void DrawGlyph(rct_drawpixelinfo* dpi, uint32_t image, int32_t x, int32_t y, const PaletteMap& palette) override;
-    void DrawBitmap(
-        rct_drawpixelinfo* dpi, uint32_t image, const void* pixels, int32_t width, int32_t height, int32_t x,
-        int32_t y) override;
+        DrawPixelInfo& dpi, FilterPaletteID palette, int32_t left, int32_t top, int32_t right, int32_t bottom) override;
+    void DrawLine(DrawPixelInfo& dpi, uint32_t colour, const ScreenLine& line) override;
+    void DrawSprite(DrawPixelInfo& dpi, const ImageId imageId, int32_t x, int32_t y) override;
+    void DrawSpriteRawMasked(
+        DrawPixelInfo& dpi, int32_t x, int32_t y, const ImageId maskImage, const ImageId colourImage) override;
+    void DrawSpriteSolid(DrawPixelInfo& dpi, const ImageId image, int32_t x, int32_t y, uint8_t colour) override;
+    void DrawGlyph(DrawPixelInfo& dpi, const ImageId image, int32_t x, int32_t y, const PaletteMap& palette) override;
+    void DrawTTFBitmap(
+        DrawPixelInfo& dpi, TextDrawInfo* info, TTFSurface* surface, int32_t x, int32_t y, uint8_t hintingThreshold) override;
 
     void FlushCommandBuffers();
 
     void FlushLines();
     void FlushRectangles();
     void HandleTransparency();
-    void CalculcateClipping(rct_drawpixelinfo* dpi);
 };
 
 class OpenGLWeatherDrawer final : public IWeatherDrawer
@@ -132,7 +134,7 @@ public:
     }
 
     virtual void Draw(
-        rct_drawpixelinfo* dpi, int32_t x, int32_t y, int32_t width, int32_t height, int32_t xStart, int32_t yStart,
+        DrawPixelInfo& dpi, int32_t x, int32_t y, int32_t width, int32_t height, int32_t xStart, int32_t yStart,
         const uint8_t* weatherpattern) override
     {
         const uint8_t* pattern = weatherpattern;
@@ -142,7 +144,7 @@ public:
         uint8_t patternStartXOffset = xStart % patternXSpace;
         uint8_t patternStartYOffset = yStart % patternYSpace;
 
-        uint32_t pixelOffset = (dpi->pitch + dpi->width) * y + x;
+        uint32_t pixelOffset = dpi.LineStride() * y + x;
         uint8_t patternYPos = patternStartYOffset % patternYSpace;
 
         for (; height != 0; height--)
@@ -158,14 +160,14 @@ public:
                 auto patternPixel = pattern[patternYPos * 2 + 1];
                 for (; xPixelOffset < finalPixelOffset; xPixelOffset += patternXSpace)
                 {
-                    int32_t pixelX = xPixelOffset % dpi->width;
-                    int32_t pixelY = (xPixelOffset / dpi->width) % dpi->height;
+                    int32_t pixelX = xPixelOffset % dpi.width;
+                    int32_t pixelY = (xPixelOffset / dpi.width) % dpi.height;
 
                     _drawingContext->DrawLine(dpi, patternPixel, { { pixelX, pixelY }, { pixelX + 1, pixelY + 1 } });
                 }
             }
 
-            pixelOffset += dpi->pitch + dpi->width;
+            pixelOffset += dpi.LineStride();
             patternYPos++;
             patternYPos %= patternYSpace;
         }
@@ -183,16 +185,16 @@ private:
     uint32_t _height = 0;
     uint32_t _pitch = 0;
     size_t _bitsSize = 0;
-    uint8_t* _bits = nullptr;
+    std::unique_ptr<uint8_t[]> _bits;
 
-    rct_drawpixelinfo _bitsDPI = {};
+    DrawPixelInfo _bitsDPI = {};
 
-    OpenGLDrawingContext* _drawingContext;
+    std::unique_ptr<OpenGLDrawingContext> _drawingContext;
 
-    ApplyPaletteShader* _applyPaletteShader = nullptr;
-    OpenGLFramebuffer* _screenFramebuffer = nullptr;
-    OpenGLFramebuffer* _scaleFramebuffer = nullptr;
-    OpenGLFramebuffer* _smoothScaleFramebuffer = nullptr;
+    std::unique_ptr<ApplyPaletteShader> _applyPaletteShader;
+    std::unique_ptr<OpenGLFramebuffer> _screenFramebuffer;
+    std::unique_ptr<OpenGLFramebuffer> _scaleFramebuffer;
+    std::unique_ptr<OpenGLFramebuffer> _smoothScaleFramebuffer;
     OpenGLWeatherDrawer _weatherDrawer;
 
 public:
@@ -201,30 +203,22 @@ public:
 
     explicit OpenGLDrawingEngine(const std::shared_ptr<IUiContext>& uiContext)
         : _uiContext(uiContext)
-        , _drawingContext(new OpenGLDrawingContext(this))
-        , _weatherDrawer(_drawingContext)
+        , _drawingContext(std::make_unique<OpenGLDrawingContext>(*this))
+        , _weatherDrawer(_drawingContext.get())
     {
         _window = static_cast<SDL_Window*>(_uiContext->GetWindow());
         _bitsDPI.DrawingEngine = this;
-#    ifdef __ENABLE_LIGHTFX__
-        lightfx_set_available(false);
-#    endif
+        LightFx::SetAvailable(false);
     }
 
     ~OpenGLDrawingEngine() override
     {
-        delete _applyPaletteShader;
-        delete _screenFramebuffer;
-
-        delete _drawingContext;
-        delete[] _bits;
-
         SDL_GL_DeleteContext(_context);
     }
 
     void Initialise() override
     {
-        OpenGLVersion requiredVersion = OPENGL_MINIMUM_REQUIRED_VERSION;
+        OpenGLVersion requiredVersion = kOpenGLMinimumRequiredVersion;
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, requiredVersion.Major);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, requiredVersion.Minor);
@@ -245,7 +239,7 @@ public:
 
         _drawingContext->Initialise();
 
-        _applyPaletteShader = new ApplyPaletteShader();
+        _applyPaletteShader = std::make_unique<ApplyPaletteShader>();
     }
 
     void Resize(uint32_t width, uint32_t height) override
@@ -253,6 +247,7 @@ public:
         ConfigureBits(width, height, width);
         ConfigureCanvas();
         _drawingContext->Resize(width, height);
+        _drawingContext->Clear(_bitsDPI, PALETTE_INDEX_10);
     }
 
     void SetPalette(const GamePalette& palette) override
@@ -293,7 +288,6 @@ public:
         assert(_screenFramebuffer != nullptr);
 
         _drawingContext->StartNewDraw();
-        _drawingContext->CalculcateClipping(&_bitsDPI);
     }
 
     void EndDraw() override
@@ -331,17 +325,13 @@ public:
 
     void PaintWindows() override
     {
-        _drawingContext->CalculcateClipping(&_bitsDPI);
-
-        window_update_all_viewports();
-        window_draw_all(&_bitsDPI, 0, 0, _width, _height);
+        WindowUpdateAllViewports();
+        WindowDrawAll(_bitsDPI, 0, 0, _width, _height);
     }
 
     void PaintWeather() override
     {
-        _drawingContext->CalculcateClipping(&_bitsDPI);
-
-        DrawWeather(&_bitsDPI, &_weatherDrawer);
+        DrawWeather(_bitsDPI, &_weatherDrawer);
     }
 
     std::string Screenshot() override
@@ -349,7 +339,7 @@ public:
         const OpenGLFramebuffer& framebuffer = _drawingContext->GetFinalFramebuffer();
         framebuffer.Bind();
         framebuffer.GetPixels(_bitsDPI);
-        std::string result = screenshot_dump_png(&_bitsDPI);
+        std::string result = ScreenshotDumpPNG(_bitsDPI);
         return result;
     }
 
@@ -360,10 +350,10 @@ public:
 
     IDrawingContext* GetDrawingContext() override
     {
-        return _drawingContext;
+        return _drawingContext.get();
     }
 
-    rct_drawpixelinfo* GetDrawingPixelInfo() override
+    DrawPixelInfo* GetDrawingPixelInfo() override
     {
         return &_bitsDPI;
     }
@@ -378,7 +368,7 @@ public:
         _drawingContext->GetTextureCache()->InvalidateImage(image);
     }
 
-    rct_drawpixelinfo* GetDPI()
+    DrawPixelInfo* GetDPI()
     {
         return &_bitsDPI;
     }
@@ -400,21 +390,22 @@ private:
     void ConfigureBits(uint32_t width, uint32_t height, uint32_t pitch)
     {
         size_t newBitsSize = pitch * height;
-        uint8_t* newBits = new uint8_t[newBitsSize];
+
+        auto newBits = std::make_unique<uint8_t[]>(newBitsSize);
         if (_bits == nullptr)
         {
-            std::fill_n(newBits, newBitsSize, 0);
+            std::fill_n(newBits.get(), newBitsSize, 0);
         }
         else
         {
             if (_pitch == pitch)
             {
-                std::copy_n(_bits, std::min(_bitsSize, newBitsSize), newBits);
+                std::copy_n(_bits.get(), std::min(_bitsSize, newBitsSize), newBits.get());
             }
             else
             {
-                uint8_t* src = _bits;
-                uint8_t* dst = newBits;
+                uint8_t* src = _bits.get();
+                uint8_t* dst = newBits.get();
 
                 uint32_t minWidth = std::min(_width, width);
                 uint32_t minHeight = std::min(_height, height);
@@ -429,17 +420,16 @@ private:
                     dst += pitch;
                 }
             }
-            delete[] _bits;
         }
 
-        _bits = newBits;
+        _bits = std::move(newBits);
         _bitsSize = newBitsSize;
         _width = width;
         _height = height;
         _pitch = pitch;
 
-        rct_drawpixelinfo* dpi = &_bitsDPI;
-        dpi->bits = _bits;
+        DrawPixelInfo* dpi = &_bitsDPI;
+        dpi->bits = _bits.get();
         dpi->x = 0;
         dpi->y = 0;
         dpi->width = width;
@@ -450,27 +440,17 @@ private:
     void ConfigureCanvas()
     {
         // Re-create screen framebuffer
-        delete _screenFramebuffer;
-        _screenFramebuffer = new OpenGLFramebuffer(_window);
-
-        if (_scaleFramebuffer != nullptr)
-        {
-            delete _scaleFramebuffer;
-            _scaleFramebuffer = nullptr;
-        }
-        if (_smoothScaleFramebuffer != nullptr)
-        {
-            delete _smoothScaleFramebuffer;
-            _smoothScaleFramebuffer = nullptr;
-        }
+        _screenFramebuffer = std::make_unique<OpenGLFramebuffer>(_window);
+        _smoothScaleFramebuffer.reset();
+        _scaleFramebuffer.reset();
         if (GetContext()->GetUiContext()->GetScaleQuality() != ScaleQuality::NearestNeighbour)
         {
-            _scaleFramebuffer = new OpenGLFramebuffer(_width, _height, false, false);
+            _scaleFramebuffer = std::make_unique<OpenGLFramebuffer>(_width, _height, false, false);
         }
         if (GetContext()->GetUiContext()->GetScaleQuality() == ScaleQuality::SmoothNearestNeighbour)
         {
-            uint32_t scale = std::ceil(gConfigGeneral.window_scale);
-            _smoothScaleFramebuffer = new OpenGLFramebuffer(_width * scale, _height * scale, false, false);
+            uint32_t scale = std::ceil(Config::Get().general.WindowScale);
+            _smoothScaleFramebuffer = std::make_unique<OpenGLFramebuffer>(_width * scale, _height * scale, false, false);
         }
     }
 
@@ -485,32 +465,21 @@ std::unique_ptr<IDrawingEngine> OpenRCT2::Ui::CreateOpenGLDrawingEngine(const st
     return std::make_unique<OpenGLDrawingEngine>(uiContext);
 }
 
-OpenGLDrawingContext::OpenGLDrawingContext(OpenGLDrawingEngine* engine)
+OpenGLDrawingContext::OpenGLDrawingContext(OpenGLDrawingEngine& engine)
+    : _engine(engine)
 {
-    _engine = engine;
 }
 
 OpenGLDrawingContext::~OpenGLDrawingContext()
 {
-    delete _applyTransparencyShader;
-    delete _drawLineShader;
-    delete _drawRectShader;
-    delete _swapFramebuffer;
-
-    delete _textureCache;
-}
-
-IDrawingEngine* OpenGLDrawingContext::GetEngine()
-{
-    return _engine;
 }
 
 void OpenGLDrawingContext::Initialise()
 {
-    _textureCache = new TextureCache();
-    _applyTransparencyShader = new ApplyTransparencyShader();
-    _drawRectShader = new DrawRectShader();
-    _drawLineShader = new DrawLineShader();
+    _textureCache = std::make_unique<TextureCache>();
+    _applyTransparencyShader = std::make_unique<ApplyTransparencyShader>();
+    _drawRectShader = std::make_unique<DrawRectShader>();
+    _drawLineShader = std::make_unique<DrawLineShader>();
 }
 
 void OpenGLDrawingContext::Resize(int32_t width, int32_t height)
@@ -524,8 +493,7 @@ void OpenGLDrawingContext::Resize(int32_t width, int32_t height)
     _drawLineShader->SetScreenSize(width, height);
 
     // Re-create canvas framebuffer
-    delete _swapFramebuffer;
-    _swapFramebuffer = new SwapFramebuffer(width, height);
+    _swapFramebuffer = std::make_unique<SwapFramebuffer>(width, height);
 }
 
 void OpenGLDrawingContext::ResetPalette()
@@ -539,26 +507,24 @@ void OpenGLDrawingContext::StartNewDraw()
     _swapFramebuffer->Clear();
 }
 
-void OpenGLDrawingContext::Clear(rct_drawpixelinfo* dpi, uint8_t paletteIndex)
+void OpenGLDrawingContext::Clear(DrawPixelInfo& dpi, uint8_t paletteIndex)
 {
-    CalculcateClipping(dpi);
-
-    FillRect(dpi, paletteIndex, _clipLeft - _offsetX, _clipTop - _offsetY, _clipRight - _offsetX, _clipBottom - _offsetY);
+    FillRect(dpi, paletteIndex, dpi.x, dpi.y, dpi.x + dpi.width, dpi.y + dpi.height);
 }
 
 void OpenGLDrawingContext::FillRect(
-    rct_drawpixelinfo* dpi, uint32_t colour, int32_t left, int32_t top, int32_t right, int32_t bottom)
+    DrawPixelInfo& dpi, uint32_t colour, int32_t left, int32_t top, int32_t right, int32_t bottom)
 {
-    CalculcateClipping(dpi);
+    const ScreenRect clip = CalculateClipping(dpi);
 
-    left += _offsetX;
-    top += _offsetY;
-    right += _offsetX;
-    bottom += _offsetY;
+    left += clip.GetLeft() - dpi.x;
+    top += clip.GetTop() - dpi.y;
+    right += clip.GetLeft() - dpi.x;
+    bottom += clip.GetTop() - dpi.y;
 
     DrawRectCommand& command = _commandBuffers.rects.allocate();
 
-    command.clip = { _clipLeft, _clipTop, _clipRight, _clipBottom };
+    command.clip = { clip.GetLeft(), clip.GetTop(), clip.GetRight(), clip.GetBottom() };
     command.texColourAtlas = 0;
     command.texColourBounds = { 0.0f, 0.0f, 0.0f, 0.0f };
     command.texMaskAtlas = 0;
@@ -582,18 +548,18 @@ void OpenGLDrawingContext::FillRect(
 }
 
 void OpenGLDrawingContext::FilterRect(
-    rct_drawpixelinfo* dpi, FilterPaletteID palette, int32_t left, int32_t top, int32_t right, int32_t bottom)
+    DrawPixelInfo& dpi, FilterPaletteID palette, int32_t left, int32_t top, int32_t right, int32_t bottom)
 {
-    CalculcateClipping(dpi);
+    const ScreenRect clip = CalculateClipping(dpi);
 
-    left += _offsetX;
-    top += _offsetY;
-    right += _offsetX;
-    bottom += _offsetY;
+    left += clip.GetLeft() - dpi.x;
+    top += clip.GetTop() - dpi.y;
+    right += clip.GetLeft() - dpi.x;
+    bottom += clip.GetTop() - dpi.y;
 
     DrawRectCommand& command = _commandBuffers.transparent.allocate();
 
-    command.clip = { _clipLeft, _clipTop, _clipRight, _clipBottom };
+    command.clip = { clip.GetLeft(), clip.GetTop(), clip.GetRight(), clip.GetBottom() };
     command.texColourAtlas = 0;
     command.texColourBounds = { 0.0f, 0.0f, 0.0f, 0.0f };
     command.texMaskAtlas = 0;
@@ -605,41 +571,132 @@ void OpenGLDrawingContext::FilterRect(
     command.depth = _drawCount++;
 }
 
-void OpenGLDrawingContext::DrawLine(rct_drawpixelinfo* dpi, uint32_t colour, const ScreenLine& line)
+// Compute the bit code for a point p relative to the clip rectangle defined by topLeft and bottomRight
+uint8_t OpenGLDrawingContext::ComputeOutCode(
+    const ScreenCoordsXY p, const ScreenCoordsXY topLeft, const ScreenCoordsXY bottomRight)
 {
-    CalculcateClipping(dpi);
+    uint8_t code = kCSInside;
+
+    if (p.x < topLeft.x)
+        code |= kCSLeft;
+    else if (p.x > bottomRight.x)
+        code |= kCSRight;
+    if (p.y < topLeft.y)
+        code |= kCSTop;
+    else if (p.y > bottomRight.y)
+        code |= kCSBottom;
+
+    return code;
+}
+
+// Trims the line to be within the bounds of the dpi.
+// based on: https://en.wikipedia.org/wiki/Cohen%E2%80%93Sutherland_algorithm
+bool OpenGLDrawingContext::CohenSutherlandLineClip(ScreenLine& line, const DrawPixelInfo& dpi)
+{
+    ScreenCoordsXY topLeft = { dpi.x, dpi.y };
+    ScreenCoordsXY bottomRight = { dpi.x + dpi.width - 1, dpi.y + dpi.height - 1 };
+    uint8_t outcode1 = ComputeOutCode(line.Point1, topLeft, bottomRight);
+    uint8_t outcode2 = ComputeOutCode(line.Point2, topLeft, bottomRight);
+
+    while (true)
+    {
+        if (outcode1 == kCSInside && outcode2 == kCSInside)
+        {
+            // both points inside dpi
+            return true;
+        }
+        if (outcode1 & outcode2)
+        {
+            // both points share an outside zone so both must be outside dpi
+            return false;
+        }
+
+        // At least one endpoint is outside the clip rectangle; pick it.
+        uint8_t outcodeOut = outcode2 > outcode1 ? outcode2 : outcode1;
+        ScreenCoordsXY clipped;
+
+        // clang-format off
+        if (outcodeOut & kCSBottom)
+        {
+            clipped.x = line.Point1.x + (line.Point2.x - line.Point1.x) *
+                (bottomRight.y - line.Point1.y) / (line.Point2.y - line.Point1.y);
+            clipped.y = bottomRight.y;
+        }
+        else if (outcodeOut & kCSTop)
+        {
+            clipped.x = line.Point1.x + (line.Point2.x - line.Point1.x) *
+                (topLeft.y - line.Point1.y) / (line.Point2.y - line.Point1.y);
+            clipped.y = topLeft.y;
+        }
+        else if (outcodeOut & kCSRight)
+        {
+            clipped.y = line.Point1.y + (line.Point2.y - line.Point1.y) *
+                (bottomRight.x - line.Point1.x) / (line.Point2.x - line.Point1.x);
+            clipped.x = bottomRight.x;
+        }
+        else if (outcodeOut & kCSLeft)
+        {
+            clipped.y = line.Point1.y + (line.Point2.y - line.Point1.y) *
+                (topLeft.x - line.Point1.x) / (line.Point2.x - line.Point1.x);
+            clipped.x = topLeft.x;
+        }
+        // clang-format on
+
+        if (outcodeOut == outcode1)
+        {
+            line.Point1 = clipped;
+            outcode1 = ComputeOutCode(line.Point1, topLeft, bottomRight);
+        }
+        else
+        {
+            line.Point2 = clipped;
+            outcode2 = ComputeOutCode(line.Point2, topLeft, bottomRight);
+        }
+    }
+}
+
+void OpenGLDrawingContext::DrawLine(DrawPixelInfo& dpi, uint32_t colour, const ScreenLine& line)
+{
+    const ZoomLevel zoom = dpi.zoom_level;
+    ScreenLine trimmedLine = { { zoom.ApplyInversedTo(line.GetX1()), zoom.ApplyInversedTo(line.GetY1()) },
+                               { zoom.ApplyInversedTo(line.GetX2()), zoom.ApplyInversedTo(line.GetY2()) } };
+    if (!CohenSutherlandLineClip(trimmedLine, dpi))
+        return;
 
     DrawLineCommand& command = _commandBuffers.lines.allocate();
 
-    command.clip = { _clipLeft, _clipTop, _clipRight, _clipBottom };
-    command.bounds = { line.GetX1() + _offsetX, line.GetY1() + _offsetY, line.GetX2() + _offsetX, line.GetY2() + _offsetY };
+    const ScreenRect clip = CalculateClipping(dpi);
+    const int32_t x1 = trimmedLine.GetX1() - dpi.x + clip.GetLeft();
+    const int32_t y1 = trimmedLine.GetY1() - dpi.y + clip.GetTop();
+    const int32_t x2 = trimmedLine.GetX2() - dpi.x + clip.GetLeft();
+    const int32_t y2 = trimmedLine.GetY2() - dpi.y + clip.GetTop();
+
+    command.bounds = { x1, y1, x2, y2 };
     command.colour = colour & 0xFF;
     command.depth = _drawCount++;
 }
 
-void OpenGLDrawingContext::DrawSprite(rct_drawpixelinfo* dpi, ImageId imageId, int32_t x, int32_t y)
+void OpenGLDrawingContext::DrawSprite(DrawPixelInfo& dpi, const ImageId imageId, int32_t x, int32_t y)
 {
-    CalculcateClipping(dpi);
-
-    auto g1Element = gfx_get_g1_element(imageId);
+    auto g1Element = GfxGetG1Element(imageId);
     if (g1Element == nullptr)
     {
         return;
     }
 
-    if (dpi->zoom_level > ZoomLevel{ 0 })
+    if (dpi.zoom_level > ZoomLevel{ 0 })
     {
         if (g1Element->flags & G1_FLAG_HAS_ZOOM_SPRITE)
         {
-            rct_drawpixelinfo zoomedDPI;
-            zoomedDPI.bits = dpi->bits;
-            zoomedDPI.x = dpi->x >> 1;
-            zoomedDPI.y = dpi->y >> 1;
-            zoomedDPI.height = dpi->height >> 1;
-            zoomedDPI.width = dpi->width >> 1;
-            zoomedDPI.pitch = dpi->pitch;
-            zoomedDPI.zoom_level = dpi->zoom_level - 1;
-            DrawSprite(&zoomedDPI, imageId.WithIndex(imageId.GetIndex() - g1Element->zoomed_offset), x >> 1, y >> 1);
+            DrawPixelInfo zoomedDPI;
+            zoomedDPI.bits = dpi.bits;
+            zoomedDPI.x = dpi.x;
+            zoomedDPI.y = dpi.y;
+            zoomedDPI.height = dpi.height;
+            zoomedDPI.width = dpi.width;
+            zoomedDPI.pitch = dpi.pitch;
+            zoomedDPI.zoom_level = dpi.zoom_level - 1;
+            DrawSprite(zoomedDPI, imageId.WithIndex(imageId.GetIndex() - g1Element->zoomed_offset), x >> 1, y >> 1);
             return;
         }
         if (g1Element->flags & G1_FLAG_NO_ZOOM_DRAW)
@@ -652,11 +709,11 @@ void OpenGLDrawingContext::DrawSprite(rct_drawpixelinfo* dpi, ImageId imageId, i
     int32_t top = y + g1Element->y_offset;
 
     int32_t zoom_mask;
-    if (dpi->zoom_level >= ZoomLevel{ 0 })
-        zoom_mask = 0xFFFFFFFF * dpi->zoom_level;
+    if (dpi.zoom_level >= ZoomLevel{ 0 })
+        zoom_mask = dpi.zoom_level.ApplyTo(0xFFFFFFFF);
     else
         zoom_mask = 0xFFFFFFFF;
-    if (dpi->zoom_level != ZoomLevel{ 0 } && (g1Element->flags & G1_FLAG_RLE_COMPRESSION))
+    if (dpi.zoom_level != ZoomLevel{ 0 } && (g1Element->flags & G1_FLAG_RLE_COMPRESSION))
     {
         top -= ~zoom_mask;
     }
@@ -672,7 +729,7 @@ void OpenGLDrawingContext::DrawSprite(rct_drawpixelinfo* dpi, ImageId imageId, i
     int32_t right = left + g1Element->width;
     int32_t bottom = top + g1Element->height;
 
-    if (dpi->zoom_level != ZoomLevel{ 0 } && (g1Element->flags & G1_FLAG_RLE_COMPRESSION))
+    if (dpi.zoom_level != ZoomLevel{ 0 } && (g1Element->flags & G1_FLAG_RLE_COMPRESSION))
     {
         bottom += top & ~zoom_mask;
     }
@@ -686,20 +743,16 @@ void OpenGLDrawingContext::DrawSprite(rct_drawpixelinfo* dpi, ImageId imageId, i
         std::swap(top, bottom);
     }
 
-    left -= dpi->x;
-    top -= dpi->y;
-    right -= dpi->x;
-    bottom -= dpi->y;
+    left = dpi.zoom_level.ApplyInversedTo(left);
+    top = dpi.zoom_level.ApplyInversedTo(top);
+    right = dpi.zoom_level.ApplyInversedTo(right);
+    bottom = dpi.zoom_level.ApplyInversedTo(bottom);
 
-    left = left / dpi->zoom_level;
-    top = top / dpi->zoom_level;
-    right = right / dpi->zoom_level;
-    bottom = bottom / dpi->zoom_level;
-
-    left += _spriteOffset.x;
-    top += _spriteOffset.y;
-    right += _spriteOffset.x;
-    bottom += _spriteOffset.y;
+    const ScreenRect clip = CalculateClipping(dpi);
+    left += clip.GetLeft() - dpi.x;
+    top += clip.GetTop() - dpi.y;
+    right += clip.GetLeft() - dpi.x;
+    bottom += clip.GetTop() - dpi.y;
 
     const auto texture = _textureCache->GetOrLoadImageTexture(imageId);
 
@@ -739,7 +792,7 @@ void OpenGLDrawingContext::DrawSprite(rct_drawpixelinfo* dpi, ImageId imageId, i
     {
         DrawRectCommand& command = _commandBuffers.transparent.allocate();
 
-        command.clip = { _clipLeft, _clipTop, _clipRight, _clipBottom };
+        command.clip = { clip.GetLeft(), clip.GetTop(), clip.GetRight(), clip.GetBottom() };
         command.texColourAtlas = texture.index;
         command.texColourBounds = texture.normalizedBounds;
         command.texMaskAtlas = texture.index;
@@ -754,7 +807,7 @@ void OpenGLDrawingContext::DrawSprite(rct_drawpixelinfo* dpi, ImageId imageId, i
     {
         DrawRectCommand& command = _commandBuffers.rects.allocate();
 
-        command.clip = { _clipLeft, _clipTop, _clipRight, _clipBottom };
+        command.clip = { clip.GetLeft(), clip.GetTop(), clip.GetRight(), clip.GetBottom() };
         command.texColourAtlas = texture.index;
         command.texColourBounds = texture.normalizedBounds;
         command.texMaskAtlas = 0;
@@ -768,12 +821,10 @@ void OpenGLDrawingContext::DrawSprite(rct_drawpixelinfo* dpi, ImageId imageId, i
 }
 
 void OpenGLDrawingContext::DrawSpriteRawMasked(
-    rct_drawpixelinfo* dpi, int32_t x, int32_t y, ImageId maskImage, ImageId colourImage)
+    DrawPixelInfo& dpi, int32_t x, int32_t y, const ImageId maskImage, const ImageId colourImage)
 {
-    CalculcateClipping(dpi);
-
-    auto g1ElementMask = gfx_get_g1_element(maskImage);
-    auto g1ElementColour = gfx_get_g1_element(colourImage);
+    auto g1ElementMask = GfxGetG1Element(maskImage);
+    auto g1ElementColour = GfxGetG1Element(colourImage);
     if (g1ElementMask == nullptr || g1ElementColour == nullptr)
     {
         return;
@@ -801,24 +852,20 @@ void OpenGLDrawingContext::DrawSpriteRawMasked(
         std::swap(top, bottom);
     }
 
-    left -= dpi->x;
-    top -= dpi->y;
-    right -= dpi->x;
-    bottom -= dpi->y;
+    left = dpi.zoom_level.ApplyInversedTo(left);
+    top = dpi.zoom_level.ApplyInversedTo(top);
+    right = dpi.zoom_level.ApplyInversedTo(right);
+    bottom = dpi.zoom_level.ApplyInversedTo(bottom);
 
-    left = left / dpi->zoom_level;
-    top = top / dpi->zoom_level;
-    right = right / dpi->zoom_level;
-    bottom = bottom / dpi->zoom_level;
-
-    left += _spriteOffset.x;
-    top += _spriteOffset.y;
-    right += _spriteOffset.x;
-    bottom += _spriteOffset.y;
+    const ScreenRect clip = CalculateClipping(dpi);
+    left += clip.GetLeft() - dpi.x;
+    top += clip.GetTop() - dpi.y;
+    right += clip.GetLeft() - dpi.x;
+    bottom += clip.GetTop() - dpi.y;
 
     DrawRectCommand& command = _commandBuffers.rects.allocate();
 
-    command.clip = { _clipLeft, _clipTop, _clipRight, _clipBottom };
+    command.clip = { clip.GetLeft(), clip.GetTop(), clip.GetRight(), clip.GetBottom() };
     command.texColourAtlas = textureColour.index;
     command.texColourBounds = textureColour.normalizedBounds;
     command.texMaskAtlas = textureMask.index;
@@ -830,13 +877,9 @@ void OpenGLDrawingContext::DrawSpriteRawMasked(
     command.depth = _drawCount++;
 }
 
-void OpenGLDrawingContext::DrawSpriteSolid(rct_drawpixelinfo* dpi, ImageId image, int32_t x, int32_t y, uint8_t colour)
+void OpenGLDrawingContext::DrawSpriteSolid(DrawPixelInfo& dpi, const ImageId image, int32_t x, int32_t y, uint8_t colour)
 {
-    CalculcateClipping(dpi);
-
-    assert((colour & 0xFF) > 0u);
-
-    auto g1Element = gfx_get_g1_element(image);
+    auto g1Element = GfxGetG1Element(image);
     if (g1Element == nullptr)
     {
         return;
@@ -863,14 +906,15 @@ void OpenGLDrawingContext::DrawSpriteSolid(rct_drawpixelinfo* dpi, ImageId image
         std::swap(top, bottom);
     }
 
-    left += _offsetX;
-    top += _offsetY;
-    right += _offsetX;
-    bottom += _offsetY;
+    const ScreenRect clip = CalculateClipping(dpi);
+    left += clip.GetLeft() - dpi.x;
+    top += clip.GetTop() - dpi.y;
+    right += clip.GetLeft() - dpi.x;
+    bottom += clip.GetTop() - dpi.y;
 
     DrawRectCommand& command = _commandBuffers.rects.allocate();
 
-    command.clip = { _clipLeft, _clipTop, _clipRight, _clipBottom };
+    command.clip = { clip.GetLeft(), clip.GetTop(), clip.GetRight(), clip.GetBottom() };
     command.texColourAtlas = 0;
     command.texColourBounds = { 0.0f, 0.0f, 0.0f, 0.0f };
     command.texMaskAtlas = texture.index;
@@ -882,17 +926,15 @@ void OpenGLDrawingContext::DrawSpriteSolid(rct_drawpixelinfo* dpi, ImageId image
     command.depth = _drawCount++;
 }
 
-void OpenGLDrawingContext::DrawGlyph(rct_drawpixelinfo* dpi, uint32_t image, int32_t x, int32_t y, const PaletteMap& palette)
+void OpenGLDrawingContext::DrawGlyph(DrawPixelInfo& dpi, const ImageId image, int32_t x, int32_t y, const PaletteMap& palette)
 {
-    CalculcateClipping(dpi);
-
-    auto g1Element = gfx_get_g1_element(image & 0x7FFFF);
+    auto g1Element = GfxGetG1Element(image);
     if (g1Element == nullptr)
     {
         return;
     }
 
-    const auto texture = _textureCache->GetOrLoadGlyphTexture(ImageId::FromUInt32(image), palette);
+    const auto texture = _textureCache->GetOrLoadGlyphTexture(image, palette);
 
     int32_t left = x + g1Element->x_offset;
     int32_t top = y + g1Element->y_offset;
@@ -908,24 +950,20 @@ void OpenGLDrawingContext::DrawGlyph(rct_drawpixelinfo* dpi, uint32_t image, int
         std::swap(top, bottom);
     }
 
-    left -= dpi->x;
-    top -= dpi->y;
-    right -= dpi->x;
-    bottom -= dpi->y;
+    left = dpi.zoom_level.ApplyInversedTo(left);
+    top = dpi.zoom_level.ApplyInversedTo(top);
+    right = dpi.zoom_level.ApplyInversedTo(right);
+    bottom = dpi.zoom_level.ApplyInversedTo(bottom);
 
-    left = left / dpi->zoom_level;
-    top = top / dpi->zoom_level;
-    right = right / dpi->zoom_level;
-    bottom = bottom / dpi->zoom_level;
-
-    left += _spriteOffset.x;
-    top += _spriteOffset.y;
-    right += _spriteOffset.x;
-    bottom += _spriteOffset.y;
+    const ScreenRect clip = CalculateClipping(dpi);
+    left += clip.GetLeft() - dpi.x;
+    top += clip.GetTop() - dpi.y;
+    right += clip.GetLeft() - dpi.x;
+    bottom += clip.GetTop() - dpi.y;
 
     DrawRectCommand& command = _commandBuffers.rects.allocate();
 
-    command.clip = { _clipLeft, _clipTop, _clipRight, _clipBottom };
+    command.clip = { clip.GetLeft(), clip.GetTop(), clip.GetRight(), clip.GetBottom() };
     command.texColourAtlas = texture.index;
     command.texColourBounds = texture.normalizedBounds;
     command.texMaskAtlas = 0;
@@ -937,17 +975,24 @@ void OpenGLDrawingContext::DrawGlyph(rct_drawpixelinfo* dpi, uint32_t image, int
     command.depth = _drawCount++;
 }
 
-void OpenGLDrawingContext::DrawBitmap(
-    rct_drawpixelinfo* dpi, uint32_t image, const void* pixels, int32_t width, int32_t height, int32_t x, int32_t y)
+void OpenGLDrawingContext::DrawTTFBitmap(
+    DrawPixelInfo& dpi, TextDrawInfo* info, TTFSurface* surface, int32_t x, int32_t y, uint8_t hintingThreshold)
 {
-    CalculcateClipping(dpi);
-
-    const auto texture = _textureCache->GetOrLoadBitmapTexture(image, pixels, width, height);
+    #ifndef NO_TTF
+    auto baseId = static_cast<uint32_t>(0x7FFFF) - 1024;
+    auto imageId = baseId + _ttfGlId;
+    _engine.InvalidateImage(imageId);
+    const auto texture = _textureCache->GetOrLoadBitmapTexture(imageId, surface->pixels, surface->w, surface->h);
+    _ttfGlId++;
+    if (_ttfGlId >= 1023)
+    {
+        _ttfGlId = 0;
+    }
 
     int32_t drawOffsetX = 0;
     int32_t drawOffsetY = 0;
-    int32_t drawWidth = static_cast<uint16_t>(width);
-    int32_t drawHeight = static_cast<uint16_t>(height);
+    int32_t drawWidth = static_cast<uint16_t>(surface->w);
+    int32_t drawHeight = static_cast<uint16_t>(surface->h);
 
     int32_t left = x + drawOffsetX;
     int32_t top = y + drawOffsetY;
@@ -963,23 +1008,62 @@ void OpenGLDrawingContext::DrawBitmap(
         std::swap(top, bottom);
     }
 
-    left += _offsetX;
-    top += _offsetY;
-    right += _offsetX;
-    bottom += _offsetY;
+    const ScreenRect clip = CalculateClipping(dpi);
+    left += clip.GetLeft() - dpi.x;
+    top += clip.GetTop() - dpi.y;
+    right += clip.GetLeft() - dpi.x;
+    bottom += clip.GetTop() - dpi.y;
 
-    DrawRectCommand& command = _commandBuffers.rects.allocate();
-
-    command.clip = { _clipLeft, _clipTop, _clipRight, _clipBottom };
+    if (info->flags & TEXT_DRAW_FLAG_OUTLINE)
+    {
+        std::array<ivec4, 4> boundsArr = { {
+            { left + 1, top, right + 1, bottom },
+            { left - 1, top, right - 1, bottom },
+            { left, top + 1, right, bottom + 1 },
+            { left, top - 1, right, bottom - 1 },
+        } };
+        for (auto b : boundsArr)
+        {
+            DrawRectCommand& command = _commandBuffers.rects.allocate();
+            command.clip = { clip.GetLeft(), clip.GetTop(), clip.GetRight(), clip.GetBottom() };
+            command.texColourAtlas = texture.index;
+            command.texColourBounds = texture.normalizedBounds;
+            command.texMaskAtlas = 0;
+            command.texMaskBounds = { 0.0f, 0.0f, 0.0f, 0.0f };
+            command.palettes = { 0, 0, 0 };
+            command.flags = DrawRectCommand::FLAG_TTF_TEXT;
+            command.colour = info->palette[3];
+            command.bounds = b;
+            command.depth = _drawCount++;
+        }
+    }
+    if (info->flags & TEXT_DRAW_FLAG_INSET)
+    {
+        DrawRectCommand& command = _commandBuffers.rects.allocate();
+        command.clip = { clip.GetLeft(), clip.GetTop(), clip.GetRight(), clip.GetBottom() };
+        command.texColourAtlas = texture.index;
+        command.texColourBounds = texture.normalizedBounds;
+        command.texMaskAtlas = 0;
+        command.texMaskBounds = { 0.0f, 0.0f, 0.0f, 0.0f };
+        command.palettes = { 0, 0, 0 };
+        command.flags = DrawRectCommand::FLAG_TTF_TEXT;
+        command.colour = info->palette[3];
+        command.bounds = { left + 1, top + 1, right + 1, bottom + 1 };
+        command.depth = _drawCount++;
+    }
+    auto& cmdBuf = hintingThreshold > 0 ? _commandBuffers.transparent : _commandBuffers.rects;
+    DrawRectCommand& command = cmdBuf.allocate();
+    command.clip = { clip.GetLeft(), clip.GetTop(), clip.GetRight(), clip.GetBottom() };
     command.texColourAtlas = texture.index;
     command.texColourBounds = texture.normalizedBounds;
     command.texMaskAtlas = 0;
     command.texMaskBounds = { 0.0f, 0.0f, 0.0f, 0.0f };
     command.palettes = { 0, 0, 0 };
-    command.flags = 0;
-    command.colour = 0;
+    command.flags = DrawRectCommand::FLAG_TTF_TEXT | (hintingThreshold << 8);
+    command.colour = info->palette[1];
     command.bounds = { left, top, right, bottom };
     command.depth = _drawCount++;
+    #endif // NO_TTF
 }
 
 void OpenGLDrawingContext::FlushCommandBuffers()
@@ -1052,30 +1136,31 @@ void OpenGLDrawingContext::HandleTransparency()
 
         _drawRectShader->Use();
         _drawRectShader->DrawInstances();
-        _swapFramebuffer->ApplyTransparency(*_applyTransparencyShader, _textureCache->GetPaletteTexture());
+        _swapFramebuffer->ApplyTransparency(
+            *_applyTransparencyShader, _textureCache->GetPaletteTexture(), _textureCache->GetBlendPaletteTexture());
     }
 
     _commandBuffers.transparent.clear();
 }
 
-void OpenGLDrawingContext::CalculcateClipping(rct_drawpixelinfo* dpi)
+ScreenRect OpenGLDrawingContext::CalculateClipping(const DrawPixelInfo& dpi) const
 {
-    auto screenDPI = _engine->GetDPI();
-    auto bytesPerRow = screenDPI->GetBytesPerRow();
-    auto bitsOffset = static_cast<size_t>(dpi->bits - screenDPI->bits);
-#    ifndef NDEBUG
-    auto bitsSize = static_cast<size_t>(screenDPI->height) * bytesPerRow;
-    assert(bitsOffset < bitsSize);
-#    endif
+    // mber: Calculating the screen coordinates by dividing the difference between pointers like this is a dirty hack.
+    //       It's also quite slow. In future the drawing code needs to be refactored to avoid this somehow.
+    const DrawPixelInfo* screenDPI = _engine.GetDPI();
+    const int32_t bytesPerRow = screenDPI->LineStride();
+    const int32_t bitsOffset = static_cast<int32_t>(dpi.bits - screenDPI->bits);
+    #ifndef NDEBUG
+    const ptrdiff_t bitsSize = static_cast<ptrdiff_t>(screenDPI->height) * static_cast<ptrdiff_t>(bytesPerRow);
+    assert(static_cast<ptrdiff_t>(bitsOffset) < bitsSize && static_cast<ptrdiff_t>(bitsOffset) >= 0);
+    #endif
 
-    _clipLeft = static_cast<int32_t>(bitsOffset % bytesPerRow) + dpi->remX;
-    _clipTop = static_cast<int32_t>(bitsOffset / bytesPerRow) + dpi->remY;
-    _clipRight = _clipLeft + (dpi->width / dpi->zoom_level);
-    _clipBottom = _clipTop + (dpi->height / dpi->zoom_level);
-    _offsetX = _clipLeft - dpi->x;
-    _offsetY = _clipTop - dpi->y;
-    _spriteOffset.x = _clipLeft - dpi->remX;
-    _spriteOffset.y = _clipTop - dpi->remY;
+    const int32_t left = bitsOffset % bytesPerRow;
+    const int32_t top = bitsOffset / bytesPerRow;
+    const int32_t right = left + dpi.width;
+    const int32_t bottom = top + dpi.height;
+
+    return { { left, top }, { right, bottom } };
 }
 
 #endif /* DISABLE_OPENGL */

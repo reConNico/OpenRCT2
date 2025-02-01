@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,14 +11,13 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "../../../Context.h"
-#    include "../../../Date.h"
-#    include "../../../Game.h"
-#    include "../../../GameState.h"
-#    include "../../../common.h"
-#    include "../../../localisation/Date.h"
-#    include "../../Duktape.hpp"
-#    include "../../ScriptEngine.h"
+    #include "../../../Context.h"
+    #include "../../../Date.h"
+    #include "../../../Game.h"
+    #include "../../../GameState.h"
+    #include "../../../localisation/Localisation.Date.h"
+    #include "../../Duktape.hpp"
+    #include "../../ScriptEngine.h"
 
 namespace OpenRCT2::Scripting
 {
@@ -43,10 +42,10 @@ namespace OpenRCT2::Scripting
             return date.GetMonthsElapsed();
         }
 
-        void monthsElapsed_set(int32_t value)
+        void monthsElapsed_set(uint32_t value)
         {
             ThrowIfGameStateNotMutable();
-            gDateMonthsElapsed = static_cast<int32_t>(value);
+            GetGameState().Date = Date{ value, GetDate().GetMonthTicks() };
         }
 
         uint32_t monthProgress_get() const
@@ -58,43 +57,33 @@ namespace OpenRCT2::Scripting
         void monthProgress_set(int32_t value)
         {
             ThrowIfGameStateNotMutable();
-            gDateMonthTicks = value;
+            GetGameState().Date = Date{ GetDate().GetMonthsElapsed(), static_cast<uint16_t>(value) };
         }
 
         uint32_t yearsElapsed_get() const
         {
             const auto& date = GetDate();
-            return date.GetMonthsElapsed() / 8;
+            return date.GetYear();
         }
 
         uint32_t ticksElapsed_get() const
         {
-            return gCurrentTicks;
+            return GetGameState().CurrentTicks;
         }
 
         int32_t day_get() const
         {
-            const auto& date = GetDate();
-            return date.GetDay() + 1;
+            return GetGameState().Date.GetDay() + 1;
         }
 
         int32_t month_get() const
         {
-            const auto& date = GetDate();
-            return date.GetMonth();
+            return GetGameState().Date.GetMonth();
         }
 
         int32_t year_get() const
         {
-            const auto& date = GetDate();
-            return date.GetYear() + 1;
-        }
-
-    private:
-        const Date& GetDate() const
-        {
-            auto gameState = GetContext()->GetGameState();
-            return gameState->GetDate();
+            return GetGameState().Date.GetYear() + 1;
         }
     };
 } // namespace OpenRCT2::Scripting

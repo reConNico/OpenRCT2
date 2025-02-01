@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,11 +9,14 @@
 
 #include "BalloonPressAction.h"
 
+#include "../Diagnostic.h"
 #include "../entity/Balloon.h"
 #include "../entity/EntityRegistry.h"
 #include "GameAction.h"
 
-BalloonPressAction::BalloonPressAction(uint16_t spriteIndex)
+using namespace OpenRCT2;
+
+BalloonPressAction::BalloonPressAction(EntityId spriteIndex)
     : _spriteIndex(spriteIndex)
 {
 }
@@ -39,8 +42,9 @@ GameActions::Result BalloonPressAction::Query() const
     auto balloon = TryGetEntity<Balloon>(_spriteIndex);
     if (balloon == nullptr)
     {
-        log_error("Tried getting invalid sprite for balloon: %u", _spriteIndex);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+        LOG_ERROR("Balloon not found for spriteIndex %u", _spriteIndex);
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_BALLOON_NOT_FOUND);
     }
     return GameActions::Result();
 }
@@ -50,8 +54,9 @@ GameActions::Result BalloonPressAction::Execute() const
     auto balloon = TryGetEntity<Balloon>(_spriteIndex);
     if (balloon == nullptr)
     {
-        log_error("Tried getting invalid sprite for balloon: %u", _spriteIndex);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+        LOG_ERROR("Balloon not found for spriteIndex %u", _spriteIndex);
+        return GameActions::Result(
+            GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_BALLOON_NOT_FOUND);
     }
 
     balloon->Press();

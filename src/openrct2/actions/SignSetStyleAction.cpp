@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,13 +10,17 @@
 #include "SignSetStyleAction.h"
 
 #include "../Context.h"
+#include "../Diagnostic.h"
 #include "../core/MemoryStream.h"
 #include "../drawing/Drawing.h"
 #include "../localisation/StringIds.h"
-#include "../ui/UiContext.h"
 #include "../windows/Intent.h"
 #include "../world/Banner.h"
 #include "../world/Scenery.h"
+#include "../world/tile_element/LargeSceneryElement.h"
+#include "../world/tile_element/WallElement.h"
+
+using namespace OpenRCT2;
 
 SignSetStyleAction::SignSetStyleAction(BannerIndex bannerIndex, uint8_t mainColour, uint8_t textColour, bool isLarge)
     : _bannerIndex(bannerIndex)
@@ -24,6 +28,14 @@ SignSetStyleAction::SignSetStyleAction(BannerIndex bannerIndex, uint8_t mainColo
     , _textColour(textColour)
     , _isLarge(isLarge)
 {
+}
+
+void SignSetStyleAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit("id", _bannerIndex);
+    visitor.Visit("mainColour", _mainColour);
+    visitor.Visit("textColour", _textColour);
+    visitor.Visit("isLarge", _isLarge);
 }
 
 uint16_t SignSetStyleAction::GetActionFlags() const
@@ -42,32 +54,33 @@ GameActions::Result SignSetStyleAction::Query() const
     auto banner = GetBanner(_bannerIndex);
     if (banner == nullptr)
     {
-        log_error("Invalid banner id. id = ", _bannerIndex);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_NONE);
+        LOG_ERROR("Banner not found for bannerIndex %u", _bannerIndex);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, kStringIdNone);
     }
 
     if (_isLarge)
     {
-        TileElement* tileElement = banner_get_tile_element(_bannerIndex);
+        TileElement* tileElement = BannerGetTileElement(_bannerIndex);
         if (tileElement == nullptr)
         {
-            log_warning("Invalid game command for setting sign style, banner id '%d' not found", _bannerIndex);
-            return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_NONE);
+            LOG_ERROR("Banner tile element not found for bannerIndex %u", _bannerIndex);
+            return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, kStringIdNone);
         }
         if (tileElement->GetType() != TileElementType::LargeScenery)
         {
-            log_warning("Invalid game command for setting sign style, banner id '%d' is not large", _bannerIndex);
-            return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_NONE);
+            LOG_ERROR(
+                "Tile element has type %u, expected %d (LargeScenery)", tileElement->GetType(), TileElementType::LargeScenery);
+            return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, kStringIdNone);
         }
     }
     else
     {
-        WallElement* wallElement = banner_get_scrolling_wall_tile_element(_bannerIndex);
+        WallElement* wallElement = BannerGetScrollingWallTileElement(_bannerIndex);
 
         if (wallElement == nullptr)
         {
-            log_warning("Invalid game command for setting sign style, banner id '%d' not found", _bannerIndex);
-            return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_NONE);
+            LOG_ERROR("Wall element not found for bannerIndex", _bannerIndex);
+            return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, kStringIdNone);
         }
     }
 
@@ -79,34 +92,34 @@ GameActions::Result SignSetStyleAction::Execute() const
     auto banner = GetBanner(_bannerIndex);
     if (banner == nullptr)
     {
-        log_error("Invalid banner id. id = ", _bannerIndex);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, STR_NONE);
+        LOG_ERROR("Invalid banner id %u", _bannerIndex);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_CANT_REPAINT_THIS, kStringIdNone);
     }
 
     CoordsXY coords = banner->position.ToCoordsXY();
 
     if (_isLarge)
     {
-        TileElement* tileElement = banner_get_tile_element(_bannerIndex);
-        if (!map_large_scenery_sign_set_colour(
+        TileElement* tileElement = BannerGetTileElement(_bannerIndex);
+        if (!MapLargeScenerySignSetColour(
                 { coords, tileElement->GetBaseZ(), tileElement->GetDirection() },
                 tileElement->AsLargeScenery()->GetSequenceIndex(), _mainColour, _textColour))
         {
-            return GameActions::Result(GameActions::Status::Unknown, STR_CANT_REPAINT_THIS, STR_NONE);
+            return GameActions::Result(GameActions::Status::Unknown, STR_CANT_REPAINT_THIS, kStringIdNone);
         }
     }
     else
     {
-        WallElement* wallElement = banner_get_scrolling_wall_tile_element(_bannerIndex);
+        WallElement* wallElement = BannerGetScrollingWallTileElement(_bannerIndex);
 
         wallElement->SetPrimaryColour(_mainColour);
         wallElement->SetSecondaryColour(_textColour);
-        map_invalidate_tile({ coords, wallElement->GetBaseZ(), wallElement->GetClearanceZ() });
+        MapInvalidateTile({ coords, wallElement->GetBaseZ(), wallElement->GetClearanceZ() });
     }
 
     auto intent = Intent(INTENT_ACTION_UPDATE_BANNER);
-    intent.putExtra(INTENT_EXTRA_BANNER_INDEX, _bannerIndex);
-    context_broadcast_intent(&intent);
+    intent.PutExtra(INTENT_EXTRA_BANNER_INDEX, _bannerIndex);
+    ContextBroadcastIntent(&intent);
 
     return GameActions::Result();
 }

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,17 +9,19 @@
 
 #include "StringTable.h"
 
+#include "../Context.h"
+#include "../core/EnumUtils.hpp"
+#include "../core/Guard.hpp"
 #include "../core/IStream.hpp"
 #include "../core/Json.hpp"
 #include "../core/String.hpp"
-#include "../localisation/Language.h"
-#include "../localisation/LanguagePack.h"
 #include "../localisation/LocalisationService.h"
+#include "../rct12/CSStringConverter.h"
 #include "Object.h"
 
-#include <algorithm>
+using namespace OpenRCT2;
 
-static constexpr const uint8_t RCT2ToOpenRCT2LanguageId[] = {
+static constexpr uint8_t RCT2ToOpenRCT2LanguageId[] = {
     LANGUAGE_ENGLISH_UK,
     LANGUAGE_ENGLISH_US,
     LANGUAGE_FRENCH,
@@ -59,15 +61,15 @@ void StringTable::Read(IReadObjectContext* context, OpenRCT2::IStream* stream, O
                 ? RCT2ToOpenRCT2LanguageId[EnumValue(rct2LanguageId)]
                 : static_cast<uint8_t>(LANGUAGE_UNDEFINED);
             std::string stringAsWin1252 = stream->ReadStdString();
-            auto stringAsUtf8 = rct2_to_utf8(stringAsWin1252, rct2LanguageId);
+            auto stringAsUtf8 = RCT2StringToUTF8(stringAsWin1252, rct2LanguageId);
 
             if (!StringIsBlank(stringAsUtf8.data()))
             {
-                stringAsUtf8 = String::Trim(stringAsUtf8);
+                stringAsUtf8 = String::trim(stringAsUtf8);
                 StringTableEntry entry{};
                 entry.Id = id;
                 entry.LanguageId = languageId;
-                entry.Text = stringAsUtf8;
+                entry.Text = std::move(stringAsUtf8);
                 _strings.push_back(std::move(entry));
             }
         }
@@ -86,6 +88,10 @@ ObjectStringID StringTable::ParseStringId(const std::string& s)
         return ObjectStringID::NAME;
     if (s == "description")
         return ObjectStringID::DESCRIPTION;
+    if (s == "park_name")
+        return ObjectStringID::PARK_NAME;
+    if (s == "details")
+        return ObjectStringID::SCENARIO_DETAILS;
     if (s == "capacity")
         return ObjectStringID::CAPACITY;
     if (s == "vehicleName")
@@ -107,7 +113,7 @@ void StringTable::ReadJson(json_t& root)
         {
             for (auto& [locale, jsonString] : jsonLanguages.items())
             {
-                auto langId = language_get_id_from_locale(locale.c_str());
+                auto langId = LanguageGetIDFromLocale(locale.c_str());
                 if (langId != LANGUAGE_UNDEFINED)
                 {
                     auto string = Json::GetString(jsonString);
@@ -154,31 +160,25 @@ void StringTable::SetString(ObjectStringID id, uint8_t language, const std::stri
 
 void StringTable::Sort()
 {
-    auto targetLanguage = LocalisationService_GetCurrentLanguage();
-    std::sort(_strings.begin(), _strings.end(), [targetLanguage](const StringTableEntry& a, const StringTableEntry& b) -> bool {
+    const auto& languageOrder = OpenRCT2::GetContext()->GetLocalisationService().GetLanguageOrder();
+    std::sort(_strings.begin(), _strings.end(), [languageOrder](const StringTableEntry& a, const StringTableEntry& b) -> bool {
         if (a.Id == b.Id)
         {
             if (a.LanguageId == b.LanguageId)
             {
-                return String::Compare(a.Text, b.Text, true) < 0;
+                return String::compare(a.Text, b.Text, true) < 0;
             }
 
-            if (a.LanguageId == targetLanguage)
+            for (const auto& language : languageOrder)
             {
-                return true;
-            }
-            if (b.LanguageId == targetLanguage)
-            {
-                return false;
-            }
-
-            if (a.LanguageId == LANGUAGE_ENGLISH_UK)
-            {
-                return true;
-            }
-            if (b.LanguageId == LANGUAGE_ENGLISH_UK)
-            {
-                return false;
+                if (a.LanguageId == language)
+                {
+                    return true;
+                }
+                if (b.LanguageId == language)
+                {
+                    return false;
+                }
             }
 
             return a.LanguageId < b.LanguageId;

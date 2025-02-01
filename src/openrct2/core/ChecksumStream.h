@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,8 +9,9 @@
 
 #pragma once
 
-#include "../common.h"
 #include "IStream.hpp"
+
+#include <array>
 
 namespace OpenRCT2
 {
@@ -22,8 +23,8 @@ namespace OpenRCT2
         // FIXME: Move the checksum implementation out.
         std::array<std::byte, 20>& _checksum;
 
-        static constexpr uint64_t Seed = 0xcbf29ce484222325ULL;
-        static constexpr uint64_t Prime = 0x00000100000001B3ULL;
+        static constexpr uint64_t kSeed = 0xcbf29ce484222325ULL;
+        static constexpr uint64_t kPrime = 0x00000100000001B3ULL;
 
     public:
         ChecksumStream(std::array<std::byte, 20>& buf);
@@ -96,7 +97,8 @@ namespace OpenRCT2
             Write<16>(buffer);
         }
 
-        template<size_t N> void Write(const void* buffer)
+        template<size_t N>
+        void Write(const void* buffer)
         {
             Write(buffer, N);
         }

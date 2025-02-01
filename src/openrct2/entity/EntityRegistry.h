@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,24 +9,39 @@
 
 #pragma once
 
-#include "../common.h"
 #include "EntityBase.h"
 
 #include <array>
+#include <string>
 
-constexpr uint16_t MAX_ENTITIES = 65535;
+namespace OpenRCT2
+{
+    union Entity_t
+    {
+        uint8_t Pad00[0x200];
+        EntityBase base;
+        Entity_t()
+            : Pad00()
+        {
+        }
+    };
+} // namespace OpenRCT2
 
-EntityBase* GetEntity(size_t sprite_idx);
+constexpr uint16_t kMaxEntities = 65535;
 
-template<typename T> T* GetEntity(size_t sprite_idx)
+EntityBase* GetEntity(EntityId sprite_idx);
+
+template<typename T>
+T* GetEntity(EntityId sprite_idx)
 {
     auto spr = GetEntity(sprite_idx);
     return spr != nullptr ? spr->As<T>() : nullptr;
 }
 
-EntityBase* TryGetEntity(size_t spriteIndex);
+EntityBase* TryGetEntity(EntityId spriteIndex);
 
-template<typename T> T* TryGetEntity(size_t sprite_idx)
+template<typename T>
+T* TryGetEntity(EntityId sprite_idx)
 {
     auto spr = TryGetEntity(sprite_idx);
     return spr != nullptr ? spr->As<T>() : nullptr;
@@ -34,15 +49,17 @@ template<typename T> T* TryGetEntity(size_t sprite_idx)
 
 EntityBase* CreateEntity(EntityType type);
 
-template<typename T> T* CreateEntity()
+template<typename T>
+T* CreateEntity()
 {
     return static_cast<T*>(CreateEntity(T::cEntityType));
 }
 
 // Use only with imports that must happen at a specified index
-EntityBase* CreateEntityAt(const uint16_t index, const EntityType type);
+EntityBase* CreateEntityAt(const EntityId index, const EntityType type);
 // Use only with imports that must happen at a specified index
-template<typename T> T* CreateEntityAt(const uint16_t index)
+template<typename T>
+T* CreateEntityAt(const EntityId index)
 {
     return static_cast<T*>(CreateEntityAt(index, T::cEntityType));
 }
@@ -50,9 +67,10 @@ template<typename T> T* CreateEntityAt(const uint16_t index)
 void ResetAllEntities();
 void ResetEntitySpatialIndices();
 void UpdateAllMiscEntities();
-void EntitySetCoordinates(const CoordsXYZ& entityPos, EntityBase* entity);
+void UpdateMoneyEffect();
 void EntityRemove(EntityBase* entity);
 uint16_t RemoveFloatingEntities();
+void UpdateEntitiesSpatialIndex();
 
 #pragma pack(push, 1)
 struct EntitiesChecksum

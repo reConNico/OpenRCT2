@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,29 +9,32 @@
 
 #pragma once
 
-#include "../common.h"
+#include "../core/StringTypes.h"
 
 #include <memory>
 #include <string>
 #include <vector>
 
-struct FileInfo
+namespace OpenRCT2::FileScanner
 {
-    const utf8* Name;
-    uint64_t Size;
-    uint64_t LastModified;
-};
+    struct FileInfo
+    {
+        u8string Name;
+        uint64_t Size;
+        uint64_t LastModified;
+    };
+} // namespace OpenRCT2::FileScanner
 
 struct IFileScanner
 {
     virtual ~IFileScanner() = default;
 
-    virtual const FileInfo* GetFileInfo() const abstract;
-    virtual const utf8* GetPath() const abstract;
-    virtual const utf8* GetPathRelative() const abstract;
+    virtual const OpenRCT2::FileScanner::FileInfo& GetFileInfo() const = 0;
+    virtual const u8string& GetPath() const = 0;
+    virtual u8string GetPathRelative() const = 0;
 
-    virtual void Reset() abstract;
-    virtual bool Next() abstract;
+    virtual void Reset() = 0;
+    virtual bool Next() = 0;
 };
 
 struct QueryDirectoryResult
@@ -42,7 +45,7 @@ struct QueryDirectoryResult
     uint32_t PathChecksum;
 };
 
-namespace Path
+namespace OpenRCT2::Path
 {
     /**
      * Scans a directory and optionally sub directories for files that matches the
@@ -61,4 +64,4 @@ namespace Path
     void QueryDirectory(QueryDirectoryResult* result, const std::string& pattern);
 
     [[nodiscard]] std::vector<std::string> GetDirectories(const std::string& path);
-} // namespace Path
+} // namespace OpenRCT2::Path

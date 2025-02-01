@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,19 +11,19 @@
 
 #include "../Cheats.h"
 #include "../Context.h"
+#include "../Diagnostic.h"
 #include "../Game.h"
+#include "../GameState.h"
 #include "../OpenRCT2.h"
 #include "../TrackImporter.h"
-#include "../actions/FootpathPlaceFromTrackAction.h"
+#include "../actions/FootpathLayoutPlaceAction.h"
 #include "../actions/FootpathRemoveAction.h"
 #include "../actions/LargeSceneryPlaceAction.h"
 #include "../actions/LargeSceneryRemoveAction.h"
 #include "../actions/MazePlaceTrackAction.h"
 #include "../actions/RideCreateAction.h"
+#include "../actions/RideDemolishAction.h"
 #include "../actions/RideEntranceExitPlaceAction.h"
-#include "../actions/RideSetNameAction.h"
-#include "../actions/RideSetSettingAction.h"
-#include "../actions/RideSetVehicleAction.h"
 #include "../actions/SmallSceneryPlaceAction.h"
 #include "../actions/SmallSceneryRemoveAction.h"
 #include "../actions/TrackPlaceAction.h"
@@ -34,27 +34,34 @@
 #include "../core/DataSerialiser.h"
 #include "../core/File.h"
 #include "../core/Numerics.hpp"
+#include "../core/SawyerCoding.h"
 #include "../core/String.hpp"
+#include "../core/UnitConversion.h"
 #include "../drawing/X8DrawingEngine.h"
-#include "../localisation/Localisation.h"
+#include "../interface/Viewport.h"
 #include "../localisation/StringIds.h"
 #include "../management/Finance.h"
 #include "../network/network.h"
 #include "../object/FootpathObject.h"
 #include "../object/FootpathSurfaceObject.h"
+#include "../object/LargeSceneryEntry.h"
+#include "../object/ObjectEntryManager.h"
+#include "../object/ObjectLimits.h"
 #include "../object/ObjectList.h"
 #include "../object/ObjectManager.h"
 #include "../object/ObjectRepository.h"
-#include "../rct1/RCT1.h"
-#include "../rct1/Tables.h"
-#include "../util/SawyerCoding.h"
-#include "../util/Util.h"
+#include "../object/SmallSceneryEntry.h"
+#include "../object/StationObject.h"
+#include "../rct2/RCT2.h"
+#include "../ride/RideConstruction.h"
 #include "../world/Footpath.h"
 #include "../world/Park.h"
 #include "../world/Scenery.h"
-#include "../world/SmallScenery.h"
-#include "../world/Surface.h"
-#include "../world/Wall.h"
+#include "../world/tile_element/EntranceElement.h"
+#include "../world/tile_element/PathElement.h"
+#include "../world/tile_element/Slope.h"
+#include "../world/tile_element/SurfaceElement.h"
+#include "../world/tile_element/TrackElement.h"
 #include "Ride.h"
 #include "RideData.h"
 #include "Track.h"
@@ -63,13 +70,30 @@
 #include "TrackDesignRepository.h"
 #include "Vehicle.h"
 
-#include <algorithm>
 #include <iterator>
 #include <memory>
 
 using namespace OpenRCT2;
+
+namespace OpenRCT2::TrackDesignSceneryElementFlags
+{
+    static constexpr uint8_t kRotationMask = 0b00000011;
+
+    static constexpr uint8_t kQuadrantMask = 0b00001100;
+
+    static constexpr uint8_t kEdgesMask = 0b00001111;
+    static constexpr uint8_t kHasSlopeMask = 0b00010000;
+    static constexpr uint8_t kSlopeDirectionMask = 0b01100000;
+    static constexpr uint8_t kIsQueueMask = 0b10000000;
+} // namespace OpenRCT2::TrackDesignSceneryElementFlags
+
+using namespace TrackDesignSceneryElementFlags;
+
+using namespace OpenRCT2;
 using namespace OpenRCT2::Drawing;
 using namespace OpenRCT2::TrackMetaData;
+
+constexpr TileCoordsXY TRACK_DESIGN_PREVIEW_MAP_SIZE = TileCoordsXY{ 256, 256 };
 
 bool gTrackDesignSceneryToggle;
 bool _trackDesignDrawingPreview;
@@ -79,93 +103,92 @@ static bool _trackDesignPlaceStateEntranceExitPlaced{};
 
 static void TrackDesignPreviewClearMap();
 
-rct_string_id TrackDesign::CreateTrackDesign(TrackDesignState& tds, const Ride& ride)
+static u8string_view TrackDesignGetStationObjectIdentifier(const Ride& ride)
 {
-    type = ride.type;
+    const auto* stationObject = ride.GetStationObject();
+    if (stationObject == nullptr)
+        return "";
 
-    auto object = object_entry_get_object(ObjectType::Ride, ride.subtype);
+    return stationObject->GetIdentifier();
+}
+
+ResultWithMessage TrackDesign::CreateTrackDesign(TrackDesignState& tds, const Ride& ride)
+{
+    trackAndVehicle.rtdIndex = ride.type;
+
+    auto object = ObjectEntryGetObject(ObjectType::Ride, ride.subtype);
     if (object != nullptr)
     {
         auto entry = object->GetObjectEntry();
+        // Remove this check for new track design format
         if (entry.IsEmpty())
         {
-            // TODO create a new error message for `JSON objects are unsupported`
-            return STR_UNKNOWN_OBJECT_TYPE;
+            return { false, STR_VEHICLE_UNSUPPORTED_TD6 };
         }
-        vehicle_object = ObjectEntryDescriptor(entry);
+        trackAndVehicle.vehicleObject = ObjectEntryDescriptor(entry);
     }
 
-    ride_mode = ride.mode;
-    colour_scheme = ride.colour_scheme_type & 3;
+    operation.rideMode = ride.mode;
+    appearance.vehicleColourSettings = ride.vehicleColourSettings;
 
-    for (int32_t i = 0; i < RCT2::Limits::MaxTrainsPerRide; i++)
+    for (size_t i = 0; i < std::size(appearance.vehicleColours); i++)
     {
-        vehicle_colours[i].body_colour = ride.vehicle_colours[i].Body;
-        vehicle_colours[i].trim_colour = ride.vehicle_colours[i].Trim;
-        vehicle_additional_colour[i] = ride.vehicle_colours[i].Ternary;
+        appearance.vehicleColours[i] = ride.vehicle_colours[i];
     }
 
-    for (int32_t i = 0; i < RCT12::Limits::NumColourSchemes; i++)
+    for (size_t i = 0; i < std::min(std::size(ride.track_colour), std::size(appearance.trackColours)); i++)
     {
-        track_spine_colour[i] = ride.track_colour[i].main;
-        track_rail_colour[i] = ride.track_colour[i].additional;
-        track_support_colour[i] = ride.track_colour[i].supports;
+        appearance.trackColours[i] = ride.track_colour[i];
     }
 
-    depart_flags = ride.depart_flags;
-    number_of_trains = ride.num_vehicles;
-    number_of_cars_per_train = ride.num_cars_per_train;
-    min_waiting_time = ride.min_waiting_time;
-    max_waiting_time = ride.max_waiting_time;
-    operation_setting = ride.operation_option;
-    lift_hill_speed = ride.lift_hill_speed;
-    num_circuits = ride.num_circuits;
+    operation.departFlags = ride.depart_flags;
+    trackAndVehicle.numberOfTrains = ride.NumTrains;
+    trackAndVehicle.numberOfCarsPerTrain = ride.num_cars_per_train;
+    operation.minWaitingTime = ride.min_waiting_time;
+    operation.maxWaitingTime = ride.max_waiting_time;
+    operation.operationSetting = ride.operation_option;
+    operation.liftHillSpeed = ride.lift_hill_speed;
+    operation.numCircuits = ride.num_circuits;
 
-    entrance_style = ride.entrance_style;
-    max_speed = static_cast<int8_t>(ride.max_speed / 65536);
-    average_speed = static_cast<int8_t>(ride.average_speed / 65536);
-    ride_length = ride.GetTotalLength() / 65536;
-    max_positive_vertical_g = ride.max_positive_vertical_g / 32;
-    max_negative_vertical_g = ride.max_negative_vertical_g / 32;
-    max_lateral_g = ride.max_lateral_g / 32;
-    inversions = ride.holes & 0x1F;
-    inversions = ride.inversions & 0x1F;
-    inversions |= (ride.sheltered_eighths << 5);
-    drops = ride.drops;
-    highest_drop_height = ride.highest_drop_height;
+    appearance.stationObjectIdentifier = TrackDesignGetStationObjectIdentifier(ride);
+    statistics.maxSpeed = static_cast<int8_t>(ride.max_speed / 65536);
+    statistics.averageSpeed = static_cast<int8_t>(ride.average_speed / 65536);
+    statistics.rideLength = ToHumanReadableRideLength(ride.GetTotalLength());
+    statistics.maxPositiveVerticalG = ride.max_positive_vertical_g;
+    statistics.maxNegativeVerticalG = ride.max_negative_vertical_g;
+    statistics.maxLateralG = ride.max_lateral_g;
+    statistics.inversions = ride.inversions;
+    statistics.holes = ride.holes;
+    statistics.drops = ride.getNumDrops();
+    statistics.highestDropHeight = ride.highest_drop_height;
+    statistics.totalAirTime = ride.totalAirTime;
 
-    uint16_t totalAirTime = (ride.total_air_time * 123) / 1024;
-    if (totalAirTime > 255)
-    {
-        totalAirTime = 0;
-    }
-    total_air_time = static_cast<uint8_t>(totalAirTime);
+    statistics.ratings = ride.ratings;
+    statistics.upkeepCost = ride.upkeep_cost;
 
-    excitement = ride.ratings.Excitement / 10;
-    intensity = ride.ratings.Intensity / 10;
-    nausea = ride.ratings.Nausea / 10;
+    const auto& rtd = GetRideTypeDescriptor(trackAndVehicle.rtdIndex);
 
-    upkeep_cost = ride.upkeep_cost;
-    flags = 0;
-    flags2 = 0;
-
-    if (type == RIDE_TYPE_MAZE)
+    if (rtd.DesignCreateMode == TrackDesignCreateMode::Maze)
     {
         return CreateTrackDesignMaze(tds, ride);
     }
-
-    return CreateTrackDesignTrack(tds, ride);
+    else
+    {
+        return CreateTrackDesignTrack(tds, ride);
+    }
 }
 
-rct_string_id TrackDesign::CreateTrackDesignTrack(TrackDesignState& tds, const Ride& ride)
+ResultWithMessage TrackDesign::CreateTrackDesignTrack(TrackDesignState& tds, const Ride& ride)
 {
     CoordsXYE trackElement;
-    if (!ride_try_get_origin_element(&ride, &trackElement))
+    if (!RideTryGetOriginElement(ride, &trackElement))
     {
-        return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+        return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
     }
 
-    ride_get_start_of_track(&trackElement);
+    StringId warningMessage = kStringIdNone;
+
+    RideGetStartOfTrack(&trackElement);
 
     int32_t z = trackElement.element->GetBaseZ();
     auto trackType = trackElement.element->AsTrack()->GetTrackType();
@@ -176,51 +199,56 @@ rct_string_id TrackDesign::CreateTrackDesignTrack(TrackDesignState& tds, const R
 
     if (!newCoords.has_value())
     {
-        return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+        return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
     }
     trackElement.x = newCoords->x;
     trackElement.y = newCoords->y;
     z = newCoords->z;
 
     const auto& ted = GetTrackElementDescriptor(trackElement.element->AsTrack()->GetTrackType());
-    const rct_track_coordinates* trackCoordinates = &ted.Coordinates;
-    const auto* trackBlock = ted.Block;
+    const TrackCoordinates* trackCoordinates = &ted.coordinates;
     // Used in the following loop to know when we have
     // completed all of the elements and are back at the
     // start.
     TileElement* initialMap = trackElement.element;
 
-    CoordsXYZ startPos = { trackElement.x, trackElement.y, z + trackCoordinates->z_begin - trackBlock->z };
-    tds.Origin = startPos;
+    CoordsXYZ startPos = { trackElement.x, trackElement.y, z + trackCoordinates->zBegin - ted.sequences[0].clearance.z };
+    tds.origin = startPos;
 
     do
     {
+        const auto& element = trackElement.element->AsTrack();
+
+        // Remove this check for new track design format
+        if (element->GetTrackType() > TrackElemType::HighestAlias)
+        {
+            return { false, STR_TRACK_ELEM_UNSUPPORTED_TD6 };
+        }
+
         TrackDesignTrackElement track{};
-        track.type = trackElement.element->AsTrack()->GetTrackType();
+        track.type = element->GetTrackType();
+        track.colourScheme = element->GetColourScheme();
+        track.stationIndex = element->GetStationIndex();
+        track.brakeBoosterSpeed = element->GetBrakeBoosterSpeed();
+        track.seatRotation = element->GetSeatRotation();
 
-        uint8_t trackFlags;
-        if (TrackTypeHasSpeedSetting(track.type))
+        // This warning will not apply to new track design format
+        if (track.type == TrackElemType::BlockBrakes && element->GetBrakeBoosterSpeed() != kRCT2DefaultBlockBrakeSpeed)
         {
-            trackFlags = trackElement.element->AsTrack()->GetBrakeBoosterSpeed() >> 1;
-        }
-        else
-        {
-            trackFlags = trackElement.element->AsTrack()->GetSeatRotation();
-        }
-
-        if (trackElement.element->AsTrack()->HasChain())
-            trackFlags |= RCT12_TRACK_ELEMENT_TYPE_FLAG_CHAIN_LIFT;
-        trackFlags |= trackElement.element->AsTrack()->GetColourScheme() << 4;
-        if (ride.GetRideTypeDescriptor().HasFlag(RIDE_TYPE_FLAG_HAS_ALTERNATIVE_TRACK_TYPE)
-            && trackElement.element->AsTrack()->IsInverted())
-        {
-            trackFlags |= TD6_TRACK_ELEMENT_FLAG_INVERTED;
+            warningMessage = STR_TRACK_DESIGN_BLOCK_BRAKE_SPEED_RESET;
         }
 
-        track.flags = trackFlags;
-        track_elements.push_back(track);
+        if (element->HasChain())
+            track.SetFlag(TrackDesignTrackElementFlag::hasChain);
 
-        if (!track_block_get_next(&trackElement, &trackElement, nullptr, nullptr))
+        if (ride.GetRideTypeDescriptor().HasFlag(RtdFlag::hasInvertedVariant) && element->IsInverted())
+        {
+            track.SetFlag(TrackDesignTrackElementFlag::isInverted);
+        }
+
+        trackElements.push_back(track);
+
+        if (!TrackBlockGetNext(&trackElement, &trackElement, nullptr, nullptr))
         {
             break;
         }
@@ -238,27 +266,27 @@ rct_string_id TrackDesign::CreateTrackDesignTrack(TrackDesignState& tds, const R
         trackElement.x = newCoords->x;
         trackElement.y = newCoords->y;
 
-        if (track_elements.size() > RCT2::Limits::TD6MaxTrackElements)
+        if (trackElements.size() > RCT2::Limits::kTD6MaxTrackElements)
         {
-            return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+            return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
         }
     } while (trackElement.element != initialMap);
 
     // First entrances, second exits
     for (int32_t i = 0; i < 2; i++)
     {
-        for (StationIndex station_index = 0; station_index < RCT12::Limits::MaxStationsPerRide; station_index++)
+        for (const auto& station : ride.GetStations())
         {
-            z = ride.stations[station_index].GetBaseZ();
+            z = station.GetBaseZ();
 
             TileCoordsXYZD location;
             if (i == 0)
             {
-                location = ride_get_entrance_location(&ride, station_index);
+                location = station.Entrance;
             }
             else
             {
-                location = ride_get_exit_location(&ride, station_index);
+                location = station.Exit;
             }
 
             if (location.IsNull())
@@ -268,7 +296,7 @@ rct_string_id TrackDesign::CreateTrackDesignTrack(TrackDesignState& tds, const R
 
             CoordsXY mapLocation = location.ToCoordsXY();
 
-            TileElement* tileElement = map_get_first_element_at(mapLocation);
+            TileElement* tileElement = MapGetFirstElementAt(mapLocation);
             if (tileElement == nullptr)
                 continue;
 
@@ -284,70 +312,64 @@ rct_string_id TrackDesign::CreateTrackDesignTrack(TrackDesignState& tds, const R
 
             Direction entranceDirection = tileElement->GetDirection();
             entranceDirection -= _saveDirection;
-            entranceDirection &= TILE_ELEMENT_DIRECTION_MASK;
+            entranceDirection &= kTileElementDirectionMask;
 
-            TrackDesignEntranceElement entrance{};
-            entrance.direction = entranceDirection;
-
-            mapLocation -= tds.Origin;
-
+            mapLocation -= tds.origin;
             // Rotate entrance coordinates backwards to the correct direction
-            auto rotatedMapLocation = mapLocation.Rotate(0 - _saveDirection);
-            entrance.x = rotatedMapLocation.x;
-            entrance.y = rotatedMapLocation.y;
+            auto rotatedMapLocation = TileCoordsXY(mapLocation.Rotate(0 - _saveDirection));
 
-            z -= tds.Origin.z;
-            z /= 8;
+            z -= tds.origin.z;
+            z /= kCoordsZStep;
 
             if (z > 127 || z < -126)
             {
-                return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+                return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
             }
 
-            entrance.z = z;
+            TrackDesignEntranceElement entrance{};
+            entrance.location = TileCoordsXYZD(rotatedMapLocation, z, entranceDirection);
 
             // If this is the exit version
             if (i == 1)
             {
                 entrance.isExit = true;
             }
-            entrance_elements.push_back(entrance);
+            entranceElements.push_back(entrance);
         }
     }
 
-    TrackDesignPreviewDrawOutlines(this, GetOrAllocateRide(PreviewRideId), { 4096, 4096, 0 });
+    TrackDesignPreviewDrawOutlines(tds, *this, RideGetTemporaryForPreview(), { 4096, 4096, 0, _currentTrackPieceDirection });
 
     // Resave global vars for scenery reasons.
-    tds.Origin = startPos;
+    tds.origin = startPos;
 
     gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_CONSTRUCT;
     gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_ARROW;
     gMapSelectFlags &= ~MAP_SELECT_FLAG_GREEN;
 
-    space_required_x = ((tds.PreviewMax.x - tds.PreviewMin.x) / 32) + 1;
-    space_required_y = ((tds.PreviewMax.y - tds.PreviewMin.y) / 32) + 1;
-    return STR_NONE;
+    statistics.spaceRequired = TileCoordsXY(tds.previewMax - tds.previewMin) + TileCoordsXY{ 1, 1 };
+    return { true, warningMessage };
 }
 
-rct_string_id TrackDesign::CreateTrackDesignMaze(TrackDesignState& tds, const Ride& ride)
+ResultWithMessage TrackDesign::CreateTrackDesignMaze(TrackDesignState& tds, const Ride& ride)
 {
     auto startLoc = MazeGetFirstElement(ride);
 
     if (startLoc.element == nullptr)
     {
-        return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+        return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
     }
 
-    tds.Origin = { startLoc.x, startLoc.y, startLoc.element->GetBaseZ() };
+    tds.origin = { startLoc.x, startLoc.y, startLoc.element->GetBaseZ() };
 
     // x is defined here as we can start the search
     // on tile start_x, start_y but then the next row
     // must restart on 0
-    for (int32_t y = startLoc.y, x = startLoc.x; y < MAXIMUM_MAP_SIZE_BIG; y += COORDS_XY_STEP)
+    for (int32_t y = startLoc.y, x = startLoc.x; y < kMaximumMapSizeBig; y += kCoordsXYStep)
     {
-        for (; x < MAXIMUM_MAP_SIZE_BIG; x += COORDS_XY_STEP)
+        for (; x < kMaximumMapSizeBig; x += kCoordsXYStep)
         {
-            auto tileElement = map_get_first_element_at(CoordsXY{ x, y });
+            auto tileElement = MapGetFirstElementAt(CoordsXY{ x, y });
             do
             {
                 if (tileElement == nullptr)
@@ -359,33 +381,33 @@ rct_string_id TrackDesign::CreateTrackDesignMaze(TrackDesignState& tds, const Ri
 
                 TrackDesignMazeElement maze{};
 
-                maze.maze_entry = tileElement->AsTrack()->GetMazeEntry();
-                maze.x = (x - startLoc.x) / COORDS_XY_STEP;
-                maze.y = (y - startLoc.y) / COORDS_XY_STEP;
+                maze.mazeEntry = tileElement->AsTrack()->GetMazeEntry();
+                maze.location.x = (x - startLoc.x) / kCoordsXYStep;
+                maze.location.y = (y - startLoc.y) / kCoordsXYStep;
                 _saveDirection = tileElement->GetDirection();
-                maze_elements.push_back(maze);
+                mazeElements.push_back(maze);
 
-                if (maze_elements.size() >= 2000)
+                if (mazeElements.size() >= 2000)
                 {
-                    return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+                    return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
                 }
             } while (!(tileElement++)->IsLastForTile());
         }
         x = 0;
     }
 
-    auto location = ride_get_entrance_location(&ride, 0);
+    auto location = ride.GetStation().Entrance;
     if (location.IsNull())
     {
-        return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+        return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
     }
 
     CoordsXY entranceLoc = location.ToCoordsXY();
-    auto tileElement = map_get_first_element_at(entranceLoc);
+    auto tileElement = MapGetFirstElementAt(entranceLoc);
     do
     {
         if (tileElement == nullptr)
-            return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+            return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
         if (tileElement->GetType() != TileElementType::Entrance)
             continue;
         if (tileElement->AsEntrance()->GetEntranceType() != ENTRANCE_TYPE_RIDE_ENTRANCE)
@@ -395,24 +417,22 @@ rct_string_id TrackDesign::CreateTrackDesignMaze(TrackDesignState& tds, const Ri
     } while (!(tileElement++)->IsLastForTile());
     // Add something that stops this from walking off the end
 
-    uint8_t entranceDirection = tileElement->GetDirection();
-    TrackDesignMazeElement mazeEntrance{};
-    mazeEntrance.direction = entranceDirection;
-    mazeEntrance.type = 8;
-    mazeEntrance.x = static_cast<int8_t>((entranceLoc.x - startLoc.x) / 32);
-    mazeEntrance.y = static_cast<int8_t>((entranceLoc.y - startLoc.y) / 32);
-    maze_elements.push_back(mazeEntrance);
+    auto entranceOffset = entranceLoc - startLoc;
+    TrackDesignEntranceElement mazeEntrance{};
+    mazeEntrance.location = TileCoordsXYZD(CoordsXYZD(entranceOffset, 0, tileElement->GetDirection()));
+    mazeEntrance.isExit = false;
+    entranceElements.push_back(mazeEntrance);
 
-    location = ride_get_exit_location(&ride, 0);
+    location = ride.GetStation().Exit;
     if (location.IsNull())
     {
-        return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+        return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
     }
 
     CoordsXY exitLoc = location.ToCoordsXY();
-    tileElement = map_get_first_element_at(exitLoc);
+    tileElement = MapGetFirstElementAt(exitLoc);
     if (tileElement == nullptr)
-        return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+        return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
     do
     {
         if (tileElement->GetType() != TileElementType::Entrance)
@@ -424,36 +444,34 @@ rct_string_id TrackDesign::CreateTrackDesignMaze(TrackDesignState& tds, const Ri
     } while (!(tileElement++)->IsLastForTile());
     // Add something that stops this from walking off the end
 
-    uint8_t exit_direction = tileElement->GetDirection();
-    TrackDesignMazeElement mazeExit{};
-    mazeExit.direction = exit_direction;
-    mazeExit.type = 0x80;
-    mazeExit.x = static_cast<int8_t>((exitLoc.x - startLoc.x) / 32);
-    mazeExit.y = static_cast<int8_t>((exitLoc.y - startLoc.y) / 32);
-    maze_elements.push_back(mazeExit);
+    auto exitOffset = exitLoc - startLoc;
+    TrackDesignEntranceElement mazeExit{};
+    mazeExit.location = TileCoordsXYZD(CoordsXYZD(exitOffset, 0, tileElement->GetDirection()));
+    mazeExit.isExit = true;
+    entranceElements.push_back(mazeExit);
 
     // Save global vars as they are still used by scenery????
-    int32_t startZ = tds.Origin.z;
-    TrackDesignPreviewDrawOutlines(this, GetOrAllocateRide(PreviewRideId), { 4096, 4096, 0 });
-    tds.Origin = { startLoc.x, startLoc.y, startZ };
+    int32_t startZ = tds.origin.z;
+    TrackDesignPreviewDrawOutlines(tds, *this, RideGetTemporaryForPreview(), { 4096, 4096, 0, _currentTrackPieceDirection });
+    tds.origin = { startLoc.x, startLoc.y, startZ };
 
     gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_CONSTRUCT;
     gMapSelectFlags &= ~MAP_SELECT_FLAG_ENABLE_ARROW;
     gMapSelectFlags &= ~MAP_SELECT_FLAG_GREEN;
 
-    space_required_x = ((tds.PreviewMax.x - tds.PreviewMin.x) / 32) + 1;
-    space_required_y = ((tds.PreviewMax.y - tds.PreviewMin.y) / 32) + 1;
-    return STR_NONE;
+    statistics.spaceRequired = TileCoordsXY(tds.previewMax - tds.previewMin) + TileCoordsXY{ 1, 1 };
+
+    return { true };
 }
 
 CoordsXYE TrackDesign::MazeGetFirstElement(const Ride& ride)
 {
     CoordsXYE tile{};
-    for (tile.y = 0; tile.y < MAXIMUM_MAP_SIZE_BIG; tile.y += COORDS_XY_STEP)
+    for (tile.y = 0; tile.y < kMaximumMapSizeBig; tile.y += kCoordsXYStep)
     {
-        for (tile.x = 0; tile.x < MAXIMUM_MAP_SIZE_BIG; tile.x += COORDS_XY_STEP)
+        for (tile.x = 0; tile.x < kMaximumMapSizeBig; tile.x += kCoordsXYStep)
         {
-            tile.element = map_get_first_element_at(CoordsXY{ tile.x, tile.y });
+            tile.element = MapGetFirstElementAt(CoordsXY{ tile.x, tile.y });
             do
             {
                 if (tile.element == nullptr)
@@ -472,129 +490,108 @@ CoordsXYE TrackDesign::MazeGetFirstElement(const Ride& ride)
     return tile;
 }
 
-rct_string_id TrackDesign::CreateTrackDesignScenery(TrackDesignState& tds)
+ResultWithMessage TrackDesign::CreateTrackDesignScenery(TrackDesignState& tds)
 {
-    scenery_elements = _trackSavedTileElementsDesc;
+    sceneryElements = _trackSavedTileElementsDesc;
     // Run an element loop
-    for (auto& scenery : scenery_elements)
+    for (auto& scenery : sceneryElements)
     {
-        switch (scenery.scenery_object.GetType())
+        switch (scenery.sceneryObject.GetType())
         {
             case ObjectType::Paths:
             {
-                uint8_t slope = (scenery.flags & 0x60) >> 5;
-                slope -= _saveDirection;
+                uint8_t slope = (scenery.getSlopeDirection() - _saveDirection) % kNumOrthogonalDirections;
+                scenery.setSlopeDirection(slope);
 
-                scenery.flags &= 0x9F;
-                scenery.flags |= ((slope & 3) << 5);
-
-                // Direction of connection on path
-                uint8_t direction = scenery.flags & 0xF;
-                // Rotate the direction by the track direction
-                direction = ((direction << 4) >> _saveDirection);
-
-                scenery.flags &= 0xF0;
-                scenery.flags |= (direction & 0xF) | (direction >> 4);
+                uint8_t edges = Numerics::ror4(scenery.getEdges(), _saveDirection);
+                scenery.setEdges(edges);
                 break;
             }
             case ObjectType::Walls:
             {
-                uint8_t direction = scenery.flags & 3;
-                direction -= _saveDirection;
-
-                scenery.flags &= 0xFC;
-                scenery.flags |= (direction & 3);
+                auto direction = (scenery.getRotation() - _saveDirection) % kNumOrthogonalDirections;
+                scenery.setRotation(direction);
                 break;
             }
             default:
             {
-                uint8_t direction = scenery.flags & 3;
-                uint8_t quadrant = (scenery.flags & 0x0C) >> 2;
+                auto direction = (scenery.getRotation() - _saveDirection) % kNumOrthogonalDirections;
+                scenery.setRotation(direction);
 
-                direction -= _saveDirection;
-                quadrant -= _saveDirection;
+                auto quadrant = (scenery.getQuadrant() - _saveDirection) % kNumOrthogonalDirections;
+                scenery.setQuadrant(quadrant);
 
-                scenery.flags &= 0xF0;
-                scenery.flags |= (direction & 3) | ((quadrant & 3) << 2);
                 break;
             }
         }
 
-        const auto relativeMapPosition = scenery.loc - tds.Origin;
+        const auto relativeMapPosition = scenery.loc - tds.origin;
         const CoordsXY rotatedRelativeMapPos = relativeMapPosition.Rotate(0 - _saveDirection);
 
-        if (rotatedRelativeMapPos.x > 127 * COORDS_XY_STEP || rotatedRelativeMapPos.y > 127 * COORDS_XY_STEP
-            || rotatedRelativeMapPos.x < -126 * COORDS_XY_STEP || rotatedRelativeMapPos.y < -126 * COORDS_XY_STEP)
+        if (rotatedRelativeMapPos.x > 127 * kCoordsXYStep || rotatedRelativeMapPos.y > 127 * kCoordsXYStep
+            || rotatedRelativeMapPos.x < -126 * kCoordsXYStep || rotatedRelativeMapPos.y < -126 * kCoordsXYStep)
         {
-            return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+            return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
         }
 
-        if (relativeMapPosition.z > 127 * COORDS_Z_STEP || relativeMapPosition.z < -126 * COORDS_Z_STEP)
+        if (relativeMapPosition.z > 127 * kCoordsZStep || relativeMapPosition.z < -126 * kCoordsZStep)
         {
-            return STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY;
+            return { false, STR_TRACK_TOO_LARGE_OR_TOO_MUCH_SCENERY };
         }
         scenery.loc = CoordsXYZ(rotatedRelativeMapPos, relativeMapPosition.z);
     }
 
-    return STR_NONE;
+    return { true };
 }
 
 void TrackDesign::Serialise(DataSerialiser& stream)
 {
     if (stream.IsLogging())
     {
-        stream << DS_TAG(name);
+        stream << DS_TAG(gameStateData.name);
         // There is too much information logged.
         // See sub actions for this information if required.
         return;
     }
-    stream << DS_TAG(type);
-    stream << DS_TAG(vehicle_type);
-    stream << DS_TAG(cost);
-    stream << DS_TAG(flags);
-    stream << DS_TAG(ride_mode);
-    stream << DS_TAG(track_flags);
-    stream << DS_TAG(colour_scheme);
-    stream << DS_TAG(vehicle_colours);
-    stream << DS_TAG(entrance_style);
-    stream << DS_TAG(total_air_time);
-    stream << DS_TAG(depart_flags);
-    stream << DS_TAG(number_of_trains);
-    stream << DS_TAG(number_of_cars_per_train);
-    stream << DS_TAG(min_waiting_time);
-    stream << DS_TAG(max_waiting_time);
-    stream << DS_TAG(operation_setting);
-    stream << DS_TAG(max_speed);
-    stream << DS_TAG(average_speed);
-    stream << DS_TAG(ride_length);
-    stream << DS_TAG(max_positive_vertical_g);
-    stream << DS_TAG(max_negative_vertical_g);
-    stream << DS_TAG(max_lateral_g);
-    stream << DS_TAG(inversions);
-    stream << DS_TAG(holes);
-    stream << DS_TAG(drops);
-    stream << DS_TAG(highest_drop_height);
-    stream << DS_TAG(excitement);
-    stream << DS_TAG(intensity);
-    stream << DS_TAG(nausea);
-    stream << DS_TAG(upkeep_cost);
-    stream << DS_TAG(track_spine_colour);
-    stream << DS_TAG(track_rail_colour);
-    stream << DS_TAG(track_support_colour);
-    stream << DS_TAG(flags2);
-    stream << DS_TAG(vehicle_object.Entry);
-    stream << DS_TAG(space_required_x);
-    stream << DS_TAG(space_required_y);
-    stream << DS_TAG(vehicle_additional_colour);
-    stream << DS_TAG(lift_hill_speed);
-    stream << DS_TAG(num_circuits);
+    stream << DS_TAG(trackAndVehicle.rtdIndex);
+    stream << DS_TAG(gameStateData.cost);
+    stream << DS_TAG(operation.rideMode);
+    stream << DS_TAG(gameStateData.flags);
+    stream << DS_TAG(appearance.vehicleColourSettings);
+    stream << DS_TAG(appearance.vehicleColours);
+    stream << DS_TAG(appearance.stationObjectIdentifier);
+    stream << DS_TAG(statistics.totalAirTime);
+    stream << DS_TAG(operation.departFlags);
+    stream << DS_TAG(trackAndVehicle.numberOfTrains);
+    stream << DS_TAG(trackAndVehicle.numberOfCarsPerTrain);
+    stream << DS_TAG(operation.minWaitingTime);
+    stream << DS_TAG(operation.maxWaitingTime);
+    stream << DS_TAG(operation.operationSetting);
+    stream << DS_TAG(statistics.maxSpeed);
+    stream << DS_TAG(statistics.averageSpeed);
+    stream << DS_TAG(statistics.rideLength);
+    stream << DS_TAG(statistics.maxPositiveVerticalG);
+    stream << DS_TAG(statistics.maxNegativeVerticalG);
+    stream << DS_TAG(statistics.maxLateralG);
+    stream << DS_TAG(statistics.inversions);
+    stream << DS_TAG(statistics.holes);
+    stream << DS_TAG(statistics.drops);
+    stream << DS_TAG(statistics.highestDropHeight);
+    stream << DS_TAG(statistics.ratings);
+    stream << DS_TAG(statistics.upkeepCost);
+    stream << DS_TAG(appearance.trackColours);
+    stream << DS_TAG(trackAndVehicle.vehicleObject);
+    stream << DS_TAG(statistics.spaceRequired.x);
+    stream << DS_TAG(statistics.spaceRequired.y);
+    stream << DS_TAG(operation.liftHillSpeed);
+    stream << DS_TAG(operation.numCircuits);
 
-    stream << DS_TAG(maze_elements);
-    stream << DS_TAG(track_elements);
-    stream << DS_TAG(entrance_elements);
-    stream << DS_TAG(scenery_elements);
+    stream << DS_TAG(mazeElements);
+    stream << DS_TAG(trackElements);
+    stream << DS_TAG(entranceElements);
+    stream << DS_TAG(sceneryElements);
 
-    stream << DS_TAG(name);
+    stream << DS_TAG(gameStateData.name);
 }
 
 std::unique_ptr<TrackDesign> TrackDesignImport(const utf8* path)
@@ -607,9 +604,9 @@ std::unique_ptr<TrackDesign> TrackDesignImport(const utf8* path)
     }
     catch (const std::exception& e)
     {
-        log_error("Unable to load track design: %s", e.what());
+        LOG_ERROR("Unable to load track design: %s", e.what());
     }
-    log_verbose("track_design_open(\"%s\")", path);
+    LOG_VERBOSE("track_design_open(\"%s\")", path);
     return nullptr;
 }
 
@@ -617,23 +614,23 @@ std::unique_ptr<TrackDesign> TrackDesignImport(const utf8* path)
  *
  *  rct2: 0x006ABDB0
  */
-static void TrackDesignLoadSceneryObjects(TrackDesign* td6)
+static void TrackDesignLoadSceneryObjects(const TrackDesign& td)
 {
     auto& objectManager = OpenRCT2::GetContext()->GetObjectManager();
-    objectManager.UnloadAll();
+    objectManager.UnloadAllTransient();
 
     // Load ride object
-    if (td6->vehicle_object.HasValue())
+    if (td.trackAndVehicle.vehicleObject.HasValue())
     {
-        objectManager.LoadObject(td6->vehicle_object);
+        objectManager.LoadObject(td.trackAndVehicle.vehicleObject);
     }
 
     // Load scenery objects
-    for (const auto& scenery : td6->scenery_elements)
+    for (const auto& scenery : td.sceneryElements)
     {
-        if (scenery.scenery_object.HasValue())
+        if (scenery.sceneryObject.HasValue())
         {
-            objectManager.LoadObject(scenery.scenery_object);
+            objectManager.LoadObject(scenery.sceneryObject);
         }
     }
 }
@@ -641,13 +638,13 @@ static void TrackDesignLoadSceneryObjects(TrackDesign* td6)
 struct TrackSceneryEntry
 {
     ObjectType Type = ObjectType::None;
-    ObjectEntryIndex Index = OBJECT_ENTRY_INDEX_NULL;
-    ObjectEntryIndex SecondaryIndex = OBJECT_ENTRY_INDEX_NULL; // For footpath railing
+    ObjectEntryIndex Index = kObjectEntryIndexNull;
+    ObjectEntryIndex SecondaryIndex = kObjectEntryIndexNull; // For footpath railing
 };
 
 static ObjectEntryIndex TrackDesignGetDefaultSurfaceIndex(bool isQueue)
 {
-    for (ObjectEntryIndex i = 0; i < MAX_FOOTPATH_SURFACE_OBJECTS; i++)
+    for (ObjectEntryIndex i = 0; i < kMaxFootpathSurfaceObjects; i++)
     {
         auto footpathSurfaceObj = GetPathSurfaceEntry(i);
         if (footpathSurfaceObj != nullptr)
@@ -665,12 +662,12 @@ static ObjectEntryIndex TrackDesignGetDefaultSurfaceIndex(bool isQueue)
             return i;
         }
     }
-    return OBJECT_ENTRY_INDEX_NULL;
+    return kObjectEntryIndexNull;
 }
 
 static ObjectEntryIndex TrackDesignGetDefaultRailingIndex()
 {
-    for (ObjectEntryIndex i = 0; i < MAX_FOOTPATH_RAILINGS_OBJECTS; i++)
+    for (ObjectEntryIndex i = 0; i < kMaxFootpathRailingsObjects; i++)
     {
         auto footpathRailingsObj = GetPathRailingsEntry(i);
         if (footpathRailingsObj != nullptr)
@@ -678,7 +675,7 @@ static ObjectEntryIndex TrackDesignGetDefaultRailingIndex()
             return i;
         }
     }
-    return OBJECT_ENTRY_INDEX_NULL;
+    return kObjectEntryIndexNull;
 }
 
 static std::optional<TrackSceneryEntry> TrackDesignPlaceSceneryElementGetEntry(const TrackDesignSceneryElement& scenery)
@@ -686,13 +683,13 @@ static std::optional<TrackSceneryEntry> TrackDesignPlaceSceneryElementGetEntry(c
     TrackSceneryEntry result;
 
     auto& objectMgr = OpenRCT2::GetContext()->GetObjectManager();
-    if (scenery.scenery_object.GetType() == ObjectType::Paths)
+    if (scenery.sceneryObject.GetType() == ObjectType::Paths)
     {
-        auto footpathMapping = RCT2::GetFootpathSurfaceId(scenery.scenery_object, true, scenery.IsQueue());
+        auto footpathMapping = RCT2::GetFootpathSurfaceId(scenery.sceneryObject, true, scenery.isQueue());
         if (footpathMapping == nullptr)
         {
             // Check if legacy path object is loaded
-            auto obj = objectMgr.GetLoadedObject(scenery.scenery_object);
+            auto obj = objectMgr.GetLoadedObject(scenery.sceneryObject);
             if (obj != nullptr)
             {
                 result.Type = obj->GetObjectType();
@@ -707,16 +704,16 @@ static std::optional<TrackSceneryEntry> TrackDesignPlaceSceneryElementGetEntry(c
         {
             result.Type = ObjectType::FootpathSurface;
             result.Index = objectMgr.GetLoadedObjectEntryIndex(
-                ObjectEntryDescriptor(scenery.IsQueue() ? footpathMapping->QueueSurface : footpathMapping->NormalSurface));
+                ObjectEntryDescriptor(scenery.isQueue() ? footpathMapping->QueueSurface : footpathMapping->NormalSurface));
             result.SecondaryIndex = objectMgr.GetLoadedObjectEntryIndex(ObjectEntryDescriptor(footpathMapping->Railing));
         }
 
-        if (result.Index == OBJECT_ENTRY_INDEX_NULL)
-            result.Index = TrackDesignGetDefaultSurfaceIndex(scenery.IsQueue());
-        if (result.SecondaryIndex == OBJECT_ENTRY_INDEX_NULL)
+        if (result.Index == kObjectEntryIndexNull)
+            result.Index = TrackDesignGetDefaultSurfaceIndex(scenery.isQueue());
+        if (result.SecondaryIndex == kObjectEntryIndexNull)
             result.SecondaryIndex = TrackDesignGetDefaultRailingIndex();
 
-        if (result.Index == OBJECT_ENTRY_INDEX_NULL || result.SecondaryIndex == OBJECT_ENTRY_INDEX_NULL)
+        if (result.Index == kObjectEntryIndexNull || result.SecondaryIndex == kObjectEntryIndexNull)
         {
             _trackDesignPlaceStateSceneryUnavailable = true;
             return {};
@@ -724,13 +721,18 @@ static std::optional<TrackSceneryEntry> TrackDesignPlaceSceneryElementGetEntry(c
     }
     else
     {
-        auto obj = objectMgr.GetLoadedObject(scenery.scenery_object);
+        auto obj = objectMgr.GetLoadedObject(scenery.sceneryObject);
+        bool objectUnavailable = obj == nullptr;
         if (obj != nullptr)
         {
             result.Type = obj->GetObjectType();
             result.Index = objectMgr.GetLoadedObjectEntryIndex(obj);
+            if (!GetGameState().Cheats.ignoreResearchStatus)
+            {
+                objectUnavailable = !ResearchIsInvented(result.Type, result.Index);
+            }
         }
-        else
+        if (objectUnavailable)
         {
             _trackDesignPlaceStateSceneryUnavailable = true;
             return {};
@@ -743,10 +745,10 @@ static std::optional<TrackSceneryEntry> TrackDesignPlaceSceneryElementGetEntry(c
  *
  *  rct2: 0x006D247A
  */
-static void TrackDesignMirrorScenery(TrackDesign* td6)
+static void TrackDesignMirrorScenery(TrackDesign& td)
 {
     auto& objectMgr = OpenRCT2::GetContext()->GetObjectManager();
-    for (auto& scenery : td6->scenery_elements)
+    for (auto& scenery : td.sceneryElements)
     {
         auto entryInfo = TrackDesignPlaceSceneryElementGetEntry(scenery);
         if (!entryInfo)
@@ -759,27 +761,27 @@ static void TrackDesignMirrorScenery(TrackDesign* td6)
             {
                 auto* sceneryEntry = reinterpret_cast<const LargeSceneryEntry*>(obj->GetLegacyData());
                 int16_t x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-                for (rct_large_scenery_tile* tile = sceneryEntry->tiles; tile->x_offset != -1; tile++)
+                for (auto& tile : sceneryEntry->tiles)
                 {
-                    if (x1 > tile->x_offset)
+                    if (x1 > tile.offset.x)
                     {
-                        x1 = tile->x_offset;
+                        x1 = tile.offset.x;
                     }
-                    if (x2 < tile->x_offset)
+                    if (x2 < tile.offset.x)
                     {
-                        x2 = tile->x_offset;
+                        x2 = tile.offset.x;
                     }
-                    if (y1 > tile->y_offset)
+                    if (y1 > tile.offset.y)
                     {
-                        y1 = tile->y_offset;
+                        y1 = tile.offset.y;
                     }
-                    if (y2 < tile->y_offset)
+                    if (y2 < tile.offset.y)
                     {
-                        y2 = tile->y_offset;
+                        y2 = tile.offset.y;
                     }
                 }
 
-                switch (scenery.flags & 3)
+                switch (scenery.getRotation())
                 {
                     case 0:
                         scenery.loc.y = -(scenery.loc.y + y1) - y2;
@@ -787,7 +789,6 @@ static void TrackDesignMirrorScenery(TrackDesign* td6)
                     case 1:
                         scenery.loc.x = scenery.loc.x + y2 + y1;
                         scenery.loc.y = -scenery.loc.y;
-                        scenery.flags ^= (1 << 1);
                         break;
                     case 2:
                         scenery.loc.y = -(scenery.loc.y - y2) + y1;
@@ -795,9 +796,9 @@ static void TrackDesignMirrorScenery(TrackDesign* td6)
                     case 3:
                         scenery.loc.x = scenery.loc.x - y2 - y1;
                         scenery.loc.y = -scenery.loc.y;
-                        scenery.flags ^= (1 << 1);
                         break;
                 }
+                scenery.setRotation(DirectionFlipXAxis(scenery.getRotation()));
                 break;
             }
             case ObjectType::SmallScenery:
@@ -807,28 +808,22 @@ static void TrackDesignMirrorScenery(TrackDesign* td6)
 
                 if (sceneryEntry->HasFlag(SMALL_SCENERY_FLAG_DIAGONAL))
                 {
-                    scenery.flags ^= (1 << 0);
+                    scenery.setRotation(scenery.getRotation() ^ (1 << 0));
                     if (!sceneryEntry->HasFlag(SMALL_SCENERY_FLAG_FULL_TILE))
                     {
-                        scenery.flags ^= (1 << 2);
+                        scenery.setQuadrant(scenery.getQuadrant() ^ (1 << 0));
                     }
                     break;
                 }
-                if (scenery.flags & (1 << 0))
-                {
-                    scenery.flags ^= (1 << 1);
-                }
 
-                scenery.flags ^= (1 << 2);
+                scenery.setRotation(DirectionFlipXAxis(scenery.getRotation()));
+                scenery.setQuadrant(scenery.getQuadrant() ^ (1 << 0));
                 break;
             }
             case ObjectType::Walls:
             {
                 scenery.loc.y = -scenery.loc.y;
-                if (scenery.flags & (1 << 0))
-                {
-                    scenery.flags ^= (1 << 1);
-                }
+                scenery.setRotation(DirectionFlipXAxis(scenery.getRotation()));
                 break;
             }
             case ObjectType::Paths:
@@ -836,15 +831,14 @@ static void TrackDesignMirrorScenery(TrackDesign* td6)
             {
                 scenery.loc.y = -scenery.loc.y;
 
-                if (scenery.flags & (1 << 5))
+                if (scenery.hasSlope())
                 {
-                    scenery.flags ^= (1 << 6);
+                    scenery.setSlopeDirection(DirectionFlipXAxis(scenery.getSlopeDirection()));
                 }
 
-                uint8_t flags = scenery.flags;
-                flags = ((flags & (1 << 3)) >> 2) | ((flags & (1 << 1)) << 2);
-                scenery.flags &= 0xF5;
-                scenery.flags |= flags;
+                uint8_t edges = scenery.getEdges();
+                edges = ((edges & 0b1000) >> 2) | ((edges & 0b0010) << 2) | (edges & 0b0101);
+                scenery.setEdges(edges);
                 break;
             }
             default:
@@ -853,30 +847,33 @@ static void TrackDesignMirrorScenery(TrackDesign* td6)
     }
 }
 
-/**
- *
- *  rct2: 0x006D2443
- */
-static void TrackDesignMirrorRide(TrackDesign* td6)
+static void TrackDesignMirrorEntrances(TrackDesign& td)
 {
-    for (auto& track : td6->track_elements)
+    for (auto& entrance : td.entranceElements)
     {
-        const auto& ted = GetTrackElementDescriptor(track.type);
-        track.type = ted.MirrorElement;
-    }
-
-    for (auto& entrance : td6->entrance_elements)
-    {
-        entrance.y = -entrance.y;
-        if (entrance.direction & 1)
+        entrance.location.y = -entrance.location.y;
+        if (entrance.location.direction & 1)
         {
-            entrance.direction = direction_reverse(entrance.direction);
+            entrance.location.direction = DirectionReverse(entrance.location.direction);
         }
     }
 }
 
+/**
+ *
+ *  rct2: 0x006D2443
+ */
+static void TrackDesignMirrorRide(TrackDesign& td)
+{
+    for (auto& track : td.trackElements)
+    {
+        const auto& ted = GetTrackElementDescriptor(track.type);
+        track.type = ted.mirrorElement;
+    }
+}
+
 /** rct2: 0x00993EDC */
-static constexpr const uint8_t maze_segment_mirror_map[] = {
+static constexpr uint8_t maze_segment_mirror_map[] = {
     5, 4, 2, 7, 1, 0, 14, 3, 13, 12, 10, 15, 9, 8, 6, 11,
 };
 
@@ -884,29 +881,21 @@ static constexpr const uint8_t maze_segment_mirror_map[] = {
  *
  *  rct2: 0x006D25FA
  */
-static void TrackDesignMirrorMaze(TrackDesign* td6)
+static void TrackDesignMirrorMaze(TrackDesign& td)
 {
-    for (auto& maze : td6->maze_elements)
+    for (auto& maze : td.mazeElements)
     {
-        maze.y = -maze.y;
+        maze.location.y = -maze.location.y;
 
-        if (maze.type == 0x8 || maze.type == 0x80)
+        uint32_t mazeEntry = maze.mazeEntry;
+        uint16_t newEntry = 0;
+        for (uint8_t position = Numerics::bitScanForward(mazeEntry); position != 0xFF;
+             position = Numerics::bitScanForward(mazeEntry))
         {
-            if (maze.direction & 1)
-            {
-                maze.direction = direction_reverse(maze.direction);
-            }
-            continue;
+            mazeEntry &= ~(1 << position);
+            newEntry |= (1 << maze_segment_mirror_map[position]);
         }
-
-        uint16_t maze_entry = maze.maze_entry;
-        uint16_t new_entry = 0;
-        for (uint8_t position = bitscanforward(maze_entry); position != 0xFF; position = bitscanforward(maze_entry))
-        {
-            maze_entry &= ~(1 << position);
-            new_entry |= (1 << maze_segment_mirror_map[position]);
-        }
-        maze.maze_entry = new_entry;
+        maze.mazeEntry = newEntry;
     }
 }
 
@@ -914,17 +903,19 @@ static void TrackDesignMirrorMaze(TrackDesign* td6)
  *
  *  rct2: 0x006D2436
  */
-void TrackDesignMirror(TrackDesign* td6)
+void TrackDesignMirror(TrackDesign& td)
 {
-    if (td6->type == RIDE_TYPE_MAZE)
+    const auto& rtd = GetRideTypeDescriptor(td.trackAndVehicle.rtdIndex);
+    if (rtd.specialType == RtdSpecialType::maze)
     {
-        TrackDesignMirrorMaze(td6);
+        TrackDesignMirrorMaze(td);
     }
     else
     {
-        TrackDesignMirrorRide(td6);
+        TrackDesignMirrorRide(td);
     }
-    TrackDesignMirrorScenery(td6);
+    TrackDesignMirrorEntrances(td);
+    TrackDesignMirrorScenery(td);
 }
 
 static void TrackDesignAddSelectedTile(const CoordsXY& coords)
@@ -938,10 +929,10 @@ static void TrackDesignAddSelectedTile(const CoordsXY& coords)
 
 static void TrackDesignUpdatePreviewBounds(TrackDesignState& tds, const CoordsXYZ& coords)
 {
-    tds.PreviewMin = { std::min(tds.PreviewMin.x, coords.x), std::min(tds.PreviewMin.y, coords.y),
-                       std::min(tds.PreviewMin.z, coords.z) };
-    tds.PreviewMax = { std::max(tds.PreviewMax.x, coords.x), std::max(tds.PreviewMax.y, coords.y),
-                       std::max(tds.PreviewMax.z, coords.z) };
+    tds.previewMin = { std::min(tds.previewMin.x, coords.x), std::min(tds.previewMin.y, coords.y),
+                       std::min(tds.previewMin.z, coords.z) };
+    tds.previewMax = { std::max(tds.previewMax.x, coords.x), std::max(tds.previewMax.y, coords.y),
+                       std::max(tds.previewMax.z, coords.z) };
 }
 
 static GameActions::Result TrackDesignPlaceSceneryElementRemoveGhost(
@@ -959,7 +950,7 @@ static GameActions::Result TrackDesignPlaceSceneryElementRemoveGhost(
     }
 
     int32_t z = scenery.loc.z + originZ;
-    uint8_t sceneryRotation = (rotation + scenery.flags) & TILE_ELEMENT_DIRECTION_MASK;
+    uint8_t sceneryRotation = (rotation + scenery.getRotation()) & kTileElementDirectionMask;
     const uint32_t flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND
         | GAME_COMMAND_FLAG_GHOST;
     std::unique_ptr<GameAction> ga;
@@ -967,10 +958,10 @@ static GameActions::Result TrackDesignPlaceSceneryElementRemoveGhost(
     {
         case ObjectType::SmallScenery:
         {
-            uint8_t quadrant = (scenery.flags >> 2) + _currentTrackPieceDirection;
+            uint8_t quadrant = scenery.getQuadrant() + _currentTrackPieceDirection;
             quadrant &= 3;
 
-            auto* sceneryEntry = get_small_scenery_entry(entryInfo->Index);
+            auto* sceneryEntry = OpenRCT2::ObjectManager::GetObjectEntry<SmallSceneryEntry>(entryInfo->Index);
             if (!(!sceneryEntry->HasFlag(SMALL_SCENERY_FLAG_FULL_TILE) && sceneryEntry->HasFlag(SMALL_SCENERY_FLAG_DIAGONAL))
                 && sceneryEntry->HasFlag(
                     SMALL_SCENERY_FLAG_DIAGONAL | SMALL_SCENERY_FLAG_HALF_SPACE | SMALL_SCENERY_FLAG_THREE_QUARTERS))
@@ -1001,10 +992,10 @@ static GameActions::Result TrackDesignPlaceSceneryElementRemoveGhost(
 
 static bool TrackDesignPlaceSceneryElementGetPlaceZ(TrackDesignState& tds, const TrackDesignSceneryElement& scenery)
 {
-    int32_t z = scenery.loc.z + tds.PlaceZ;
-    if (z < tds.PlaceSceneryZ)
+    int32_t z = scenery.loc.z + tds.placeZ;
+    if (z < tds.placeSceneryZ)
     {
-        tds.PlaceSceneryZ = z;
+        tds.placeSceneryZ = z;
     }
 
     TrackDesignPlaceSceneryElementGetEntry(scenery);
@@ -1015,27 +1006,28 @@ static GameActions::Result TrackDesignPlaceSceneryElement(
     TrackDesignState& tds, CoordsXY mapCoord, uint8_t mode, const TrackDesignSceneryElement& scenery, uint8_t rotation,
     int32_t originZ)
 {
-    if (tds.PlaceOperation == PTD_OPERATION_DRAW_OUTLINES && mode == 0)
+    if (tds.placeOperation == TrackPlaceOperation::drawOutlines && mode == 0)
     {
         TrackDesignAddSelectedTile(mapCoord);
         return GameActions::Result();
     }
 
-    if (tds.PlaceOperation == PTD_OPERATION_REMOVE_GHOST && mode == 0)
+    if (tds.placeOperation == TrackPlaceOperation::removeGhost && mode == 0)
     {
         return TrackDesignPlaceSceneryElementRemoveGhost(mapCoord, scenery, rotation, originZ);
     }
 
-    if (tds.PlaceOperation == PTD_OPERATION_GET_PLACE_Z)
+    if (tds.placeOperation == TrackPlaceOperation::getPlaceZ)
     {
         TrackDesignPlaceSceneryElementGetPlaceZ(tds, scenery);
         return GameActions::Result();
     }
 
-    money32 cost = 0;
+    money64 cost = 0;
 
-    if (tds.PlaceOperation != PTD_OPERATION_PLACE_QUERY && tds.PlaceOperation != PTD_OPERATION_PLACE
-        && tds.PlaceOperation != PTD_OPERATION_PLACE_GHOST && tds.PlaceOperation != PTD_OPERATION_PLACE_TRACK_PREVIEW)
+    if (tds.placeOperation != TrackPlaceOperation::placeQuery && tds.placeOperation != TrackPlaceOperation::place
+        && tds.placeOperation != TrackPlaceOperation::placeGhost
+        && tds.placeOperation != TrackPlaceOperation::placeTrackPreview)
     {
         return GameActions::Result();
     }
@@ -1048,7 +1040,6 @@ static GameActions::Result TrackDesignPlaceSceneryElement(
 
     int16_t z;
     uint8_t flags;
-    uint8_t quadrant;
 
     switch (entryInfo->Type)
     {
@@ -1059,34 +1050,34 @@ static GameActions::Result TrackDesignPlaceSceneryElement(
                 return GameActions::Result();
             }
 
-            rotation += scenery.flags;
+            rotation += scenery.getRotation();
             rotation &= 3;
             z = scenery.loc.z + originZ;
-            quadrant = ((scenery.flags >> 2) + _currentTrackPieceDirection) & 3;
+            uint8_t quadrant = (scenery.getQuadrant() + _currentTrackPieceDirection) & 3;
 
-            flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_PATH_SCENERY;
-            if (tds.PlaceOperation == PTD_OPERATION_PLACE_TRACK_PREVIEW)
+            flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_TRACK_DESIGN;
+            if (tds.placeOperation == TrackPlaceOperation::placeTrackPreview)
             {
-                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_PATH_SCENERY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
+                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_TRACK_DESIGN | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
                     | GAME_COMMAND_FLAG_NO_SPEND;
             }
-            else if (tds.PlaceOperation == PTD_OPERATION_PLACE_GHOST)
+            else if (tds.placeOperation == TrackPlaceOperation::placeGhost)
             {
-                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_PATH_SCENERY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
+                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_TRACK_DESIGN | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
                     | GAME_COMMAND_FLAG_GHOST | GAME_COMMAND_FLAG_NO_SPEND;
             }
-            else if (tds.PlaceOperation == PTD_OPERATION_PLACE_QUERY)
+            else if (tds.placeOperation == TrackPlaceOperation::placeQuery)
             {
-                flags = GAME_COMMAND_FLAG_PATH_SCENERY;
+                flags = GAME_COMMAND_FLAG_TRACK_DESIGN;
             }
-            if (tds.IsReplay)
+            if (tds.isReplay)
             {
                 flags |= GAME_COMMAND_FLAG_REPLAY;
             }
 
             auto smallSceneryPlace = SmallSceneryPlaceAction(
-                { mapCoord.x, mapCoord.y, z, rotation }, quadrant, entryInfo->Index, scenery.primary_colour,
-                scenery.secondary_colour);
+                { mapCoord.x, mapCoord.y, z, rotation }, quadrant, entryInfo->Index, scenery.primaryColour,
+                scenery.secondaryColour, scenery.tertiaryColour);
 
             smallSceneryPlace.SetFlags(flags);
             auto res = flags & GAME_COMMAND_FLAG_APPLY ? GameActions::ExecuteNested(&smallSceneryPlace)
@@ -1102,32 +1093,33 @@ static GameActions::Result TrackDesignPlaceSceneryElement(
                 return GameActions::Result();
             }
 
-            rotation += scenery.flags;
+            rotation += scenery.getRotation();
             rotation &= 3;
 
             z = scenery.loc.z + originZ;
 
-            flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_PATH_SCENERY;
-            if (tds.PlaceOperation == PTD_OPERATION_PLACE_TRACK_PREVIEW)
+            flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_TRACK_DESIGN;
+            if (tds.placeOperation == TrackPlaceOperation::placeTrackPreview)
             {
-                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_PATH_SCENERY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
+                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_TRACK_DESIGN | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
                     | GAME_COMMAND_FLAG_NO_SPEND;
             }
-            else if (tds.PlaceOperation == PTD_OPERATION_PLACE_GHOST)
+            else if (tds.placeOperation == TrackPlaceOperation::placeGhost)
             {
-                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_PATH_SCENERY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
+                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_TRACK_DESIGN | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
                     | GAME_COMMAND_FLAG_GHOST | GAME_COMMAND_FLAG_NO_SPEND;
             }
-            else if (tds.PlaceOperation == PTD_OPERATION_PLACE_QUERY)
+            else if (tds.placeOperation == TrackPlaceOperation::placeQuery)
             {
-                flags = GAME_COMMAND_FLAG_PATH_SCENERY;
+                flags = GAME_COMMAND_FLAG_TRACK_DESIGN;
             }
-            if (tds.IsReplay)
+            if (tds.isReplay)
             {
                 flags |= GAME_COMMAND_FLAG_REPLAY;
             }
             auto sceneryPlaceAction = LargeSceneryPlaceAction(
-                { mapCoord.x, mapCoord.y, z, rotation }, entryInfo->Index, scenery.primary_colour, scenery.secondary_colour);
+                { mapCoord.x, mapCoord.y, z, rotation }, entryInfo->Index, scenery.primaryColour, scenery.secondaryColour,
+                scenery.tertiaryColour);
             sceneryPlaceAction.SetFlags(flags);
             auto res = flags & GAME_COMMAND_FLAG_APPLY ? GameActions::ExecuteNested(&sceneryPlaceAction)
                                                        : GameActions::QueryNested(&sceneryPlaceAction);
@@ -1143,31 +1135,31 @@ static GameActions::Result TrackDesignPlaceSceneryElement(
             }
 
             z = scenery.loc.z + originZ;
-            rotation += scenery.flags;
+            rotation += scenery.getRotation();
             rotation &= 3;
 
             flags = GAME_COMMAND_FLAG_APPLY;
-            if (tds.PlaceOperation == PTD_OPERATION_PLACE_TRACK_PREVIEW)
+            if (tds.placeOperation == TrackPlaceOperation::placeTrackPreview)
             {
-                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_PATH_SCENERY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
+                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_TRACK_DESIGN | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
                     | GAME_COMMAND_FLAG_NO_SPEND;
             }
-            else if (tds.PlaceOperation == PTD_OPERATION_PLACE_GHOST)
+            else if (tds.placeOperation == TrackPlaceOperation::placeGhost)
             {
                 flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND
                     | GAME_COMMAND_FLAG_GHOST;
             }
-            else if (tds.PlaceOperation == PTD_OPERATION_PLACE_QUERY)
+            else if (tds.placeOperation == TrackPlaceOperation::placeQuery)
             {
                 flags = 0;
             }
-            if (tds.IsReplay)
+            if (tds.isReplay)
             {
                 flags |= GAME_COMMAND_FLAG_REPLAY;
             }
             auto wallPlaceAction = WallPlaceAction(
-                entryInfo->Index, { mapCoord.x, mapCoord.y, z }, rotation, scenery.primary_colour, scenery.secondary_colour,
-                (scenery.flags & 0xFC) >> 2);
+                entryInfo->Index, { mapCoord.x, mapCoord.y, z }, rotation, scenery.primaryColour, scenery.secondaryColour,
+                scenery.tertiaryColour);
             wallPlaceAction.SetFlags(flags);
             auto res = flags & GAME_COMMAND_FLAG_APPLY ? GameActions::ExecuteNested(&wallPlaceAction)
                                                        : GameActions::QueryNested(&wallPlaceAction);
@@ -1180,42 +1172,34 @@ static GameActions::Result TrackDesignPlaceSceneryElement(
             z = scenery.loc.z + originZ;
             if (mode == 0)
             {
-                auto isQueue = scenery.IsQueue();
-
-                uint8_t bh = ((scenery.flags & 0xF) << rotation);
-                flags = bh >> 4;
-                bh = (bh | flags) & 0xF;
-                flags = (((scenery.flags >> 5) + rotation) & 3) << 5;
-                bh |= flags;
-
-                bh |= scenery.flags & 0x90;
-
                 flags = GAME_COMMAND_FLAG_APPLY;
-                if (tds.PlaceOperation == PTD_OPERATION_PLACE_TRACK_PREVIEW)
+                if (tds.placeOperation == TrackPlaceOperation::placeTrackPreview)
                 {
                     flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND;
                 }
-                if (tds.PlaceOperation == PTD_OPERATION_PLACE_GHOST)
+                if (tds.placeOperation == TrackPlaceOperation::placeGhost)
                 {
                     flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND
                         | GAME_COMMAND_FLAG_GHOST;
                 }
-                if (tds.PlaceOperation == PTD_OPERATION_PLACE_QUERY)
+                if (tds.placeOperation == TrackPlaceOperation::placeQuery)
                 {
                     flags = 0;
                 }
-                if (tds.IsReplay)
+                if (tds.isReplay)
                 {
                     flags |= GAME_COMMAND_FLAG_REPLAY;
                 }
-                uint8_t slope = ((bh >> 5) & 0x3) | ((bh >> 2) & 0x4);
-                uint8_t edges = bh & 0xF;
+                uint8_t slope = (scenery.getSlopeDirection() + rotation) & 0x3;
+                if (scenery.hasSlope())
+                    slope |= FOOTPATH_PROPERTIES_FLAG_IS_SLOPED;
+                uint8_t edges = Numerics::rol4(scenery.getEdges(), rotation);
                 PathConstructFlags constructFlags = 0;
-                if (isQueue)
+                if (scenery.isQueue())
                     constructFlags |= PathConstructFlag::IsQueue;
                 if (entryInfo->Type == ObjectType::Paths)
                     constructFlags |= PathConstructFlag::IsLegacyPathObject;
-                auto footpathPlaceAction = FootpathPlaceFromTrackAction(
+                auto footpathPlaceAction = FootpathLayoutPlaceAction(
                     { mapCoord.x, mapCoord.y, z }, slope, entryInfo->Index, entryInfo->SecondaryIndex, edges, constructFlags);
                 footpathPlaceAction.SetFlags(flags);
                 auto res = flags & GAME_COMMAND_FLAG_APPLY ? GameActions::ExecuteNested(&footpathPlaceAction)
@@ -1225,36 +1209,44 @@ static GameActions::Result TrackDesignPlaceSceneryElement(
             }
             else
             {
-                if (tds.PlaceOperation == PTD_OPERATION_PLACE_QUERY)
+                if (tds.placeOperation == TrackPlaceOperation::placeQuery)
                 {
                     return GameActions::Result();
                 }
 
-                auto* pathElement = map_get_path_element_at({ mapCoord.x / 32, mapCoord.y / 32, z });
+                auto* pathElement = MapGetPathElementAt(TileCoordsXYZ{ CoordsXYZ{ mapCoord.x, mapCoord.y, z } });
                 if (pathElement == nullptr)
                 {
                     return GameActions::Result();
                 }
 
-                footpath_queue_chain_reset();
-                footpath_remove_edges_at(mapCoord, reinterpret_cast<TileElement*>(pathElement));
+                if (tds.placeOperation == TrackPlaceOperation::place)
+                {
+                    FootpathQueueChainReset();
+                    FootpathRemoveEdgesAt(mapCoord, reinterpret_cast<TileElement*>(pathElement));
+                }
 
                 flags = GAME_COMMAND_FLAG_APPLY;
-                if (tds.PlaceOperation == PTD_OPERATION_PLACE_TRACK_PREVIEW)
+                if (tds.placeOperation == TrackPlaceOperation::placeTrackPreview)
                 {
                     flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND;
                 }
-                if (tds.PlaceOperation == PTD_OPERATION_PLACE_GHOST)
+                if (tds.placeOperation == TrackPlaceOperation::placeGhost)
                 {
                     flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND
                         | GAME_COMMAND_FLAG_GHOST;
                 }
-                if (tds.IsReplay)
+                if (tds.isReplay)
                 {
                     flags |= GAME_COMMAND_FLAG_REPLAY;
                 }
-                footpath_connect_edges(mapCoord, reinterpret_cast<TileElement*>(pathElement), flags);
-                footpath_update_queue_chains();
+
+                if (tds.placeOperation == TrackPlaceOperation::place)
+                {
+                    FootpathConnectEdges(mapCoord, reinterpret_cast<TileElement*>(pathElement), flags);
+                    FootpathUpdateQueueChains();
+                }
+
                 return GameActions::Result();
             }
             break;
@@ -1274,28 +1266,26 @@ static GameActions::Result TrackDesignPlaceSceneryElement(
  *  rct2: 0x006D0964
  */
 static GameActions::Result TrackDesignPlaceAllScenery(
-    TrackDesignState& tds, const std::vector<TrackDesignSceneryElement>& sceneryList)
+    TrackDesignState& tds, const std::vector<TrackDesignSceneryElement>& sceneryList, uint8_t rotation)
 {
-    const auto& origin = tds.Origin;
+    const auto& origin = tds.origin;
 
-    money32 cost = 0;
+    money64 cost = 0;
 
     for (uint8_t mode = 0; mode <= 1; mode++)
     {
         if (!sceneryList.empty())
         {
-            tds.HasScenery = true;
+            tds.hasScenery = true;
         }
 
-        if (!tds.PlaceScenery)
+        if (!tds.placeScenery)
         {
             continue;
         }
 
         for (const auto& scenery : sceneryList)
         {
-            uint8_t rotation = _currentTrackPieceDirection;
-
             auto mapCoord = CoordsXYZ{ CoordsXY(origin) + scenery.loc.Rotate(rotation), origin.z };
             TrackDesignUpdatePreviewBounds(tds, mapCoord);
 
@@ -1303,7 +1293,7 @@ static GameActions::Result TrackDesignPlaceAllScenery(
             if (placementRes.Error != GameActions::Status::Ok)
             {
                 // Allow operation to fail when its removing ghosts.
-                if (tds.PlaceOperation != PTD_OPERATION_REMOVE_GHOST)
+                if (tds.placeOperation != TrackPlaceOperation::removeGhost)
                 {
                     return placementRes;
                 }
@@ -1318,185 +1308,201 @@ static GameActions::Result TrackDesignPlaceAllScenery(
     return res;
 }
 
-static GameActions::Result TrackDesignPlaceMaze(TrackDesignState& tds, TrackDesign* td6, const CoordsXYZ& coords, Ride* ride)
+static std::optional<GameActions::Result> TrackDesignPlaceEntrances(
+    TrackDesignState& tds, const TrackDesign& td, CoordsXYZ newCoords, RideId rideId, money64& totalCost)
 {
-    if (tds.PlaceOperation == PTD_OPERATION_DRAW_OUTLINES)
+    for (const auto& entrance : td.entranceElements)
     {
-        gMapSelectionTiles.clear();
-        gMapSelectArrowPosition = CoordsXYZ{ coords, tile_element_height(coords) };
-        gMapSelectArrowDirection = _currentTrackPieceDirection;
-    }
+        auto rotation = _currentTrackPieceDirection & 3;
+        CoordsXY entranceMapPos = entrance.location.ToCoordsXY();
+        auto rotatedEntranceMapPos = entranceMapPos.Rotate(rotation);
+        newCoords = { rotatedEntranceMapPos + tds.origin, newCoords.z };
 
-    tds.PlaceZ = 0;
-    money32 totalCost = 0;
+        TrackDesignUpdatePreviewBounds(tds, newCoords);
 
-    for (const auto& maze_element : td6->maze_elements)
-    {
-        uint8_t rotation = _currentTrackPieceDirection & 3;
-        CoordsXY mazeMapPos = TileCoordsXY(maze_element.x, maze_element.y).ToCoordsXY();
-        auto mapCoord = mazeMapPos.Rotate(rotation);
-        mapCoord += coords;
-
-        TrackDesignUpdatePreviewBounds(tds, { mapCoord, coords.z });
-
-        if (tds.PlaceOperation == PTD_OPERATION_DRAW_OUTLINES)
+        switch (tds.placeOperation)
         {
-            TrackDesignAddSelectedTile(mapCoord);
-        }
-
-        if (tds.PlaceOperation == PTD_OPERATION_PLACE_QUERY || tds.PlaceOperation == PTD_OPERATION_PLACE
-            || tds.PlaceOperation == PTD_OPERATION_PLACE_GHOST || tds.PlaceOperation == PTD_OPERATION_PLACE_TRACK_PREVIEW)
-        {
-            uint8_t flags;
-            money32 cost = 0;
-            uint16_t maze_entry;
-            switch (maze_element.type)
+            case TrackPlaceOperation::drawOutlines:
+                TrackDesignAddSelectedTile(newCoords);
+                break;
+            case TrackPlaceOperation::placeQuery:
+            case TrackPlaceOperation::place:
+            case TrackPlaceOperation::placeGhost:
+            case TrackPlaceOperation::placeTrackPreview:
             {
-                case MAZE_ELEMENT_TYPE_ENTRANCE:
-                    // entrance
-                    rotation += maze_element.direction;
-                    rotation &= 3;
+                rotation = (rotation + entrance.location.direction) & 3;
+                newCoords.z = entrance.location.z * kCoordsZStep;
+                newCoords.z += tds.origin.z;
 
-                    flags = GAME_COMMAND_FLAG_APPLY;
-
-                    if (tds.PlaceOperation == PTD_OPERATION_PLACE_QUERY)
+                if (tds.placeOperation != TrackPlaceOperation::placeQuery)
+                {
+                    auto tile = CoordsXY{ newCoords } + CoordsDirectionDelta[rotation];
+                    TileElement* tile_element = MapGetFirstElementAt(tile);
+                    if (tile_element == nullptr)
                     {
-                        auto res = RideEntranceExitPlaceAction::TrackPlaceQuery({ mapCoord, coords.z }, false);
-                        if (res.Error != GameActions::Status::Ok)
-                        {
-                            return res;
-                        }
-                        cost = res.Cost;
+                        return GameActions::Result(
+                            GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER, STR_ERR_TILE_ELEMENT_NOT_FOUND);
                     }
-                    else
+
+                    do
                     {
-                        if (tds.PlaceOperation == PTD_OPERATION_PLACE_TRACK_PREVIEW)
+                        if (tile_element->GetType() != TileElementType::Track)
+                        {
+                            continue;
+                        }
+                        if (tile_element->GetBaseZ() != newCoords.z)
+                        {
+                            continue;
+                        }
+
+                        auto stationIndex = tile_element->AsTrack()->GetStationIndex();
+                        uint8_t flags = GAME_COMMAND_FLAG_APPLY;
+                        if (tds.placeOperation == TrackPlaceOperation::placeTrackPreview)
                         {
                             flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
                                 | GAME_COMMAND_FLAG_NO_SPEND;
                         }
-                        else if (tds.PlaceOperation == PTD_OPERATION_PLACE_GHOST)
+                        if (tds.placeOperation == TrackPlaceOperation::placeGhost)
                         {
                             flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND
                                 | GAME_COMMAND_FLAG_GHOST;
                         }
-                        if (tds.IsReplay)
+                        if (tds.placeOperation == TrackPlaceOperation::placeQuery)
+                        {
+                            flags = 0;
+                        }
+                        if (tds.isReplay)
                         {
                             flags |= GAME_COMMAND_FLAG_REPLAY;
                         }
-                        auto rideEntranceExitPlaceAction = RideEntranceExitPlaceAction(mapCoord, rotation, ride->id, 0, false);
+
+                        auto rideEntranceExitPlaceAction = RideEntranceExitPlaceAction(
+                            newCoords, rotation, rideId, stationIndex, entrance.isExit);
                         rideEntranceExitPlaceAction.SetFlags(flags);
-                        auto res = GameActions::ExecuteNested(&rideEntranceExitPlaceAction);
+                        auto res = flags & GAME_COMMAND_FLAG_APPLY ? GameActions::ExecuteNested(&rideEntranceExitPlaceAction)
+                                                                   : GameActions::QueryNested(&rideEntranceExitPlaceAction);
+
                         if (res.Error != GameActions::Status::Ok)
                         {
                             return res;
                         }
-                        cost = res.Cost;
-                    }
-                    tds.EntranceExitPlaced = true;
-                    _trackDesignPlaceStateEntranceExitPlaced = true;
-                    break;
-                case MAZE_ELEMENT_TYPE_EXIT:
-                    // exit
-                    rotation += maze_element.direction;
-                    rotation &= 3;
-
-                    flags = GAME_COMMAND_FLAG_APPLY;
-
-                    if (tds.PlaceOperation == PTD_OPERATION_PLACE_QUERY)
-                    {
-                        auto res = RideEntranceExitPlaceAction::TrackPlaceQuery({ mapCoord, coords.z }, true);
-                        if (res.Error != GameActions::Status::Ok)
-                        {
-                            return res;
-                        }
-                        cost = res.Cost;
-                    }
-                    else
-                    {
-                        if (tds.PlaceOperation == PTD_OPERATION_PLACE_TRACK_PREVIEW)
-                        {
-                            flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
-                                | GAME_COMMAND_FLAG_NO_SPEND;
-                        }
-                        else if (tds.PlaceOperation == PTD_OPERATION_PLACE_GHOST)
-                        {
-                            flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND
-                                | GAME_COMMAND_FLAG_GHOST;
-                        }
-                        if (tds.IsReplay)
-                        {
-                            flags |= GAME_COMMAND_FLAG_REPLAY;
-                        }
-                        auto rideEntranceExitPlaceAction = RideEntranceExitPlaceAction(mapCoord, rotation, ride->id, 0, true);
-                        rideEntranceExitPlaceAction.SetFlags(flags);
-                        auto res = GameActions::ExecuteNested(&rideEntranceExitPlaceAction);
-                        if (res.Error != GameActions::Status::Ok)
-                        {
-                            return res;
-                        }
-                        cost = res.Cost;
-                    }
-                    tds.EntranceExitPlaced = true;
-                    _trackDesignPlaceStateEntranceExitPlaced = true;
-                    break;
-                default:
-                    maze_entry = Numerics::rol16(maze_element.maze_entry, rotation * 4);
-
-                    if (tds.PlaceOperation == PTD_OPERATION_PLACE_TRACK_PREVIEW)
-                    {
-                        flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND;
-                    }
-                    else if (tds.PlaceOperation == PTD_OPERATION_PLACE_GHOST)
-                    {
-                        flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND
-                            | GAME_COMMAND_FLAG_GHOST;
-                    }
-                    else if (tds.PlaceOperation == PTD_OPERATION_PLACE_QUERY)
-                    {
-                        flags = 0;
-                    }
-                    else
-                    {
-                        flags = GAME_COMMAND_FLAG_APPLY;
-                    }
-                    if (tds.IsReplay)
-                    {
-                        flags |= GAME_COMMAND_FLAG_REPLAY;
-                    }
-
-                    auto mazePlace = MazePlaceTrackAction({ mapCoord, coords.z }, ride->id, maze_entry);
-                    mazePlace.SetFlags(flags);
-                    auto res = flags & GAME_COMMAND_FLAG_APPLY ? GameActions::ExecuteNested(&mazePlace)
-                                                               : GameActions::QueryNested(&mazePlace);
+                        totalCost += res.Cost;
+                        tds.entranceExitPlaced = true;
+                        _trackDesignPlaceStateEntranceExitPlaced = true;
+                        break;
+                    } while (!(tile_element++)->IsLastForTile());
+                }
+                else
+                {
+                    auto res = RideEntranceExitPlaceAction::TrackPlaceQuery(newCoords, false);
                     if (res.Error != GameActions::Status::Ok)
                     {
                         return res;
                     }
-                    cost = res.Cost;
-                    break;
+
+                    totalCost += res.Cost;
+                    tds.entranceExitPlaced = true;
+                    _trackDesignPlaceStateEntranceExitPlaced = true;
+                }
+                break;
             }
+            case TrackPlaceOperation::removeGhost:
+            case TrackPlaceOperation::getPlaceZ:
+                break;
+        }
+    }
+
+    return std::nullopt;
+}
+
+static GameActions::Result TrackDesignPlaceMaze(
+    TrackDesignState& tds, const TrackDesign& td, const CoordsXYZ& origin, const Ride& ride)
+{
+    if (tds.placeOperation == TrackPlaceOperation::drawOutlines)
+    {
+        gMapSelectionTiles.clear();
+        gMapSelectArrowPosition = CoordsXYZ{ origin, TileElementHeight(origin) };
+        gMapSelectArrowDirection = _currentTrackPieceDirection;
+    }
+
+    tds.placeZ = 0;
+    money64 totalCost = 0;
+
+    for (const auto& maze_element : td.mazeElements)
+    {
+        uint8_t rotation = _currentTrackPieceDirection & 3;
+        CoordsXY mazeMapPos = maze_element.location.ToCoordsXY();
+        auto mapCoord = mazeMapPos.Rotate(rotation);
+        mapCoord += origin;
+
+        TrackDesignUpdatePreviewBounds(tds, { mapCoord, origin.z });
+
+        if (tds.placeOperation == TrackPlaceOperation::drawOutlines)
+        {
+            TrackDesignAddSelectedTile(mapCoord);
+        }
+
+        if (tds.placeOperation == TrackPlaceOperation::placeQuery || tds.placeOperation == TrackPlaceOperation::place
+            || tds.placeOperation == TrackPlaceOperation::placeGhost
+            || tds.placeOperation == TrackPlaceOperation::placeTrackPreview)
+        {
+            uint8_t flags;
+            money64 cost = 0;
+
+            uint16_t mazeEntry = Numerics::rol16(maze_element.mazeEntry, rotation * 4);
+
+            if (tds.placeOperation == TrackPlaceOperation::placeTrackPreview)
+            {
+                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND;
+            }
+            else if (tds.placeOperation == TrackPlaceOperation::placeGhost)
+            {
+                flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND
+                    | GAME_COMMAND_FLAG_GHOST;
+            }
+            else if (tds.placeOperation == TrackPlaceOperation::placeQuery)
+            {
+                flags = 0;
+            }
+            else
+            {
+                flags = GAME_COMMAND_FLAG_APPLY;
+            }
+            if (tds.isReplay)
+            {
+                flags |= GAME_COMMAND_FLAG_REPLAY;
+            }
+
+            auto mazePlace = MazePlaceTrackAction({ mapCoord, origin.z }, ride.id, mazeEntry);
+            mazePlace.SetFlags(flags);
+            auto res = flags & GAME_COMMAND_FLAG_APPLY ? GameActions::ExecuteNested(&mazePlace)
+                                                       : GameActions::QueryNested(&mazePlace);
+            if (res.Error != GameActions::Status::Ok)
+            {
+                return res;
+            }
+            cost = res.Cost;
 
             totalCost += cost;
         }
 
-        if (tds.PlaceOperation == PTD_OPERATION_GET_PLACE_Z)
+        if (tds.placeOperation == TrackPlaceOperation::getPlaceZ)
         {
-            if (!map_is_location_valid(mapCoord))
+            if (!MapIsLocationValid(mapCoord))
             {
                 continue;
             }
 
-            auto surfaceElement = map_get_surface_element_at(mapCoord);
+            auto surfaceElement = MapGetSurfaceElementAt(mapCoord);
             if (surfaceElement == nullptr)
                 continue;
             int16_t surfaceZ = surfaceElement->GetBaseZ();
-            if (surfaceElement->GetSlope() & TILE_ELEMENT_SLOPE_ALL_CORNERS_UP)
+            if (surfaceElement->GetSlope() & kTileSlopeRaisedCornersMask)
             {
-                surfaceZ += LAND_HEIGHT_STEP;
-                if (surfaceElement->GetSlope() & TILE_ELEMENT_SLOPE_DOUBLE_HEIGHT)
+                surfaceZ += kLandHeightStep;
+                if (surfaceElement->GetSlope() & kTileSlopeDiagonalFlag)
                 {
-                    surfaceZ += LAND_HEIGHT_STEP;
+                    surfaceZ += kLandHeightStep;
                 }
             }
 
@@ -1506,23 +1512,28 @@ static GameActions::Result TrackDesignPlaceMaze(TrackDesignState& tds, TrackDesi
                 surfaceZ = waterZ;
             }
 
-            int16_t temp_z = coords.z + tds.PlaceZ - surfaceZ;
+            int16_t temp_z = origin.z + tds.placeZ - surfaceZ;
             if (temp_z < 0)
             {
-                tds.PlaceZ -= temp_z;
+                tds.placeZ -= temp_z;
             }
         }
     }
 
-    if (tds.PlaceOperation == PTD_OPERATION_REMOVE_GHOST)
+    tds.origin = origin;
+
+    auto result = TrackDesignPlaceEntrances(tds, td, origin, ride.id, totalCost);
+    if (result.has_value())
     {
-        ride_action_modify(
-            ride, RIDE_MODIFY_DEMOLISH,
-            GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND
-                | GAME_COMMAND_FLAG_GHOST);
+        return result.value();
     }
 
-    tds.Origin = coords;
+    if (tds.placeOperation == TrackPlaceOperation::removeGhost)
+    {
+        auto gameAction = RideDemolishAction(ride.id, RIDE_MODIFY_DEMOLISH);
+        gameAction.SetFlags(GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
+        GameActions::Execute(&gameAction);
+    }
 
     auto res = GameActions::Result();
     res.Cost = totalCost;
@@ -1530,98 +1541,97 @@ static GameActions::Result TrackDesignPlaceMaze(TrackDesignState& tds, TrackDesi
     return res;
 }
 
-static GameActions::Result TrackDesignPlaceRide(TrackDesignState& tds, TrackDesign* td6, const CoordsXYZ& origin, Ride* ride)
+static GameActions::Result TrackDesignPlaceRide(
+    TrackDesignState& tds, const TrackDesign& td, const CoordsXYZ& origin, Ride& ride)
 {
-    tds.Origin = origin;
-    if (tds.PlaceOperation == PTD_OPERATION_DRAW_OUTLINES)
+    tds.origin = origin;
+    if (tds.placeOperation == TrackPlaceOperation::drawOutlines)
     {
         gMapSelectionTiles.clear();
-        gMapSelectArrowPosition = CoordsXYZ{ origin, tile_element_height(origin) };
+        gMapSelectArrowPosition = CoordsXYZ{ origin, TileElementHeight(origin) };
         gMapSelectArrowDirection = _currentTrackPieceDirection;
     }
 
-    tds.PlaceZ = 0;
-    money32 totalCost = 0;
+    tds.placeZ = 0;
+    money64 totalCost = 0;
     uint8_t rotation = _currentTrackPieceDirection;
 
     // Track elements
     auto newCoords = origin;
-    for (const auto& track : td6->track_elements)
+    for (const auto& track : td.trackElements)
     {
         auto trackType = track.type;
         const auto& ted = GetTrackElementDescriptor(trackType);
 
         TrackDesignUpdatePreviewBounds(tds, newCoords);
 
-        switch (tds.PlaceOperation)
+        switch (tds.placeOperation)
         {
-            case PTD_OPERATION_DRAW_OUTLINES:
-                for (const rct_preview_track* trackBlock = ted.Block; trackBlock->index != 0xFF; trackBlock++)
+            case TrackPlaceOperation::drawOutlines:
+                for (uint8_t i = 0; i < ted.numSequences; i++)
                 {
-                    auto tile = CoordsXY{ newCoords } + CoordsXY{ trackBlock->x, trackBlock->y }.Rotate(rotation);
+                    const auto& trackBlock = ted.sequences[i].clearance;
+                    auto tile = CoordsXY{ newCoords } + CoordsXY{ trackBlock.x, trackBlock.y }.Rotate(rotation);
                     TrackDesignUpdatePreviewBounds(tds, { tile, newCoords.z });
                     TrackDesignAddSelectedTile(tile);
                 }
                 break;
-            case PTD_OPERATION_REMOVE_GHOST:
+            case TrackPlaceOperation::removeGhost:
             {
-                const rct_track_coordinates* trackCoordinates = &ted.Coordinates;
-                const rct_preview_track* trackBlock = ted.Block;
-                int32_t tempZ = newCoords.z - trackCoordinates->z_begin + trackBlock->z;
+                const TrackCoordinates* trackCoordinates = &ted.coordinates;
+                int32_t tempZ = newCoords.z - trackCoordinates->zBegin + ted.sequences[0].clearance.z;
                 auto trackRemoveAction = TrackRemoveAction(
                     trackType, 0, { newCoords, tempZ, static_cast<Direction>(rotation & 3) });
                 trackRemoveAction.SetFlags(
-                    GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
+                    GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST
+                    | GAME_COMMAND_FLAG_TRACK_DESIGN);
                 GameActions::ExecuteNested(&trackRemoveAction);
                 break;
             }
-            case PTD_OPERATION_PLACE_QUERY:
-            case PTD_OPERATION_PLACE:
-            case PTD_OPERATION_PLACE_GHOST:
-            case PTD_OPERATION_PLACE_TRACK_PREVIEW:
+            case TrackPlaceOperation::placeQuery:
+            case TrackPlaceOperation::place:
+            case TrackPlaceOperation::placeGhost:
+            case TrackPlaceOperation::placeTrackPreview:
             {
-                const rct_track_coordinates* trackCoordinates = &ted.Coordinates;
+                const TrackCoordinates* trackCoordinates = &ted.coordinates;
 
                 // di
-                int16_t tempZ = newCoords.z - trackCoordinates->z_begin;
-                uint32_t trackColour = (track.flags >> 4) & 0x3;
-                uint32_t brakeSpeed = (track.flags & 0x0F) * 2;
-                uint32_t seatRotation = track.flags & 0x0F;
+                int16_t tempZ = newCoords.z - trackCoordinates->zBegin;
 
-                int32_t liftHillAndAlternativeState = 0;
-                if (track.flags & RCT12_TRACK_ELEMENT_TYPE_FLAG_CHAIN_LIFT)
+                SelectedLiftAndInverted liftHillAndAlternativeState{};
+                if (track.HasFlag(TrackDesignTrackElementFlag::hasChain))
                 {
-                    liftHillAndAlternativeState |= 1;
+                    liftHillAndAlternativeState.set(LiftHillAndInverted::liftHill);
                 }
-                if (track.flags & TD6_TRACK_ELEMENT_FLAG_INVERTED)
+                if (track.HasFlag(TrackDesignTrackElementFlag::isInverted))
                 {
-                    liftHillAndAlternativeState |= 2;
+                    liftHillAndAlternativeState.set(LiftHillAndInverted::inverted);
                 }
 
                 uint8_t flags = GAME_COMMAND_FLAG_APPLY;
-                if (tds.PlaceOperation == PTD_OPERATION_PLACE_TRACK_PREVIEW)
+                if (tds.placeOperation == TrackPlaceOperation::placeTrackPreview)
                 {
                     flags |= GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED;
                     flags |= GAME_COMMAND_FLAG_NO_SPEND;
                 }
-                else if (tds.PlaceOperation == PTD_OPERATION_PLACE_GHOST)
+                else if (tds.placeOperation == TrackPlaceOperation::placeGhost)
                 {
                     flags |= GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED;
                     flags |= GAME_COMMAND_FLAG_NO_SPEND;
                     flags |= GAME_COMMAND_FLAG_GHOST;
                 }
-                else if (tds.PlaceOperation == PTD_OPERATION_PLACE_QUERY)
+                else if (tds.placeOperation == TrackPlaceOperation::placeQuery)
                 {
                     flags = GAME_COMMAND_FLAG_NO_SPEND;
                 }
-                if (tds.IsReplay)
+                if (tds.isReplay)
                 {
                     flags |= GAME_COMMAND_FLAG_REPLAY;
                 }
 
                 auto trackPlaceAction = TrackPlaceAction(
-                    _currentRideIndex, trackType, ride->type, { newCoords, tempZ, static_cast<uint8_t>(rotation) }, brakeSpeed,
-                    trackColour, seatRotation, liftHillAndAlternativeState, true);
+                    ride.id, trackType, ride.type, { newCoords, tempZ, static_cast<uint8_t>(rotation) },
+                    track.brakeBoosterSpeed, track.colourScheme, track.seatRotation, liftHillAndAlternativeState, true);
                 trackPlaceAction.SetFlags(flags);
 
                 auto res = flags & GAME_COMMAND_FLAG_APPLY ? GameActions::ExecuteNested(&trackPlaceAction)
@@ -1634,30 +1644,33 @@ static GameActions::Result TrackDesignPlaceRide(TrackDesignState& tds, TrackDesi
                 totalCost += res.Cost;
                 break;
             }
-            case PTD_OPERATION_GET_PLACE_Z:
+            case TrackPlaceOperation::getPlaceZ:
             {
-                int32_t tempZ = newCoords.z - ted.Coordinates.z_begin;
-                for (const rct_preview_track* trackBlock = ted.Block; trackBlock->index != 0xFF; trackBlock++)
+                int32_t tempZ = newCoords.z - ted.coordinates.zBegin;
+                for (uint8_t i = 0; i < ted.numSequences; i++)
                 {
-                    auto tile = CoordsXY{ newCoords } + CoordsXY{ trackBlock->x, trackBlock->y }.Rotate(rotation);
-                    if (!map_is_location_valid(tile))
+                    const auto& trackBlock = ted.sequences[i].clearance;
+                    auto tile = CoordsXY{ newCoords } + CoordsXY{ trackBlock.x, trackBlock.y }.Rotate(rotation);
+                    if (!MapIsLocationValid(tile))
                     {
                         continue;
                     }
 
-                    auto surfaceElement = map_get_surface_element_at(tile);
+                    auto surfaceElement = MapGetSurfaceElementAt(tile);
                     if (surfaceElement == nullptr)
                     {
-                        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
+                        return GameActions::Result(
+                            GameActions::Status::InvalidParameters, STR_ERR_INVALID_PARAMETER,
+                            STR_ERR_SURFACE_ELEMENT_NOT_FOUND);
                     }
 
                     int32_t surfaceZ = surfaceElement->GetBaseZ();
-                    if (surfaceElement->GetSlope() & TILE_ELEMENT_SLOPE_ALL_CORNERS_UP)
+                    if (surfaceElement->GetSlope() & kTileSlopeRaisedCornersMask)
                     {
-                        surfaceZ += LAND_HEIGHT_STEP;
-                        if (surfaceElement->GetSlope() & TILE_ELEMENT_SLOPE_DOUBLE_HEIGHT)
+                        surfaceZ += kLandHeightStep;
+                        if (surfaceElement->GetSlope() & kTileSlopeDiagonalFlag)
                         {
-                            surfaceZ += LAND_HEIGHT_STEP;
+                            surfaceZ += kLandHeightStep;
                         }
                     }
 
@@ -1666,23 +1679,23 @@ static GameActions::Result TrackDesignPlaceRide(TrackDesignState& tds, TrackDesi
                     {
                         surfaceZ = waterZ;
                     }
-                    int32_t heightDifference = tempZ + tds.PlaceZ + trackBlock->z - surfaceZ;
+                    int32_t heightDifference = tempZ + tds.placeZ + trackBlock.z - surfaceZ;
                     if (heightDifference < 0)
                     {
-                        tds.PlaceZ -= heightDifference;
+                        tds.placeZ -= heightDifference;
                     }
                 }
                 break;
             }
         }
 
-        const rct_track_coordinates& track_coordinates = ted.Coordinates;
+        const TrackCoordinates& track_coordinates = ted.coordinates;
         auto offsetAndRotatedTrack = CoordsXY{ newCoords }
             + CoordsXY{ track_coordinates.x, track_coordinates.y }.Rotate(rotation);
 
-        newCoords = { offsetAndRotatedTrack, newCoords.z - track_coordinates.z_begin + track_coordinates.z_end };
-        rotation = (rotation + track_coordinates.rotation_end - track_coordinates.rotation_begin) & 3;
-        if (track_coordinates.rotation_end & (1 << 2))
+        newCoords = { offsetAndRotatedTrack, newCoords.z - track_coordinates.zBegin + track_coordinates.zEnd };
+        rotation = (rotation + track_coordinates.rotationEnd - track_coordinates.rotationBegin) & 3;
+        if (track_coordinates.rotationEnd & (1 << 2))
         {
             rotation |= (1 << 2);
         }
@@ -1692,113 +1705,19 @@ static GameActions::Result TrackDesignPlaceRide(TrackDesignState& tds, TrackDesi
         }
     }
 
-    // Entrance elements
-    for (const auto& entrance : td6->entrance_elements)
+    auto result = TrackDesignPlaceEntrances(tds, td, newCoords, ride.id, totalCost);
+    if (result.has_value())
     {
-        rotation = _currentTrackPieceDirection & 3;
-        CoordsXY entranceMapPos{ entrance.x, entrance.y };
-        auto rotatedEntranceMapPos = entranceMapPos.Rotate(rotation);
-        newCoords = { rotatedEntranceMapPos + tds.Origin, newCoords.z };
-
-        TrackDesignUpdatePreviewBounds(tds, newCoords);
-
-        switch (tds.PlaceOperation)
-        {
-            case PTD_OPERATION_DRAW_OUTLINES:
-                TrackDesignAddSelectedTile(newCoords);
-                break;
-            case PTD_OPERATION_PLACE_QUERY:
-            case PTD_OPERATION_PLACE:
-            case PTD_OPERATION_PLACE_GHOST:
-            case PTD_OPERATION_PLACE_TRACK_PREVIEW:
-            {
-                rotation = (rotation + entrance.direction) & 3;
-                if (tds.PlaceOperation != PTD_OPERATION_PLACE_QUERY)
-                {
-                    auto tile = CoordsXY{ newCoords } + CoordsDirectionDelta[rotation];
-                    TileElement* tile_element = map_get_first_element_at(tile);
-                    newCoords.z = tds.Origin.z / COORDS_Z_STEP;
-                    newCoords.z += entrance.z;
-                    if (tile_element == nullptr)
-                    {
-                        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
-                    }
-
-                    do
-                    {
-                        if (tile_element->GetType() != TileElementType::Track)
-                        {
-                            continue;
-                        }
-                        if (tile_element->base_height != newCoords.z)
-                        {
-                            continue;
-                        }
-
-                        auto stationIndex = tile_element->AsTrack()->GetStationIndex();
-                        uint8_t flags = GAME_COMMAND_FLAG_APPLY;
-                        if (tds.PlaceOperation == PTD_OPERATION_PLACE_TRACK_PREVIEW)
-                        {
-                            flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
-                                | GAME_COMMAND_FLAG_NO_SPEND;
-                        }
-                        if (tds.PlaceOperation == PTD_OPERATION_PLACE_GHOST)
-                        {
-                            flags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND
-                                | GAME_COMMAND_FLAG_GHOST;
-                        }
-                        if (tds.PlaceOperation == PTD_OPERATION_PLACE_QUERY)
-                        {
-                            flags = 0;
-                        }
-                        if (tds.IsReplay)
-                        {
-                            flags |= GAME_COMMAND_FLAG_REPLAY;
-                        }
-
-                        auto rideEntranceExitPlaceAction = RideEntranceExitPlaceAction(
-                            newCoords, rotation, ride->id, stationIndex, entrance.isExit);
-                        rideEntranceExitPlaceAction.SetFlags(flags);
-                        auto res = flags & GAME_COMMAND_FLAG_APPLY ? GameActions::ExecuteNested(&rideEntranceExitPlaceAction)
-                                                                   : GameActions::QueryNested(&rideEntranceExitPlaceAction);
-
-                        if (res.Error != GameActions::Status::Ok)
-                        {
-                            return res;
-                        }
-                        totalCost += res.Cost;
-                        tds.EntranceExitPlaced = true;
-                        _trackDesignPlaceStateEntranceExitPlaced = true;
-                        break;
-                    } while (!(tile_element++)->IsLastForTile());
-                }
-                else
-                {
-                    newCoords.z = entrance.z * COORDS_Z_STEP;
-                    newCoords.z += tds.Origin.z;
-
-                    auto res = RideEntranceExitPlaceAction::TrackPlaceQuery(newCoords, false);
-                    if (res.Error != GameActions::Status::Ok)
-                    {
-                        return GameActions::Result(GameActions::Status::InvalidParameters, STR_NONE, STR_NONE);
-                    }
-
-                    totalCost += res.Cost;
-                    tds.EntranceExitPlaced = true;
-                    _trackDesignPlaceStateEntranceExitPlaced = true;
-                }
-                break;
-            }
-        }
+        return result.value();
     }
 
-    if (tds.PlaceOperation == PTD_OPERATION_REMOVE_GHOST)
+    if (tds.placeOperation == TrackPlaceOperation::removeGhost)
     {
-        ride->ValidateStations();
-        ride->Delete();
+        ride.ValidateStations();
+        ride.Delete();
     }
 
-    auto res = GameActions::Result(GameActions::Status::Ok, STR_NONE, STR_NONE);
+    auto res = GameActions::Result();
     res.Cost = totalCost;
 
     return res;
@@ -1818,39 +1737,46 @@ static GameActions::Result TrackDesignPlaceRide(TrackDesignState& tds, TrackDesi
  *  rct2: 0x006D01B3
  */
 static GameActions::Result TrackDesignPlaceVirtual(
-    TrackDesignState& tds, TrackDesign* td6, uint8_t ptdOperation, bool placeScenery, Ride* ride, const CoordsXYZ& coords)
+    TrackDesignState& tds, const TrackDesign& td, TrackPlaceOperation ptdOperation, bool placeScenery, Ride& ride,
+    const CoordsXYZD& coords, bool isReplay = false)
 {
     _trackDesignPlaceStateSceneryUnavailable = false;
     _trackDesignPlaceStateEntranceExitPlaced = false;
 
-    tds.PlaceScenery = placeScenery;
-    tds.EntranceExitPlaced = false;
-    tds.HasScenery = false;
+    tds.placeScenery = placeScenery;
+    tds.entranceExitPlaced = false;
+    tds.hasScenery = false;
 
-    tds.IsReplay = ptdOperation & PTD_OPERATION_FLAG_IS_REPLAY;
-    ptdOperation &= ~PTD_OPERATION_FLAG_IS_REPLAY;
-    tds.PlaceOperation = ptdOperation;
+    tds.isReplay = isReplay;
+    tds.placeOperation = ptdOperation;
 
-    tds.PreviewMin = coords;
-    tds.PreviewMax = coords;
-    tds.PlaceSceneryZ = 0;
+    tds.previewMin = coords;
+    tds.previewMax = coords;
+    tds.placeSceneryZ = 0;
 
     if (gTrackDesignSceneryToggle)
     {
-        tds.PlaceScenery = false;
+        tds.placeScenery = false;
     }
 
-    _currentRideIndex = ride->id;
+    // NOTE: We need to save this, in networked games this would affect all clients otherwise.
+    auto savedRideId = _currentRideIndex;
+    auto savedTrackPieceDirection = _currentTrackPieceDirection;
+    _currentRideIndex = ride.id;
+    _currentTrackPieceDirection = coords.direction;
 
     GameActions::Result trackPlaceRes;
-    if (td6->type == RIDE_TYPE_MAZE)
+    const auto& rtd = GetRideTypeDescriptor(td.trackAndVehicle.rtdIndex);
+    if (rtd.specialType == RtdSpecialType::maze)
     {
-        trackPlaceRes = TrackDesignPlaceMaze(tds, td6, coords, ride);
+        trackPlaceRes = TrackDesignPlaceMaze(tds, td, coords, ride);
     }
     else
     {
-        trackPlaceRes = TrackDesignPlaceRide(tds, td6, coords, ride);
+        trackPlaceRes = TrackDesignPlaceRide(tds, td, coords, ride);
     }
+    _currentRideIndex = savedRideId;
+    _currentTrackPieceDirection = savedTrackPieceDirection;
 
     if (trackPlaceRes.Error != GameActions::Status::Ok)
     {
@@ -1858,19 +1784,19 @@ static GameActions::Result TrackDesignPlaceVirtual(
     }
 
     // Scenery elements
-    auto sceneryPlaceRes = TrackDesignPlaceAllScenery(tds, td6->scenery_elements);
+    auto sceneryPlaceRes = TrackDesignPlaceAllScenery(tds, td.sceneryElements, coords.direction);
     if (sceneryPlaceRes.Error != GameActions::Status::Ok)
     {
         return sceneryPlaceRes;
     }
 
     // 0x6D0FE6
-    if (tds.PlaceOperation == PTD_OPERATION_DRAW_OUTLINES)
+    if (tds.placeOperation == TrackPlaceOperation::drawOutlines)
     {
         gMapSelectFlags |= MAP_SELECT_FLAG_ENABLE_CONSTRUCT;
         gMapSelectFlags |= MAP_SELECT_FLAG_ENABLE_ARROW;
         gMapSelectFlags &= ~MAP_SELECT_FLAG_GREEN;
-        map_invalidate_map_selection_tiles();
+        MapInvalidateMapSelectionTiles();
     }
 
     auto res = GameActions::Result();
@@ -1879,62 +1805,62 @@ static GameActions::Result TrackDesignPlaceVirtual(
     return res;
 }
 
-GameActions::Result TrackDesignPlace(TrackDesign* td6, uint32_t flags, bool placeScenery, Ride* ride, const CoordsXYZ& coords)
+GameActions::Result TrackDesignPlace(
+    const TrackDesign& td, uint32_t flags, bool placeScenery, Ride& ride, const CoordsXYZD& coords)
 {
-    uint32_t ptdOperation = (flags & GAME_COMMAND_FLAG_APPLY) != 0 ? PTD_OPERATION_PLACE : PTD_OPERATION_PLACE_QUERY;
+    TrackPlaceOperation ptdOperation = (flags & GAME_COMMAND_FLAG_APPLY) != 0 ? TrackPlaceOperation::place
+                                                                              : TrackPlaceOperation::placeQuery;
     if ((flags & GAME_COMMAND_FLAG_APPLY) != 0 && (flags & GAME_COMMAND_FLAG_GHOST) != 0)
     {
-        ptdOperation = PTD_OPERATION_PLACE_GHOST;
+        ptdOperation = TrackPlaceOperation::placeGhost;
     }
-    if (flags & GAME_COMMAND_FLAG_REPLAY)
-        ptdOperation |= PTD_OPERATION_FLAG_IS_REPLAY;
+    bool isReplay = flags & GAME_COMMAND_FLAG_REPLAY;
 
     TrackDesignState tds{};
-    return TrackDesignPlaceVirtual(tds, td6, ptdOperation, placeScenery, ride, coords);
+    return TrackDesignPlaceVirtual(tds, td, ptdOperation, placeScenery, ride, coords, isReplay);
 }
 
-void TrackDesignPreviewRemoveGhosts(TrackDesign* td6, Ride* ride, const CoordsXYZ& coords)
+void TrackDesignPreviewRemoveGhosts(const TrackDesign& td, Ride& ride, const CoordsXYZD& coords)
 {
     TrackDesignState tds{};
-    TrackDesignPlaceVirtual(tds, td6, PTD_OPERATION_REMOVE_GHOST, true, ride, coords);
+    TrackDesignPlaceVirtual(tds, td, TrackPlaceOperation::removeGhost, true, ride, coords);
 }
 
-void TrackDesignPreviewDrawOutlines(TrackDesign* td6, Ride* ride, const CoordsXYZ& coords)
+void TrackDesignPreviewDrawOutlines(TrackDesignState& tds, const TrackDesign& td, Ride& ride, const CoordsXYZD& coords)
 {
-    TrackDesignState tds{};
-    TrackDesignPlaceVirtual(tds, td6, PTD_OPERATION_DRAW_OUTLINES, true, ride, coords);
+    TrackDesignPlaceVirtual(tds, td, TrackPlaceOperation::drawOutlines, true, ride, coords);
 }
 
-static int32_t TrackDesignGetZPlacement(TrackDesignState& tds, TrackDesign* td6, Ride* ride, const CoordsXYZ& coords)
+static int32_t TrackDesignGetZPlacement(TrackDesignState& tds, const TrackDesign& td, Ride& ride, const CoordsXYZD& coords)
 {
-    TrackDesignPlaceVirtual(tds, td6, PTD_OPERATION_GET_PLACE_Z, true, ride, coords);
+    TrackDesignPlaceVirtual(tds, td, TrackPlaceOperation::getPlaceZ, true, ride, coords);
 
     // Change from vanilla: originally, _trackDesignPlaceSceneryZ was not subtracted
     // from _trackDesignPlaceZ, causing bug #259.
-    return tds.PlaceZ - tds.PlaceSceneryZ;
+    return tds.placeZ - tds.placeSceneryZ;
 }
 
-int32_t TrackDesignGetZPlacement(TrackDesign* td6, Ride* ride, const CoordsXYZ& coords)
+int32_t TrackDesignGetZPlacement(const TrackDesign& td, Ride& ride, const CoordsXYZD& coords)
 {
     TrackDesignState tds{};
-    return TrackDesignGetZPlacement(tds, td6, ride, coords);
+    return TrackDesignGetZPlacement(tds, td, ride, coords);
 }
 
-static money32 TrackDesignCreateRide(int32_t type, int32_t subType, int32_t flags, ride_id_t* outRideIndex)
+static money64 TrackDesignCreateRide(int32_t type, int32_t subType, int32_t flags, RideId* outRideIndex)
 {
     // Don't set colours as will be set correctly later.
-    auto gameAction = RideCreateAction(type, subType, 0, 0);
+    auto gameAction = RideCreateAction(type, subType, 0, 0, GetGameState().LastEntranceStyle);
     gameAction.SetFlags(flags);
 
     auto res = GameActions::ExecuteNested(&gameAction);
 
-    // Callee's of this function expect MONEY32_UNDEFINED in case of failure.
+    // Callee's of this function expect kMoney64Undefined in case of failure.
     if (res.Error != GameActions::Status::Ok)
     {
-        return MONEY32_UNDEFINED;
+        return kMoney64Undefined;
     }
 
-    *outRideIndex = res.GetData<ride_id_t>();
+    *outRideIndex = res.GetData<RideId>();
 
     return res.Cost;
 }
@@ -1945,94 +1871,93 @@ static money32 TrackDesignCreateRide(int32_t type, int32_t subType, int32_t flag
  * ebx = ride_id
  * cost = edi
  */
-static bool TrackDesignPlacePreview(TrackDesignState& tds, TrackDesign* td6, money32* cost, Ride** outRide, uint8_t* flags)
+static bool TrackDesignPlacePreview(
+    TrackDesignState& tds, const TrackDesign& td, Ride** outRide, TrackDesignGameStateData& gameStateData)
 {
     *outRide = nullptr;
-    *flags = 0;
+    gameStateData.flags = 0;
 
+    auto& gameState = GetGameState();
     auto& objManager = GetContext()->GetObjectManager();
-    auto entry_index = objManager.GetLoadedObjectEntryIndex(td6->vehicle_object);
+    auto entry_index = objManager.GetLoadedObjectEntryIndex(td.trackAndVehicle.vehicleObject);
 
-    ride_id_t rideIndex;
+    RideId rideIndex;
     uint8_t rideCreateFlags = GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND;
-    if (TrackDesignCreateRide(td6->type, entry_index, rideCreateFlags, &rideIndex) == MONEY32_UNDEFINED)
+    if (TrackDesignCreateRide(td.trackAndVehicle.rtdIndex, entry_index, rideCreateFlags, &rideIndex) == kMoney64Undefined)
     {
         return false;
     }
 
-    auto ride = get_ride(rideIndex);
+    auto ride = GetRide(rideIndex);
     if (ride == nullptr)
         return false;
 
     ride->custom_name = {};
 
-    auto stationIdentifier = GetStationIdentifierFromStyle(td6->entrance_style);
-    ride->entrance_style = objManager.GetLoadedObjectEntryIndex(stationIdentifier);
-    if (ride->entrance_style == OBJECT_ENTRY_INDEX_NULL)
+    ride->entrance_style = objManager.GetLoadedObjectEntryIndex(td.appearance.stationObjectIdentifier);
+    if (ride->entrance_style == kObjectEntryIndexNull)
     {
-        ride->entrance_style = gLastEntranceStyle;
+        ride->entrance_style = gameState.LastEntranceStyle;
     }
 
-    for (int32_t i = 0; i < RCT12::Limits::NumColourSchemes; i++)
+    for (size_t i = 0; i < std::min(std::size(ride->track_colour), std::size(td.appearance.trackColours)); i++)
     {
-        ride->track_colour[i].main = td6->track_spine_colour[i];
-        ride->track_colour[i].additional = td6->track_rail_colour[i];
-        ride->track_colour[i].supports = td6->track_support_colour[i];
+        ride->track_colour[i] = td.appearance.trackColours[i];
     }
 
     // Flat rides need their vehicle colours loaded for display
     // in the preview window
-    if (!GetRideTypeDescriptor(td6->type).HasFlag(RIDE_TYPE_FLAG_HAS_TRACK))
+    if (!GetRideTypeDescriptor(td.trackAndVehicle.rtdIndex).HasFlag(RtdFlag::hasTrack))
     {
-        for (int32_t i = 0; i < RCT12::Limits::MaxVehicleColours; i++)
+        for (size_t i = 0; i < std::size(ride->vehicle_colours); i++)
         {
-            ride->vehicle_colours[i].Body = td6->vehicle_colours[i].body_colour;
-            ride->vehicle_colours[i].Trim = td6->vehicle_colours[i].trim_colour;
-            ride->vehicle_colours[i].Ternary = td6->vehicle_additional_colour[i];
+            ride->vehicle_colours[i] = td.appearance.vehicleColours[i];
         }
     }
 
     _trackDesignDrawingPreview = true;
     uint8_t backup_rotation = _currentTrackPieceDirection;
-    uint32_t backup_park_flags = gParkFlags;
-    gParkFlags &= ~PARK_FLAGS_FORBID_HIGH_CONSTRUCTION;
-    int32_t mapSize = gMapSize << 4;
+    uint32_t backup_park_flags = gameState.Park.Flags;
+    gameState.Park.Flags &= ~PARK_FLAGS_FORBID_HIGH_CONSTRUCTION;
+    auto mapSize = TileCoordsXY{ gameState.MapSize.x * 16, gameState.MapSize.y * 16 };
 
     _currentTrackPieceDirection = 0;
-    int32_t z = TrackDesignGetZPlacement(tds, td6, GetOrAllocateRide(PreviewRideId), { mapSize, mapSize, 16 });
+    int32_t z = TrackDesignGetZPlacement(
+        tds, td, RideGetTemporaryForPreview(), { mapSize.x, mapSize.y, 16, _currentTrackPieceDirection });
 
-    if (tds.HasScenery)
+    if (tds.hasScenery)
     {
-        *flags |= TRACK_DESIGN_FLAG_HAS_SCENERY;
+        gameStateData.setFlag(TrackDesignGameStateFlag::HasScenery, true);
     }
 
-    z += 16 - tds.PlaceSceneryZ;
+    z += 16 - tds.placeSceneryZ;
 
     bool placeScenery = true;
     if (_trackDesignPlaceStateSceneryUnavailable)
     {
         placeScenery = false;
-        *flags |= TRACK_DESIGN_FLAG_SCENERY_UNAVAILABLE;
+        gameStateData.setFlag(TrackDesignGameStateFlag::SceneryUnavailable, true);
     }
 
     auto res = TrackDesignPlaceVirtual(
-        tds, td6, PTD_OPERATION_PLACE_TRACK_PREVIEW, placeScenery, ride, { mapSize, mapSize, z });
-    gParkFlags = backup_park_flags;
+        tds, td, TrackPlaceOperation::placeTrackPreview, placeScenery, *ride,
+        { mapSize.x, mapSize.y, z, _currentTrackPieceDirection });
+    gameState.Park.Flags = backup_park_flags;
 
     if (res.Error == GameActions::Status::Ok)
     {
-        if (entry_index == OBJECT_ENTRY_INDEX_NULL)
+        if (entry_index == kObjectEntryIndexNull)
         {
-            *flags |= TRACK_DESIGN_FLAG_VEHICLE_UNAVAILABLE;
+            gameStateData.setFlag(TrackDesignGameStateFlag::VehicleUnavailable, true);
         }
-        else if (!ride_entry_is_invented(entry_index) && !gCheatsIgnoreResearchStatus)
+        else if (!RideEntryIsInvented(entry_index) && !GetGameState().Cheats.ignoreResearchStatus)
         {
-            *flags |= TRACK_DESIGN_FLAG_VEHICLE_UNAVAILABLE;
+            gameStateData.setFlag(TrackDesignGameStateFlag::VehicleUnavailable, true);
         }
 
         _currentTrackPieceDirection = backup_rotation;
         _trackDesignDrawingPreview = false;
-        *cost = res.Cost;
+        gameStateData.cost = res.Cost;
         *outRide = ride;
         return true;
     }
@@ -2043,46 +1968,127 @@ static bool TrackDesignPlacePreview(TrackDesignState& tds, TrackDesign* td6, mon
     return false;
 }
 
+Direction TrackDesignSceneryElement::getRotation() const
+{
+    return flags & kRotationMask;
+}
+
+void TrackDesignSceneryElement::setRotation(Direction rotation)
+{
+    flags &= ~kRotationMask;
+    flags |= (rotation & kRotationMask);
+}
+
+// Small scenery
+uint8_t TrackDesignSceneryElement::getQuadrant() const
+{
+    return (flags & kQuadrantMask) >> 2;
+}
+
+void TrackDesignSceneryElement::setQuadrant(uint8_t quadrant)
+{
+    flags &= ~kQuadrantMask;
+    flags |= ((quadrant << 2) & kQuadrantMask);
+}
+
+// Path
+bool TrackDesignSceneryElement::hasSlope() const
+{
+    return (flags & kHasSlopeMask) != 0;
+}
+
+void TrackDesignSceneryElement::setHasSlope(bool on)
+{
+    if (on)
+        flags |= kHasSlopeMask;
+    else
+        flags &= ~kHasSlopeMask;
+}
+
+Direction TrackDesignSceneryElement::getSlopeDirection() const
+{
+    return (flags >> 5) % kNumOrthogonalDirections;
+}
+
+void TrackDesignSceneryElement::setSlopeDirection(Direction slope)
+{
+    flags &= ~kSlopeDirectionMask;
+    flags |= ((slope << 5) & kSlopeDirectionMask);
+}
+
+uint8_t TrackDesignSceneryElement::getEdges() const
+{
+    return (flags & kEdgesMask);
+}
+
+void TrackDesignSceneryElement::setEdges(uint8_t edges)
+{
+    flags &= ~kEdgesMask;
+    flags |= (edges & kEdgesMask);
+}
+
+bool TrackDesignSceneryElement::isQueue() const
+{
+    return (flags & kIsQueueMask) != 0;
+}
+
+void TrackDesignSceneryElement::setIsQueue(bool on)
+{
+    if (on)
+        flags |= kIsQueueMask;
+    else
+        flags &= ~kIsQueueMask;
+}
+
+bool TrackDesignSceneryElement::operator==(const TrackDesignSceneryElement& rhs)
+{
+    return sceneryObject == rhs.sceneryObject && loc == rhs.loc && flags == rhs.flags && primaryColour == rhs.primaryColour
+        && secondaryColour == rhs.secondaryColour && tertiaryColour == rhs.tertiaryColour;
+}
+
+bool TrackDesignSceneryElement::operator!=(const TrackDesignSceneryElement& rhs)
+{
+    return !((*this) == rhs);
+}
+
 #pragma region Track Design Preview
 
 /**
  *
  *  rct2: 0x006D1EF0
  */
-void TrackDesignDrawPreview(TrackDesign* td6, uint8_t* pixels)
+void TrackDesignDrawPreview(TrackDesign& td, uint8_t* pixels)
 {
     StashMap();
     TrackDesignPreviewClearMap();
 
     if (gScreenFlags & SCREEN_FLAGS_TRACK_MANAGER)
     {
-        TrackDesignLoadSceneryObjects(td6);
+        TrackDesignLoadSceneryObjects(td);
     }
 
     TrackDesignState tds{};
 
-    money32 cost;
     Ride* ride;
-    uint8_t flags;
-    if (!TrackDesignPlacePreview(tds, td6, &cost, &ride, &flags))
+    TrackDesignGameStateData updatedGameStateData = td.gameStateData;
+    if (!TrackDesignPlacePreview(tds, td, &ride, updatedGameStateData))
     {
-        std::fill_n(pixels, TRACK_PREVIEW_IMAGE_SIZE * 4, 0x00);
+        std::fill_n(pixels, kTrackPreviewImageSize * 4, 0x00);
         UnstashMap();
         return;
     }
-    td6->cost = cost;
-    td6->track_flags = flags & 7;
+    td.gameStateData = updatedGameStateData;
 
-    CoordsXYZ centre = { (tds.PreviewMin.x + tds.PreviewMax.x) / 2 + 16, (tds.PreviewMin.y + tds.PreviewMax.y) / 2 + 16,
-                         (tds.PreviewMin.z + tds.PreviewMax.z) / 2 };
+    CoordsXYZ centre = { (tds.previewMin.x + tds.previewMax.x) / 2 + 16, (tds.previewMin.y + tds.previewMax.y) / 2 + 16,
+                         (tds.previewMin.z + tds.previewMax.z) / 2 };
 
-    int32_t size_x = tds.PreviewMax.x - tds.PreviewMin.x;
-    int32_t size_y = tds.PreviewMax.y - tds.PreviewMin.y;
-    int32_t size_z = tds.PreviewMax.z - tds.PreviewMin.z;
+    int32_t size_x = tds.previewMax.x - tds.previewMin.x;
+    int32_t size_y = tds.previewMax.y - tds.previewMin.y;
+    int32_t size_z = tds.previewMax.z - tds.previewMin.z;
 
     // Special case for flat rides - Z-axis info is irrelevant
     // and must be zeroed out lest the preview be off-centre
-    if (!GetRideTypeDescriptor(td6->type).HasFlag(RIDE_TYPE_FLAG_HAS_TRACK))
+    if (!GetRideTypeDescriptor(td.trackAndVehicle.rtdIndex).HasFlag(RtdFlag::hasTrack))
     {
         centre.z = 0;
         size_z = 0;
@@ -2104,20 +2110,17 @@ void TrackDesignDrawPreview(TrackDesign* td6, uint8_t* pixels)
         zoom_level = ZoomLevel{ 3 };
     }
 
-    size_x = 370 * zoom_level;
-    size_y = 217 * zoom_level;
+    size_x = zoom_level.ApplyTo(370);
+    size_y = zoom_level.ApplyTo(217);
 
-    rct_viewport view;
+    Viewport view;
     view.width = 370;
     view.height = 217;
-    view.view_width = size_x;
-    view.view_height = size_y;
     view.pos = { 0, 0 };
     view.zoom = zoom_level;
-    view.flags = VIEWPORT_FLAG_HIDE_BASE | VIEWPORT_FLAG_INVISIBLE_SPRITES;
+    view.flags = VIEWPORT_FLAG_HIDE_BASE | VIEWPORT_FLAG_HIDE_ENTITIES;
 
-    rct_drawpixelinfo dpi;
-    dpi.zoom_level = zoom_level;
+    DrawPixelInfo dpi;
     dpi.x = 0;
     dpi.y = 0;
     dpi.width = 370;
@@ -2131,12 +2134,11 @@ void TrackDesignDrawPreview(TrackDesign* td6, uint8_t* pixels)
     const ScreenCoordsXY offset = { size_x / 2, size_y / 2 };
     for (uint8_t i = 0; i < 4; i++)
     {
-        gCurrentRotation = i;
+        view.viewPos = Translate3DTo2DWithZ(i, centre) - offset;
+        view.rotation = i;
+        ViewportRender(dpi, &view);
 
-        view.viewPos = translate_3d_to_2d_with_z(i, centre) - offset;
-        viewport_paint(&view, &dpi, { view.viewPos, view.viewPos + ScreenCoordsXY{ size_x, size_y } });
-
-        dpi.bits += TRACK_PREVIEW_IMAGE_SIZE;
+        dpi.bits += kTrackPreviewImageSize;
     }
 
     ride->Delete();
@@ -2149,9 +2151,10 @@ void TrackDesignDrawPreview(TrackDesign* td6, uint8_t* pixels)
  */
 static void TrackDesignPreviewClearMap()
 {
-    auto numTiles = MAXIMUM_MAP_SIZE_TECHNICAL * MAXIMUM_MAP_SIZE_TECHNICAL;
+    auto numTiles = kMaximumMapSizeTechnical * kMaximumMapSizeTechnical;
 
-    gMapSize = 256;
+    auto& gameState = GetGameState();
+    gameState.MapSize = TRACK_DESIGN_PREVIEW_MAP_SIZE;
 
     // Reserve ~8 elements per tile
     std::vector<TileElement> tileElements;
@@ -2162,20 +2165,34 @@ static void TrackDesignPreviewClearMap()
         auto* element = &tileElements.emplace_back();
         element->ClearAs(TileElementType::Surface);
         element->SetLastForTile(true);
-        element->AsSurface()->SetSlope(TILE_ELEMENT_SLOPE_FLAT);
+        element->AsSurface()->SetSlope(kTileSlopeFlat);
         element->AsSurface()->SetWaterHeight(0);
-        element->AsSurface()->SetSurfaceStyle(0);
-        element->AsSurface()->SetEdgeStyle(0);
+        element->AsSurface()->SetSurfaceObjectIndex(0);
+        element->AsSurface()->SetEdgeObjectIndex(0);
         element->AsSurface()->SetGrassLength(GRASS_LENGTH_CLEAR_0);
         element->AsSurface()->SetOwnership(OWNERSHIP_OWNED);
         element->AsSurface()->SetParkFences(0);
     }
-    SetTileElements(std::move(tileElements));
+
+    SetTileElements(gameState, std::move(tileElements));
 }
 
-bool track_design_are_entrance_and_exit_placed()
+bool TrackDesignAreEntranceAndExitPlaced()
 {
     return _trackDesignPlaceStateEntranceExitPlaced;
 }
 
 #pragma endregion
+
+bool TrackDesignGameStateData::hasFlag(TrackDesignGameStateFlag flag) const
+{
+    return flags & EnumToFlag(flag);
+}
+
+void TrackDesignGameStateData::setFlag(TrackDesignGameStateFlag flag, bool on)
+{
+    if (on)
+        flags |= EnumToFlag(flag);
+    else
+        flags &= ~EnumToFlag(flag);
+}

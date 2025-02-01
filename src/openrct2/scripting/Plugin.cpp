@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,21 +9,20 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "Plugin.h"
+    #include "Plugin.h"
 
-#    include "../Diagnostic.h"
-#    include "../OpenRCT2.h"
-#    include "../core/File.h"
-#    include "Duktape.hpp"
-#    include "ScriptEngine.h"
+    #include "../Diagnostic.h"
+    #include "../OpenRCT2.h"
+    #include "../core/File.h"
+    #include "Duktape.hpp"
+    #include "ScriptEngine.h"
 
-#    include <algorithm>
-#    include <fstream>
-#    include <memory>
+    #include <fstream>
+    #include <memory>
 
 using namespace OpenRCT2::Scripting;
 
-Plugin::Plugin(duk_context* context, const std::string& path)
+Plugin::Plugin(duk_context* context, std::string_view path)
     : _context(context)
     , _path(path)
 {
@@ -41,7 +40,7 @@ void Plugin::Load()
         LoadCodeFromFile();
     }
 
-    std::string projectedVariables = "console,context,date,map,network,park";
+    std::string projectedVariables = "console,context,date,map,network,park,profiler";
     if (!gOpenRCT2Headless)
     {
         projectedVariables += ",ui";
@@ -69,19 +68,27 @@ void Plugin::Load()
     {
         auto val = std::string(duk_safe_to_string(_context, -1));
         duk_pop(_context);
-        throw std::runtime_error("Failed to load plug-in script: " + val);
+        throw std::runtime_error("Failed to load plug-in script: " + val + " at " + _path);
     }
 
     _metadata = GetMetadata(DukValue::take_from_stack(_context));
+    _hasLoaded = true;
 }
 
 void Plugin::Start()
 {
+    if (!_hasLoaded)
+    {
+        throw std::runtime_error("Plugin has not been loaded.");
+    }
+
     const auto& mainFunc = _metadata.Main;
     if (mainFunc.context() == nullptr)
     {
         throw std::runtime_error("No main function specified.");
     }
+
+    _hasStarted = true;
 
     mainFunc.push();
     auto result = duk_pcall(_context, 0);
@@ -92,13 +99,39 @@ void Plugin::Start()
         throw std::runtime_error("[" + _metadata.Name + "] " + val);
     }
     duk_pop(_context);
-
-    _hasStarted = true;
 }
 
-void Plugin::Stop()
+void Plugin::StopBegin()
 {
+    _isStopping = true;
+}
+
+void Plugin::StopEnd()
+{
+    _isStopping = false;
     _hasStarted = false;
+}
+
+void Plugin::ThrowIfStopping() const
+{
+    if (IsStopping())
+    {
+        duk_error(_context, DUK_ERR_ERROR, "Plugin is stopping.");
+    }
+}
+
+void Plugin::Unload()
+{
+    // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105937, fixed in GCC13
+    #if defined(__GNUC__) && !defined(__clang__)
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+    #endif
+    _metadata.Main = {};
+    #if defined(__GNUC__) && !defined(__clang__)
+        #pragma GCC diagnostic pop
+    #endif
+    _hasLoaded = false;
 }
 
 void Plugin::LoadCodeFromFile()
@@ -127,13 +160,19 @@ PluginMetadata Plugin::GetMetadata(const DukValue& dukMetadata)
         auto dukMinApiVersion = dukMetadata["minApiVersion"];
         if (dukMinApiVersion.type() == DukValue::Type::NUMBER)
         {
-            metadata.MinApiVersion = dukMinApiVersion.as_int();
+            metadata.MinApiVersion = dukMinApiVersion.as_uint();
         }
 
         auto dukTargetApiVersion = dukMetadata["targetApiVersion"];
         if (dukTargetApiVersion.type() == DukValue::Type::NUMBER)
         {
-            metadata.TargetApiVersion = dukTargetApiVersion.as_int();
+            metadata.TargetApiVersion = dukTargetApiVersion.as_uint();
+        }
+        else
+        {
+            LOG_ERROR(
+                u8"Plug-in “%s” does not specify a target API version or specifies it incorrectly. Emulating deprecated APIs.",
+                metadata.Name.c_str());
         }
 
         auto dukAuthors = dukMetadata["authors"];
@@ -160,13 +199,15 @@ PluginType Plugin::ParsePluginType(std::string_view type)
         return PluginType::Local;
     if (type == "remote")
         return PluginType::Remote;
+    if (type == "intransient")
+        return PluginType::Intransient;
     throw std::invalid_argument("Unknown plugin type.");
 }
 
 void Plugin::CheckForLicence(const DukValue& dukLicence, std::string_view pluginName)
 {
     if (dukLicence.type() != DukValue::Type::STRING || dukLicence.as_string().empty())
-        log_error("Plugin %s does not specify a licence", std::string(pluginName).c_str());
+        LOG_ERROR("Plugin %s does not specify a licence", std::string(pluginName).c_str());
 }
 
 int32_t Plugin::GetTargetAPIVersion() const
@@ -176,6 +217,11 @@ int32_t Plugin::GetTargetAPIVersion() const
 
     // If not specified, default to 33 since that is the API version from before 'targetAPIVersion' was introduced.
     return 33;
+}
+
+bool Plugin::IsTransient() const
+{
+    return _metadata.Type != PluginType::Intransient;
 }
 
 #endif

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,16 +10,13 @@
 #include "X8DrawingEngine.h"
 
 #include "../Context.h"
-#include "../Game.h"
-#include "../Intro.h"
 #include "../config/Config.h"
 #include "../core/Numerics.hpp"
 #include "../interface/Screenshot.h"
 #include "../interface/Viewport.h"
 #include "../interface/Window.h"
+#include "../scenes/intro/IntroScene.h"
 #include "../ui/UiContext.h"
-#include "../util/Util.h"
-#include "../world/Climate.h"
 #include "Drawing.h"
 #include "IDrawingContext.h"
 #include "IDrawingEngine.h"
@@ -27,6 +24,7 @@
 #include "Weather.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstring>
 
 using namespace OpenRCT2;
@@ -44,7 +42,7 @@ X8WeatherDrawer::~X8WeatherDrawer()
 }
 
 void X8WeatherDrawer::Draw(
-    rct_drawpixelinfo* dpi, int32_t x, int32_t y, int32_t width, int32_t height, int32_t xStart, int32_t yStart,
+    DrawPixelInfo& dpi, int32_t x, int32_t y, int32_t width, int32_t height, int32_t xStart, int32_t yStart,
     const uint8_t* weatherpattern)
 {
     const uint8_t* pattern = weatherpattern;
@@ -54,10 +52,10 @@ void X8WeatherDrawer::Draw(
     uint8_t patternStartXOffset = xStart % patternXSpace;
     uint8_t patternStartYOffset = yStart % patternYSpace;
 
-    uint32_t pixelOffset = (dpi->pitch + dpi->width) * y + x;
+    uint32_t pixelOffset = dpi.LineStride() * y + x;
     uint8_t patternYPos = patternStartYOffset % patternYSpace;
 
-    uint8_t* screenBits = dpi->bits;
+    uint8_t* screenBits = dpi.bits;
 
     // Stores the colours of changed pixels
     WeatherPixel* newPixels = &_weatherPixels[_weatherPixelsCount];
@@ -86,18 +84,18 @@ void X8WeatherDrawer::Draw(
             }
         }
 
-        pixelOffset += dpi->pitch + dpi->width;
+        pixelOffset += dpi.LineStride();
         patternYPos++;
         patternYPos %= patternYSpace;
     }
 }
 
-void X8WeatherDrawer::Restore(rct_drawpixelinfo* dpi)
+void X8WeatherDrawer::Restore(DrawPixelInfo& dpi)
 {
     if (_weatherPixelsCount > 0)
     {
-        uint32_t numPixels = (dpi->width + dpi->pitch) * dpi->height;
-        uint8_t* bits = dpi->bits;
+        uint32_t numPixels = dpi.LineStride() * dpi.height;
+        uint8_t* bits = dpi.bits;
         for (uint32_t i = 0; i < _weatherPixelsCount; i++)
         {
             WeatherPixel weatherPixel = _weatherPixels[i];
@@ -114,18 +112,16 @@ void X8WeatherDrawer::Restore(rct_drawpixelinfo* dpi)
 }
 
 #ifdef __WARN_SUGGEST_FINAL_METHODS__
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wsuggest-final-methods"
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wsuggest-final-methods"
 #endif
 
 X8DrawingEngine::X8DrawingEngine([[maybe_unused]] const std::shared_ptr<Ui::IUiContext>& uiContext)
 {
     _drawingContext = new X8DrawingContext(this);
     _bitsDPI.DrawingEngine = this;
-#ifdef __ENABLE_LIGHTFX__
-    lightfx_set_available(true);
-    _lastLightFXenabled = (gConfigGeneral.enable_light_fx != 0);
-#endif
+    LightFx::SetAvailable(true);
+    _lastLightFXenabled = Config::Get().general.EnableLightFx;
 }
 
 X8DrawingEngine::~X8DrawingEngine()
@@ -143,6 +139,7 @@ void X8DrawingEngine::Resize(uint32_t width, uint32_t height)
 {
     uint32_t pitch = width;
     ConfigureBits(width, height, pitch);
+    _drawingContext->Clear(_bitsDPI, PALETTE_INDEX_10);
 }
 
 void X8DrawingEngine::SetPalette([[maybe_unused]] const GamePalette& palette)
@@ -188,16 +185,16 @@ void X8DrawingEngine::Invalidate(int32_t left, int32_t top, int32_t right, int32
 
 void X8DrawingEngine::BeginDraw()
 {
-    if (gIntroState == IntroState::None)
+    if (!IntroIsPlaying())
     {
-#ifdef __ENABLE_LIGHTFX__
         // HACK we need to re-configure the bits if light fx has been enabled / disabled
-        if (_lastLightFXenabled != (gConfigGeneral.enable_light_fx != 0))
+        if (_lastLightFXenabled != Config::Get().general.EnableLightFx)
         {
             Resize(_width, _height);
+            GfxInvalidateScreen();
+            _lastLightFXenabled = Config::Get().general.EnableLightFx;
         }
-#endif
-        _weatherDrawer.Restore(&_bitsDPI);
+        _weatherDrawer.Restore(_bitsDPI);
     }
 }
 
@@ -207,18 +204,18 @@ void X8DrawingEngine::EndDraw()
 
 void X8DrawingEngine::PaintWindows()
 {
-    window_reset_visibilities();
+    WindowResetVisibilities();
 
     // Redraw dirty regions before updating the viewports, otherwise
     // when viewports get panned, they copy dirty pixels
     DrawAllDirtyBlocks();
-    window_update_all_viewports();
+    WindowUpdateAllViewports();
     DrawAllDirtyBlocks();
 }
 
 void X8DrawingEngine::PaintWeather()
 {
-    DrawWeather(&_bitsDPI, &_weatherDrawer);
+    DrawWeather(_bitsDPI, &_weatherDrawer);
 }
 
 void X8DrawingEngine::CopyRect(int32_t x, int32_t y, int32_t width, int32_t height, int32_t dx, int32_t dy)
@@ -240,7 +237,7 @@ void X8DrawingEngine::CopyRect(int32_t x, int32_t y, int32_t width, int32_t heig
     width += lmargin + rmargin;
     height += tmargin + bmargin;
 
-    int32_t stride = _bitsDPI.width + _bitsDPI.pitch;
+    int32_t stride = _bitsDPI.LineStride();
     uint8_t* to = _bitsDPI.bits + y * stride + x;
     uint8_t* from = _bitsDPI.bits + (y - dy) * stride + x - dx;
 
@@ -263,7 +260,7 @@ void X8DrawingEngine::CopyRect(int32_t x, int32_t y, int32_t width, int32_t heig
 
 std::string X8DrawingEngine::Screenshot()
 {
-    return screenshot_dump_png(&_bitsDPI);
+    return ScreenshotDumpPNG(_bitsDPI);
 }
 
 IDrawingContext* X8DrawingEngine::GetDrawingContext()
@@ -271,7 +268,7 @@ IDrawingContext* X8DrawingEngine::GetDrawingContext()
     return _drawingContext;
 }
 
-rct_drawpixelinfo* X8DrawingEngine::GetDrawingPixelInfo()
+DrawPixelInfo* X8DrawingEngine::GetDrawingPixelInfo()
 {
     return &_bitsDPI;
 }
@@ -286,7 +283,7 @@ void X8DrawingEngine::InvalidateImage([[maybe_unused]] uint32_t image)
     // Not applicable for this engine
 }
 
-rct_drawpixelinfo* X8DrawingEngine::GetDPI()
+DrawPixelInfo* X8DrawingEngine::GetDPI()
 {
     return &_bitsDPI;
 }
@@ -332,7 +329,7 @@ void X8DrawingEngine::ConfigureBits(uint32_t width, uint32_t height, uint32_t pi
     _height = height;
     _pitch = pitch;
 
-    rct_drawpixelinfo* dpi = &_bitsDPI;
+    DrawPixelInfo* dpi = &_bitsDPI;
     dpi->bits = _bits;
     dpi->x = 0;
     dpi->y = 0;
@@ -342,12 +339,10 @@ void X8DrawingEngine::ConfigureBits(uint32_t width, uint32_t height, uint32_t pi
 
     ConfigureDirtyGrid();
 
-#ifdef __ENABLE_LIGHTFX__
-    if (lightfx_is_available())
+    if (LightFx::IsAvailable())
     {
-        lightfx_update_buffers(dpi);
+        LightFx::UpdateBuffers(*dpi);
     }
-#endif
 }
 
 void X8DrawingEngine::OnDrawDirtyBlock(
@@ -358,7 +353,7 @@ void X8DrawingEngine::OnDrawDirtyBlock(
 void X8DrawingEngine::ConfigureDirtyGrid()
 {
     _dirtyGrid.BlockShiftX = 7;
-    _dirtyGrid.BlockShiftY = 6;
+    _dirtyGrid.BlockShiftY = 5; // Keep column at 32 (1 << 5)
     _dirtyGrid.BlockWidth = 1 << _dirtyGrid.BlockShiftX;
     _dirtyGrid.BlockHeight = 1 << _dirtyGrid.BlockShiftY;
     _dirtyGrid.BlockColumns = (_width >> _dirtyGrid.BlockShiftX) + 1;
@@ -370,6 +365,25 @@ void X8DrawingEngine::ConfigureDirtyGrid()
 
 void X8DrawingEngine::DrawAllDirtyBlocks()
 {
+    // TODO: For optimal performance it is currently limited to a single column.
+    // The optimal approach would be to extract all dirty regions as rectangles not including
+    // parts that are not marked dirty and have the grid more fine grained.
+    // A situation like following:
+    //
+    //   0 1 2 3 4 5 6 7 8 9
+    //   1 - - - - - - - - -
+    //   2 - x x x x - - - -
+    //   3 - x x - - - - - -
+    //   4 - - - - - - - - -
+    //   5 - - - - - - - - -
+    //   6 - - - - - - - - -
+    //   7 - - - - - - - - -
+    //   8 - - - - - - - - -
+    //   9 - - - - - - - - -
+    //
+    // Would currently redraw {2,2} to {3,5} where {3,4} and {3,5} are not dirty. Choosing to do this
+    // per column eliminates this issue but limits it to rendering just a single column at a time.
+
     for (uint32_t x = 0; x < _dirtyGrid.BlockColumns; x++)
     {
         for (uint32_t y = 0; y < _dirtyGrid.BlockRows; y++)
@@ -380,18 +394,10 @@ void X8DrawingEngine::DrawAllDirtyBlocks()
                 continue;
             }
 
-            // Determine columns
-            uint32_t xx;
-            for (xx = x; xx < _dirtyGrid.BlockColumns; xx++)
-            {
-                if (_dirtyGrid.Blocks[yOffset + xx] == 0)
-                {
-                    break;
-                }
-            }
+            // See comment above as to why this is 1.
+            const uint32_t columns = 1;
 
             // Check rows
-            uint32_t columns = xx - x;
             auto rows = GetNumDirtyRows(x, y, columns);
             DrawDirtyBlocks(x, y, columns, rows);
         }
@@ -443,11 +449,11 @@ void X8DrawingEngine::DrawDirtyBlocks(uint32_t x, uint32_t y, uint32_t columns, 
 
     // Draw region
     OnDrawDirtyBlock(x, y, columns, rows);
-    window_draw_all(&_bitsDPI, left, top, right, bottom);
+    WindowDrawAll(_bitsDPI, left, top, right, bottom);
 }
 
 #ifdef __WARN_SUGGEST_FINAL_METHODS__
-#    pragma GCC diagnostic pop
+    #pragma GCC diagnostic pop
 #endif
 
 X8DrawingContext::X8DrawingContext(X8DrawingEngine* engine)
@@ -455,27 +461,22 @@ X8DrawingContext::X8DrawingContext(X8DrawingEngine* engine)
     _engine = engine;
 }
 
-IDrawingEngine* X8DrawingContext::GetEngine()
+void X8DrawingContext::Clear(DrawPixelInfo& dpi, uint8_t paletteIndex)
 {
-    return _engine;
-}
-
-void X8DrawingContext::Clear(rct_drawpixelinfo* dpi, uint8_t paletteIndex)
-{
-    int32_t w = dpi->width / dpi->zoom_level;
-    int32_t h = dpi->height / dpi->zoom_level;
-    uint8_t* ptr = dpi->bits;
+    int32_t w = dpi.width;
+    int32_t h = dpi.height;
+    uint8_t* ptr = dpi.bits;
 
     for (int32_t y = 0; y < h; y++)
     {
         std::fill_n(ptr, w, paletteIndex);
-        ptr += w + dpi->pitch;
+        ptr += w + dpi.pitch;
     }
 }
 
 /** rct2: 0x0097FF04 */
 // clang-format off
-static constexpr const uint16_t Pattern[] = {
+static constexpr uint16_t kPattern[] = {
     0b0111111110000000,
     0b0011111111000000,
     0b0001111111100000,
@@ -495,7 +496,7 @@ static constexpr const uint16_t Pattern[] = {
 };
 
 /** rct2: 0x0097FF14 */
-static constexpr const uint16_t PatternInverse[] = {
+static constexpr uint16_t kPatternInverse[] = {
     0b1000000001111111,
     0b1100000000111111,
     0b1110000000011111,
@@ -515,54 +516,54 @@ static constexpr const uint16_t PatternInverse[] = {
 };
 
 /** rct2: 0x0097FEFC */
-static constexpr const uint16_t* Patterns[] = {
-    Pattern,
-    PatternInverse,
+static constexpr const uint16_t* kPatterns[] = {
+    kPattern,
+    kPatternInverse,
 };
 // clang-format on
 
-void X8DrawingContext::FillRect(
-    rct_drawpixelinfo* dpi, uint32_t colour, int32_t left, int32_t top, int32_t right, int32_t bottom)
+void X8DrawingContext::FillRect(DrawPixelInfo& dpi, uint32_t colour, int32_t left, int32_t top, int32_t right, int32_t bottom)
 {
+    assert(dpi.zoom_level == ZoomLevel{ 0 });
     if (left > right)
         return;
     if (top > bottom)
         return;
-    if (dpi->x > right)
+    if (dpi.x > right)
         return;
-    if (left >= dpi->x + dpi->width)
+    if (left >= dpi.x + dpi.width)
         return;
-    if (bottom < dpi->y)
+    if (bottom < dpi.y)
         return;
-    if (top >= dpi->y + dpi->height)
+    if (top >= dpi.y + dpi.height)
         return;
 
-    uint16_t crossPattern = 0;
+    uint16_t crosskPattern = 0;
 
-    int32_t startX = left - dpi->x;
+    int32_t startX = left - dpi.x;
     if (startX < 0)
     {
-        crossPattern ^= startX;
+        crosskPattern ^= startX;
         startX = 0;
     }
 
-    int32_t endX = right - dpi->x + 1;
-    if (endX > dpi->width)
+    int32_t endX = right - dpi.x + 1;
+    if (endX > dpi.width)
     {
-        endX = dpi->width;
+        endX = dpi.width;
     }
 
-    int32_t startY = top - dpi->y;
+    int32_t startY = top - dpi.y;
     if (startY < 0)
     {
-        crossPattern ^= startY;
+        crosskPattern ^= startY;
         startY = 0;
     }
 
-    int32_t endY = bottom - dpi->y + 1;
-    if (endY > dpi->height)
+    int32_t endY = bottom - dpi.y + 1;
+    if (endY > dpi.height)
     {
-        endY = dpi->height;
+        endY = dpi.height;
     }
 
     int32_t width = endX - startX;
@@ -571,11 +572,11 @@ void X8DrawingContext::FillRect(
     if (colour & 0x1000000)
     {
         // Cross hatching
-        uint8_t* dst = (startY * (dpi->width + dpi->pitch)) + startX + dpi->bits;
+        uint8_t* dst = startY * dpi.LineStride() + startX + dpi.bits;
         for (int32_t i = 0; i < height; i++)
         {
-            uint8_t* nextdst = dst + dpi->width + dpi->pitch;
-            uint32_t p = Numerics::ror32(crossPattern, 1);
+            uint8_t* nextdst = dst + dpi.LineStride();
+            uint32_t p = Numerics::ror32(crosskPattern, 1);
             p = (p & 0xFFFF0000) | width;
 
             // Fill every other pixel with the colour
@@ -588,7 +589,7 @@ void X8DrawingContext::FillRect(
                 }
                 dst++;
             }
-            crossPattern ^= 1;
+            crosskPattern ^= 1;
             dst = nextdst;
         }
     }
@@ -598,22 +599,22 @@ void X8DrawingContext::FillRect(
     }
     else if (colour & 0x4000000)
     {
-        uint8_t* dst = startY * (dpi->width + dpi->pitch) + startX + dpi->bits;
+        uint8_t* dst = startY * dpi.LineStride() + startX + dpi.bits;
 
         // The pattern loops every 15 lines this is which
         // part the pattern is on.
-        int32_t patternY = (startY + dpi->y) % 16;
+        int32_t patternY = (startY + dpi.y) % 16;
 
         // The pattern loops every 15 pixels this is which
         // part the pattern is on.
-        int32_t startPatternX = (startX + dpi->x) % 16;
-        int32_t patternX = startPatternX;
+        int32_t startkPatternX = (startX + dpi.x) % 16;
+        int32_t patternX = startkPatternX;
 
-        const uint16_t* patternsrc = Patterns[colour >> 28]; // or possibly uint8_t)[esi*4] ?
+        const uint16_t* patternsrc = kPatterns[colour >> 28]; // or possibly uint8_t)[esi*4] ?
 
         for (int32_t numLines = height; numLines > 0; numLines--)
         {
-            uint8_t* nextdst = dst + dpi->width + dpi->pitch;
+            uint8_t* nextdst = dst + dpi.LineStride();
             uint16_t pattern = patternsrc[patternY];
 
             for (int32_t numPixels = width; numPixels > 0; numPixels--)
@@ -625,82 +626,77 @@ void X8DrawingContext::FillRect(
                 patternX = (patternX + 1) % 16;
                 dst++;
             }
-            patternX = startPatternX;
+            patternX = startkPatternX;
             patternY = (patternY + 1) % 16;
             dst = nextdst;
         }
     }
     else
     {
-        uint8_t* dst = startY * (dpi->width + dpi->pitch) + startX + dpi->bits;
+        uint8_t* dst = startY * dpi.LineStride() + startX + dpi.bits;
         for (int32_t i = 0; i < height; i++)
         {
             std::fill_n(dst, width, colour & 0xFF);
-            dst += dpi->width + dpi->pitch;
+            dst += dpi.LineStride();
         }
     }
 }
 
 void X8DrawingContext::FilterRect(
-    rct_drawpixelinfo* dpi, FilterPaletteID palette, int32_t left, int32_t top, int32_t right, int32_t bottom)
+    DrawPixelInfo& dpi, FilterPaletteID palette, int32_t left, int32_t top, int32_t right, int32_t bottom)
 {
     if (left > right)
         return;
     if (top > bottom)
         return;
-    if (dpi->x > right)
+    if (dpi.x > right)
         return;
-    if (left >= dpi->x + dpi->width)
+    if (left >= dpi.x + dpi.width)
         return;
-    if (bottom < dpi->y)
+    if (bottom < dpi.y)
         return;
-    if (top >= dpi->y + dpi->height)
+    if (top >= dpi.y + dpi.height)
         return;
 
-    int32_t startX = left - dpi->x;
+    int32_t startX = left - dpi.x;
     if (startX < 0)
     {
         startX = 0;
     }
 
-    int32_t endX = right - dpi->x + 1;
-    if (endX > dpi->width)
+    int32_t endX = right - dpi.x + 1;
+    if (endX > dpi.width)
     {
-        endX = dpi->width;
+        endX = dpi.width;
     }
 
-    int32_t startY = top - dpi->y;
+    int32_t startY = top - dpi.y;
     if (startY < 0)
     {
         startY = 0;
     }
 
-    int32_t endY = bottom - dpi->y + 1;
-    if (endY > dpi->height)
+    int32_t endY = bottom - dpi.y + 1;
+    if (endY > dpi.height)
     {
-        endY = dpi->height;
+        endY = dpi.height;
     }
 
     int32_t width = endX - startX;
     int32_t height = endY - startY;
 
-    // 0x2000000
-    // 00678B7E   00678C83
-    // Location in screen buffer?
-    uint8_t* dst = dpi->bits
-        + static_cast<uint32_t>(
-                       (startY / dpi->zoom_level) * ((dpi->width / dpi->zoom_level) + dpi->pitch) + (startX / dpi->zoom_level));
+    uint8_t* dst = dpi.bits + (startY * dpi.LineStride() + startX);
 
     // Find colour in colour table?
     auto paletteMap = GetPaletteMapForColour(EnumValue(palette));
     if (paletteMap.has_value())
     {
         const auto& paletteEntries = paletteMap.value();
-        const int32_t scaled_width = width / dpi->zoom_level;
-        const int32_t step = ((dpi->width / dpi->zoom_level) + dpi->pitch);
+        const int32_t scaled_width = width;
+        const int32_t step = dpi.LineStride();
 
         // Fill the rectangle with the colours from the colour table
-        auto c = height / dpi->zoom_level;
+        auto c = height;
         for (int32_t i = 0; i < c; i++)
         {
             uint8_t* nextdst = dst + step * i;
@@ -713,32 +709,131 @@ void X8DrawingContext::FilterRect(
     }
 }
 
-void X8DrawingContext::DrawLine(rct_drawpixelinfo* dpi, uint32_t colour, const ScreenLine& line)
+void X8DrawingContext::DrawLine(DrawPixelInfo& dpi, uint32_t colour, const ScreenLine& line)
 {
-    gfx_draw_line_software(dpi, line, colour);
+    GfxDrawLineSoftware(dpi, line, colour);
 }
 
-void X8DrawingContext::DrawSprite(rct_drawpixelinfo* dpi, ImageId imageId, int32_t x, int32_t y)
+void X8DrawingContext::DrawSprite(DrawPixelInfo& dpi, const ImageId imageId, int32_t x, int32_t y)
 {
-    gfx_draw_sprite_software(dpi, imageId, { x, y });
+    GfxDrawSpriteSoftware(dpi, imageId, { x, y });
 }
 
-void X8DrawingContext::DrawSpriteRawMasked(rct_drawpixelinfo* dpi, int32_t x, int32_t y, ImageId maskImage, ImageId colourImage)
+void X8DrawingContext::DrawSpriteRawMasked(
+    DrawPixelInfo& dpi, int32_t x, int32_t y, const ImageId maskImage, const ImageId colourImage)
 {
-    gfx_draw_sprite_raw_masked_software(dpi, { x, y }, maskImage, colourImage);
+    GfxDrawSpriteRawMaskedSoftware(dpi, { x, y }, maskImage, colourImage);
 }
 
-void X8DrawingContext::DrawSpriteSolid(rct_drawpixelinfo* dpi, ImageId image, int32_t x, int32_t y, uint8_t colour)
+void X8DrawingContext::DrawSpriteSolid(DrawPixelInfo& dpi, const ImageId image, int32_t x, int32_t y, uint8_t colour)
 {
     uint8_t palette[256];
     std::fill_n(palette, sizeof(palette), colour);
     palette[0] = 0;
 
     const auto spriteCoords = ScreenCoordsXY{ x, y };
-    gfx_draw_sprite_palette_set_software(dpi, ImageId(image.GetIndex(), 0), spriteCoords, PaletteMap(palette));
+    GfxDrawSpritePaletteSetSoftware(dpi, ImageId(image.GetIndex(), 0), spriteCoords, PaletteMap(palette));
 }
 
-void X8DrawingContext::DrawGlyph(rct_drawpixelinfo* dpi, uint32_t image, int32_t x, int32_t y, const PaletteMap& paletteMap)
+void X8DrawingContext::DrawGlyph(DrawPixelInfo& dpi, const ImageId image, int32_t x, int32_t y, const PaletteMap& paletteMap)
 {
-    gfx_draw_sprite_palette_set_software(dpi, ImageId::FromUInt32(image), { x, y }, paletteMap);
+    GfxDrawSpritePaletteSetSoftware(dpi, image, { x, y }, paletteMap);
+}
+
+#ifndef NO_TTF
+template<bool TUseHinting>
+static void DrawTTFBitmapInternal(
+    DrawPixelInfo& dpi, uint8_t colour, TTFSurface* surface, int32_t x, int32_t y, uint8_t hintingThreshold)
+{
+    assert(dpi.zoom_level == ZoomLevel{ 0 });
+    const int32_t surfaceWidth = surface->w;
+    int32_t width = surfaceWidth;
+    int32_t height = surface->h;
+
+    const int32_t overflowX = (dpi.x + dpi.width) - (x + width);
+    const int32_t overflowY = (dpi.y + dpi.height) - (y + height);
+    if (overflowX < 0)
+        width += overflowX;
+    if (overflowY < 0)
+        height += overflowY;
+    int32_t skipX = x - dpi.x;
+    int32_t skipY = y - dpi.y;
+
+    auto src = static_cast<const uint8_t*>(surface->pixels);
+    uint8_t* dst = dpi.bits;
+
+    if (skipX < 0)
+    {
+        width += skipX;
+        src += -skipX;
+        skipX = 0;
+    }
+    if (skipY < 0)
+    {
+        height += skipY;
+        src += (-skipY * surfaceWidth);
+        skipY = 0;
+    }
+
+    dst += skipX;
+    dst += skipY * dpi.LineStride();
+
+    const int32_t srcScanSkip = surfaceWidth - width;
+    const int32_t dstScanSkip = dpi.LineStride() - width;
+    for (int32_t yy = 0; yy < height; yy++)
+    {
+        for (int32_t xx = 0; xx < width; xx++)
+        {
+            if (*src != 0)
+            {
+                if constexpr (TUseHinting)
+                {
+                    if (*src > 180)
+                    {
+                        // Centre of the glyph: use full colour.
+                        *dst = colour;
+                    }
+                    else if (*src > hintingThreshold)
+                    {
+                        *dst = BlendColours(colour, *dst);
+                    }
+                }
+                else
+                {
+                    *dst = colour;
+                }
+            }
+            src++;
+            dst++;
+        }
+        src += srcScanSkip;
+        dst += dstScanSkip;
+    }
+}
+#endif // NO_TTF
+
+void X8DrawingContext::DrawTTFBitmap(
+    DrawPixelInfo& dpi, TextDrawInfo* info, TTFSurface* surface, int32_t x, int32_t y, uint8_t hintingThreshold)
+{
+#ifndef NO_TTF
+    const uint8_t fgColor = info->palette[1];
+    const uint8_t bgColor = info->palette[3];
+
+    if (info->flags & TEXT_DRAW_FLAG_OUTLINE)
+    {
+        DrawTTFBitmapInternal<false>(dpi, bgColor, surface, x + 1, y, 0);
+        DrawTTFBitmapInternal<false>(dpi, bgColor, surface, x - 1, y, 0);
+        DrawTTFBitmapInternal<false>(dpi, bgColor, surface, x, y + 1, 0);
+        DrawTTFBitmapInternal<false>(dpi, bgColor, surface, x, y - 1, 0);
+    }
+    if (info->flags & TEXT_DRAW_FLAG_INSET)
+    {
+        DrawTTFBitmapInternal<false>(dpi, bgColor, surface, x + 1, y + 1, 0);
+    }
+
+    if (hintingThreshold > 0)
+        DrawTTFBitmapInternal<true>(dpi, fgColor, surface, x, y, hintingThreshold);
+    else
+        DrawTTFBitmapInternal<false>(dpi, fgColor, surface, x, y, 0);
+#endif // NO_TTF
 }

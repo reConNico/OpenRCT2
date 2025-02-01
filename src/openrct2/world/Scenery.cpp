@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -12,31 +12,37 @@
 #include "../Cheats.h"
 #include "../Context.h"
 #include "../Game.h"
+#include "../GameState.h"
 #include "../OpenRCT2.h"
 #include "../actions/BannerRemoveAction.h"
 #include "../actions/FootpathAdditionRemoveAction.h"
 #include "../actions/LargeSceneryRemoveAction.h"
 #include "../actions/SmallSceneryRemoveAction.h"
 #include "../actions/WallRemoveAction.h"
-#include "../common.h"
-#include "../core/String.hpp"
+#include "../core/CodepointView.hpp"
 #include "../entity/Fountain.h"
-#include "../localisation/Localisation.h"
 #include "../network/network.h"
+#include "../object/BannerSceneryEntry.h"
+#include "../object/LargeSceneryEntry.h"
+#include "../object/ObjectEntryManager.h"
+#include "../object/ObjectLimits.h"
 #include "../object/ObjectList.h"
 #include "../object/ObjectManager.h"
+#include "../object/PathAdditionEntry.h"
+#include "../object/SceneryGroupEntry.h"
+#include "../object/SceneryGroupObject.h"
+#include "../object/SmallSceneryEntry.h"
+#include "../object/WallSceneryEntry.h"
 #include "../scenario/Scenario.h"
-#include "Climate.h"
 #include "Footpath.h"
-#include "LargeScenery.h"
 #include "Map.h"
 #include "Park.h"
-#include "SmallScenery.h"
-#include "Wall.h"
+#include "tile_element/PathElement.h"
+#include "tile_element/SmallSceneryElement.h"
 
 uint8_t gSceneryQuadrant;
 
-money32 gSceneryPlaceCost;
+money64 gSceneryPlaceCost;
 ScenerySelection gSceneryPlaceObject;
 int16_t gSceneryPlaceZ;
 uint8_t gSceneryPlaceRotation;
@@ -53,19 +59,17 @@ int16_t gSceneryShiftPressZOffset;
 int16_t gSceneryCtrlPressed;
 int16_t gSceneryCtrlPressZ;
 
-money64 gClearSceneryCost;
-
-static std::vector<ScenerySelection> _restrictedScenery;
+using namespace OpenRCT2;
 
 // rct2: 0x009A3E74
 const CoordsXY SceneryQuadrantOffsets[] = {
-    { 7, 7 },
-    { 7, 23 },
-    { 23, 23 },
-    { 23, 7 },
+    { 8, 8 },
+    { 8, 24 },
+    { 24, 24 },
+    { 24, 8 },
 };
 
-LargeSceneryText::LargeSceneryText(const rct_large_scenery_text& original)
+LargeSceneryText::LargeSceneryText(const RCTLargeSceneryText& original)
 {
     for (size_t i = 0; i < std::size(original.offset); i++)
     {
@@ -81,7 +85,7 @@ LargeSceneryText::LargeSceneryText(const rct_large_scenery_text& original)
     }
 }
 
-const rct_large_scenery_text_glyph* LargeSceneryText::GetGlyph(char32_t codepoint) const
+const LargeSceneryTextGlyph* LargeSceneryText::GetGlyph(char32_t codepoint) const
 {
     if (codepoint >= std::size(glyphs))
     {
@@ -90,7 +94,7 @@ const rct_large_scenery_text_glyph* LargeSceneryText::GetGlyph(char32_t codepoin
     return &glyphs[codepoint];
 }
 
-const rct_large_scenery_text_glyph& LargeSceneryText::GetGlyph(char32_t codepoint, char32_t defaultCodepoint) const
+const LargeSceneryTextGlyph& LargeSceneryText::GetGlyph(char32_t codepoint, char32_t defaultCodepoint) const
 {
     auto glyph = GetGlyph(codepoint);
     if (glyph == nullptr)
@@ -120,18 +124,18 @@ int32_t LargeSceneryText::MeasureHeight(std::string_view text) const
     return result;
 }
 
-void scenery_update_tile(const CoordsXY& sceneryPos)
+void SceneryUpdateTile(const CoordsXY& sceneryPos)
 {
     TileElement* tileElement;
 
-    tileElement = map_get_first_element_at(sceneryPos);
+    tileElement = MapGetFirstElementAt(sceneryPos);
     if (tileElement == nullptr)
         return;
     do
     {
         // Ghosts are purely this-client-side and should not cause any interaction,
         // as that may lead to a desync.
-        if (network_get_mode() != NETWORK_MODE_NONE)
+        if (NetworkGetMode() != NETWORK_MODE_NONE)
         {
             if (tileElement->IsGhost())
                 continue;
@@ -148,11 +152,11 @@ void scenery_update_tile(const CoordsXY& sceneryPos)
                 auto* pathAddEntry = tileElement->AsPath()->GetAdditionEntry();
                 if (pathAddEntry != nullptr)
                 {
-                    if (pathAddEntry->flags & PATH_BIT_FLAG_JUMPING_FOUNTAIN_WATER)
+                    if (pathAddEntry->flags & PATH_ADDITION_FLAG_JUMPING_FOUNTAIN_WATER)
                     {
                         JumpingFountain::StartAnimation(JumpingFountainType::Water, sceneryPos, tileElement);
                     }
-                    else if (pathAddEntry->flags & PATH_BIT_FLAG_JUMPING_FOUNTAIN_SNOW)
+                    else if (pathAddEntry->flags & PATH_ADDITION_FLAG_JUMPING_FOUNTAIN_SNOW)
                     {
                         JumpingFountain::StartAnimation(JumpingFountainType::Snow, sceneryPos, tileElement);
                     }
@@ -174,12 +178,14 @@ void SmallSceneryElement::UpdateAge(const CoordsXY& sceneryPos)
         return;
     }
 
-    if (gCheatsDisablePlantAging && sceneryEntry->HasFlag(SMALL_SCENERY_FLAG_CAN_BE_WATERED))
+    auto& gameState = GetGameState();
+    if (gameState.Cheats.disablePlantAging && sceneryEntry->HasFlag(SMALL_SCENERY_FLAG_CAN_BE_WATERED))
     {
         return;
     }
 
-    if (!sceneryEntry->HasFlag(SMALL_SCENERY_FLAG_CAN_BE_WATERED) || WeatherIsDry(gClimateCurrent.Weather) || GetAge() < 5)
+    if (!sceneryEntry->HasFlag(SMALL_SCENERY_FLAG_CAN_BE_WATERED) || WeatherIsDry(gameState.ClimateCurrent.Weather)
+        || GetAge() < 5)
     {
         IncreaseAge(sceneryPos);
         return;
@@ -202,7 +208,7 @@ void SmallSceneryElement::UpdateAge(const CoordsXY& sceneryPos)
             case TileElementType::LargeScenery:
             case TileElementType::Entrance:
             case TileElementType::Path:
-                map_invalidate_tile_zoom1({ sceneryPos, tileElementAbove->GetBaseZ(), tileElementAbove->GetClearanceZ() });
+                MapInvalidateTileZoom1({ sceneryPos, tileElementAbove->GetBaseZ(), tileElementAbove->GetClearanceZ() });
                 IncreaseAge(sceneryPos);
                 return;
             case TileElementType::SmallScenery:
@@ -220,14 +226,14 @@ void SmallSceneryElement::UpdateAge(const CoordsXY& sceneryPos)
 
     // Reset age / water plant
     SetAge(0);
-    map_invalidate_tile_zoom1({ sceneryPos, GetBaseZ(), GetClearanceZ() });
+    MapInvalidateTileZoom1({ sceneryPos, GetBaseZ(), GetClearanceZ() });
 }
 
 /**
  *
  *  rct2: 0x006E2712
  */
-void scenery_remove_ghost_tool_placement()
+void SceneryRemoveGhostToolPlacement()
 {
     if (gSceneryGhostType & SCENERY_GHOST_FLAG_0)
     {
@@ -243,7 +249,7 @@ void scenery_remove_ghost_tool_placement()
     if (gSceneryGhostType & SCENERY_GHOST_FLAG_1)
     {
         gSceneryGhostType &= ~SCENERY_GHOST_FLAG_1;
-        TileElement* tileElement = map_get_first_element_at(gSceneryGhostPosition);
+        TileElement* tileElement = MapGetFirstElementAt(gSceneryGhostPosition);
 
         do
         {
@@ -257,7 +263,8 @@ void scenery_remove_ghost_tool_placement()
                 continue;
 
             auto footpathAdditionRemoveAction = FootpathAdditionRemoveAction(gSceneryGhostPosition);
-            footpathAdditionRemoveAction.SetFlags(GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_GHOST);
+            footpathAdditionRemoveAction.SetFlags(
+                GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
             GameActions::Execute(&footpathAdditionRemoveAction);
             break;
         } while (!(tileElement++)->IsLastForTile());
@@ -269,7 +276,7 @@ void scenery_remove_ghost_tool_placement()
 
         CoordsXYZD wallLocation = { gSceneryGhostPosition, gSceneryGhostWallRotation };
         auto wallRemoveAction = WallRemoveAction(wallLocation);
-        wallRemoveAction.SetFlags(GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_GHOST | GAME_COMMAND_FLAG_PATH_SCENERY);
+        wallRemoveAction.SetFlags(GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
         wallRemoveAction.Execute();
     }
 
@@ -279,8 +286,7 @@ void scenery_remove_ghost_tool_placement()
 
         auto removeSceneryAction = LargeSceneryRemoveAction({ gSceneryGhostPosition, gSceneryPlaceRotation }, 0);
         removeSceneryAction.SetFlags(
-            GAME_COMMAND_FLAG_APPLY | GAME_COMMAND_FLAG_GHOST | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED
-            | GAME_COMMAND_FLAG_NO_SPEND);
+            GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
         removeSceneryAction.Execute();
     }
 
@@ -290,62 +296,9 @@ void scenery_remove_ghost_tool_placement()
 
         auto removeSceneryAction = BannerRemoveAction({ gSceneryGhostPosition, gSceneryPlaceRotation });
         removeSceneryAction.SetFlags(
-            GAME_COMMAND_FLAG_GHOST | GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND);
+            GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED | GAME_COMMAND_FLAG_NO_SPEND | GAME_COMMAND_FLAG_GHOST);
         GameActions::Execute(&removeSceneryAction);
     }
-}
-
-WallSceneryEntry* get_wall_entry(ObjectEntryIndex entryIndex)
-{
-    WallSceneryEntry* result = nullptr;
-    auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
-    auto obj = objMgr.GetLoadedObject(ObjectType::Walls, entryIndex);
-    if (obj != nullptr)
-    {
-        result = static_cast<WallSceneryEntry*>(obj->GetLegacyData());
-    }
-    return result;
-}
-
-BannerSceneryEntry* get_banner_entry(ObjectEntryIndex entryIndex)
-{
-    BannerSceneryEntry* result = nullptr;
-    auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
-    auto obj = objMgr.GetLoadedObject(ObjectType::Banners, entryIndex);
-    if (obj != nullptr)
-    {
-        result = static_cast<BannerSceneryEntry*>(obj->GetLegacyData());
-    }
-    return result;
-}
-
-PathBitEntry* get_footpath_item_entry(ObjectEntryIndex entryIndex)
-{
-    PathBitEntry* result = nullptr;
-    auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
-    auto obj = objMgr.GetLoadedObject(ObjectType::PathBits, entryIndex);
-    if (obj != nullptr)
-    {
-        result = static_cast<PathBitEntry*>(obj->GetLegacyData());
-    }
-    return result;
-}
-
-rct_scenery_group_entry* get_scenery_group_entry(ObjectEntryIndex entryIndex)
-{
-    rct_scenery_group_entry* result = nullptr;
-    auto& objMgr = OpenRCT2::GetContext()->GetObjectManager();
-    auto obj = objMgr.GetLoadedObject(ObjectType::SceneryGroup, entryIndex);
-    if (obj != nullptr)
-    {
-        result = static_cast<rct_scenery_group_entry*>(obj->GetLegacyData());
-    }
-    return result;
-}
-
-int32_t wall_entry_get_door_sound(const WallSceneryEntry* wallEntry)
-{
-    return (wallEntry->flags2 & WALL_SCENERY_2_DOOR_SOUND_MASK) >> WALL_SCENERY_2_DOOR_SOUND_SHIFT;
 }
 
 bool IsSceneryAvailableToBuild(const ScenerySelection& item)
@@ -356,15 +309,16 @@ bool IsSceneryAvailableToBuild(const ScenerySelection& item)
         return true;
     }
 
-    if (!gCheatsIgnoreResearchStatus)
+    auto& gameState = GetGameState();
+    if (!gameState.Cheats.ignoreResearchStatus)
     {
-        if (!scenery_is_invented(item))
+        if (!SceneryIsInvented(item))
         {
             return false;
         }
     }
 
-    if (!gCheatsSandboxMode && !(gScreenFlags & SCREEN_FLAGS_EDITOR))
+    if (!gameState.Cheats.sandboxMode && !(gScreenFlags & SCREEN_FLAGS_EDITOR))
     {
         if (IsSceneryItemRestricted(item))
         {
@@ -380,67 +334,113 @@ static size_t GetMaxObjectsForSceneryType(const uint8_t sceneryType)
     switch (sceneryType)
     {
         case SCENERY_TYPE_SMALL:
-            return MAX_SMALL_SCENERY_OBJECTS;
+            return kMaxSmallSceneryObjects;
         case SCENERY_TYPE_PATH_ITEM:
-            return MAX_PATH_ADDITION_OBJECTS;
+            return kMaxPathAdditionObjects;
         case SCENERY_TYPE_WALL:
-            return MAX_WALL_SCENERY_OBJECTS;
+            return kMaxWallSceneryObjects;
         case SCENERY_TYPE_LARGE:
-            return MAX_LARGE_SCENERY_OBJECTS;
+            return kMaxLargeSceneryObjects;
         case SCENERY_TYPE_BANNER:
-            return MAX_BANNER_OBJECTS;
+            return kMaxBannerObjects;
         default:
             return 0;
     }
 }
 
-static SceneryEntryBase* GetSceneryEntry(const ScenerySelection& item)
+static bool IsSceneryEntryValid(const ScenerySelection& item)
 {
     switch (item.SceneryType)
     {
         case SCENERY_TYPE_SMALL:
-            return get_small_scenery_entry(item.EntryIndex);
+            return OpenRCT2::ObjectManager::GetObjectEntry<SmallSceneryEntry>(item.EntryIndex) != nullptr;
         case SCENERY_TYPE_PATH_ITEM:
-            return get_footpath_item_entry(item.EntryIndex);
+            return OpenRCT2::ObjectManager::GetObjectEntry<PathAdditionEntry>(item.EntryIndex) != nullptr;
         case SCENERY_TYPE_WALL:
-            return get_wall_entry(item.EntryIndex);
+            return OpenRCT2::ObjectManager::GetObjectEntry<WallSceneryEntry>(item.EntryIndex) != nullptr;
         case SCENERY_TYPE_LARGE:
-            return get_large_scenery_entry(item.EntryIndex);
+            return OpenRCT2::ObjectManager::GetObjectEntry<LargeSceneryEntry>(item.EntryIndex) != nullptr;
         case SCENERY_TYPE_BANNER:
-            return get_banner_entry(item.EntryIndex);
+            return OpenRCT2::ObjectManager::GetObjectEntry<BannerSceneryEntry>(item.EntryIndex) != nullptr;
         default:
-            return nullptr;
+            return false;
     }
 }
 
 bool IsSceneryItemRestricted(const ScenerySelection& item)
 {
-    return std::find(std::begin(_restrictedScenery), std::end(_restrictedScenery), item) != std::end(_restrictedScenery);
+    auto& gameState = GetGameState();
+    return std::find(std::begin(gameState.RestrictedScenery), std::end(gameState.RestrictedScenery), item)
+        != std::end(gameState.RestrictedScenery);
 }
 
 void ClearRestrictedScenery()
 {
-    _restrictedScenery.clear();
+    GetGameState().RestrictedScenery.clear();
 }
 
 std::vector<ScenerySelection>& GetRestrictedScenery()
 {
-    return _restrictedScenery;
+    return GetGameState().RestrictedScenery;
 }
 
-static std::vector<ScenerySelection> GetAllMiscScenery()
+void SetSceneryItemRestricted(const ScenerySelection& item, bool on)
 {
-    std::vector<ScenerySelection> miscScenery;
-    std::vector<ScenerySelection> nonMiscScenery;
-    for (ObjectEntryIndex i = 0; i < MAX_SCENERY_GROUP_OBJECTS; i++)
+    auto& gameState = GetGameState();
+    auto existingItem = std::find(std::begin(gameState.RestrictedScenery), std::end(gameState.RestrictedScenery), item);
+    const bool existingItemIsPresent = existingItem != std::end(gameState.RestrictedScenery);
+    if (on)
     {
-        const auto* sgEntry = get_scenery_group_entry(i);
+        if (!existingItemIsPresent)
+        {
+            gameState.RestrictedScenery.push_back(item);
+        }
+    }
+    else
+    {
+        if (existingItemIsPresent)
+        {
+            gameState.RestrictedScenery.erase(existingItem);
+        }
+    }
+}
+
+bool ObjectTypeCanBeRestricted(ObjectType objectType)
+{
+    switch (objectType)
+    {
+        case ObjectType::SmallScenery:
+        case ObjectType::LargeScenery:
+        case ObjectType::Walls:
+        case ObjectType::Banners:
+        case ObjectType::PathAdditions:
+            return true;
+        default:
+            return false;
+    }
+}
+
+struct MiscScenery
+{
+    // Scenery that will end up on the ‘?’ tab
+    std::vector<ScenerySelection> miscScenery{};
+    // Scenery that has attached itself to an existing group, but is not referenced directly.
+    std::vector<ScenerySelection> additionalGroupScenery{};
+};
+
+static MiscScenery GetAllMiscScenery()
+{
+    MiscScenery ret;
+    std::vector<ScenerySelection> referencedBySceneryGroups;
+    std::vector<ObjectEntryIndex> sceneryGroupIds;
+    for (ObjectEntryIndex i = 0; i < kMaxSceneryGroupObjects; i++)
+    {
+        const auto* sgEntry = OpenRCT2::ObjectManager::GetObjectEntry<SceneryGroupEntry>(i);
         if (sgEntry != nullptr)
         {
-            for (size_t j = 0; j < sgEntry->entry_count; j++)
-            {
-                nonMiscScenery.push_back(sgEntry->scenery_entries[j]);
-            }
+            referencedBySceneryGroups.insert(
+                referencedBySceneryGroups.end(), sgEntry->SceneryEntries.begin(), sgEntry->SceneryEntries.end());
+            sceneryGroupIds.emplace_back(i);
         }
     }
     for (uint8_t sceneryType = SCENERY_TYPE_SMALL; sceneryType < SCENERY_TYPE_COUNT; sceneryType++)
@@ -448,36 +448,107 @@ static std::vector<ScenerySelection> GetAllMiscScenery()
         const auto maxObjects = GetMaxObjectsForSceneryType(sceneryType);
         for (ObjectEntryIndex i = 0; i < maxObjects; i++)
         {
-            const ScenerySelection sceneryItem = { sceneryType, i };
-            const auto* sceneryEntry = GetSceneryEntry(sceneryItem);
-            if (sceneryEntry != nullptr)
+            ObjectEntryIndex linkedSceneryGroup = kObjectEntryIndexNull;
+            const auto objectType = GetObjectTypeFromSceneryType(sceneryType);
+            switch (objectType)
             {
-                if (std::find(std::begin(nonMiscScenery), std::end(nonMiscScenery), sceneryItem) == std::end(nonMiscScenery))
+                case ObjectType::SmallScenery:
                 {
-                    miscScenery.push_back(sceneryItem);
+                    const auto* objectEntry = OpenRCT2::ObjectManager::GetObjectEntry<SmallSceneryEntry>(i);
+                    if (objectEntry != nullptr)
+                        linkedSceneryGroup = objectEntry->scenery_tab_id;
+                    break;
+                }
+                case ObjectType::LargeScenery:
+                {
+                    const auto* objectEntry = OpenRCT2::ObjectManager::GetObjectEntry<LargeSceneryEntry>(i);
+                    if (objectEntry != nullptr)
+                        linkedSceneryGroup = objectEntry->scenery_tab_id;
+                    break;
+                }
+                case ObjectType::Walls:
+                {
+                    const auto* objectEntry = OpenRCT2::ObjectManager::GetObjectEntry<WallSceneryEntry>(i);
+                    if (objectEntry != nullptr)
+                        linkedSceneryGroup = objectEntry->scenery_tab_id;
+                    break;
+                }
+                case ObjectType::Banners:
+                {
+                    const auto* objectEntry = OpenRCT2::ObjectManager::GetObjectEntry<BannerSceneryEntry>(i);
+                    if (objectEntry != nullptr)
+                        linkedSceneryGroup = objectEntry->scenery_tab_id;
+                    break;
+                }
+                case ObjectType::PathAdditions:
+                {
+                    const auto* objectEntry = OpenRCT2::ObjectManager::GetObjectEntry<PathAdditionEntry>(i);
+                    if (objectEntry != nullptr)
+                        linkedSceneryGroup = objectEntry->scenery_tab_id;
+                    break;
+                }
+                default:
+                    break;
+            }
+
+            const ScenerySelection sceneryItem = { sceneryType, i };
+            if (!IsSceneryEntryValid(sceneryItem))
+                continue;
+
+            const bool isReferencedBySceneryGroup = std::find(
+                                                        std::begin(referencedBySceneryGroups),
+                                                        std::end(referencedBySceneryGroups), sceneryItem)
+                != std::end(referencedBySceneryGroups);
+            if (isReferencedBySceneryGroup)
+                continue;
+
+            // An object may link itself against a scenery group, in which case it should not be marked as miscellaneous.
+            bool isLinkedToKnownSceneryGroup = false;
+            if (linkedSceneryGroup != kObjectEntryIndexNull)
+            {
+                if (std::find(std::begin(sceneryGroupIds), std::end(sceneryGroupIds), linkedSceneryGroup)
+                    != std::end(sceneryGroupIds))
+                {
+                    isLinkedToKnownSceneryGroup = true;
                 }
             }
+
+            if (isLinkedToKnownSceneryGroup)
+                ret.additionalGroupScenery.push_back(sceneryItem);
+            else
+                ret.miscScenery.push_back(sceneryItem);
         }
     }
-    return miscScenery;
+    return ret;
 }
 
 void RestrictAllMiscScenery()
 {
-    auto miscScenery = GetAllMiscScenery();
-    _restrictedScenery.insert(_restrictedScenery.begin(), miscScenery.begin(), miscScenery.end());
+    auto& gameState = GetGameState();
+    auto miscScenery = GetAllMiscScenery().miscScenery;
+    gameState.RestrictedScenery.insert(gameState.RestrictedScenery.begin(), miscScenery.begin(), miscScenery.end());
+}
+
+static void MarkAllUnrestrictedSceneryInVectorInvented(const std::vector<ScenerySelection>& vector)
+{
+    auto& restrictedScenery = GetGameState().RestrictedScenery;
+
+    for (const auto& sceneryItem : vector)
+    {
+        const bool isNotRestricted = std::find(restrictedScenery.begin(), restrictedScenery.end(), sceneryItem)
+            == restrictedScenery.end();
+        if (isNotRestricted)
+        {
+            ScenerySetInvented(sceneryItem);
+        }
+    }
 }
 
 void MarkAllUnrestrictedSceneryAsInvented()
 {
-    auto miscScenery = GetAllMiscScenery();
-    for (const auto& sceneryItem : miscScenery)
-    {
-        if (std::find(_restrictedScenery.begin(), _restrictedScenery.end(), sceneryItem) == _restrictedScenery.end())
-        {
-            scenery_set_invented(sceneryItem);
-        }
-    }
+    auto scenery = GetAllMiscScenery();
+    MarkAllUnrestrictedSceneryInVectorInvented(scenery.miscScenery);
+    MarkAllUnrestrictedSceneryInVectorInvented(scenery.additionalGroupScenery);
 }
 
 ObjectType GetObjectTypeFromSceneryType(uint8_t type)
@@ -487,7 +558,7 @@ ObjectType GetObjectTypeFromSceneryType(uint8_t type)
         case SCENERY_TYPE_SMALL:
             return ObjectType::SmallScenery;
         case SCENERY_TYPE_PATH_ITEM:
-            return ObjectType::PathBits;
+            return ObjectType::PathAdditions;
         case SCENERY_TYPE_WALL:
             return ObjectType::Walls;
         case SCENERY_TYPE_LARGE:
@@ -505,7 +576,7 @@ uint8_t GetSceneryTypeFromObjectType(ObjectType type)
     {
         case ObjectType::SmallScenery:
             return SCENERY_TYPE_SMALL;
-        case ObjectType::PathBits:
+        case ObjectType::PathAdditions:
             return SCENERY_TYPE_PATH_ITEM;
         case ObjectType::Walls:
             return SCENERY_TYPE_WALL;

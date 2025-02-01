@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,30 +9,46 @@
 
 #pragma once
 
-#include "common.h"
+#include "core/Money.hpp"
 
-extern bool gCheatsSandboxMode;
-extern bool gCheatsDisableClearanceChecks;
-extern bool gCheatsDisableSupportLimits;
-extern bool gCheatsShowAllOperatingModes;
-extern bool gCheatsShowVehiclesFromOtherTrackTypes;
-extern bool gCheatsUnlockOperatingLimits;
-extern bool gCheatsDisableBrakesFailure;
-extern bool gCheatsDisableAllBreakdowns;
-extern bool gCheatsBuildInPauseMode;
-extern bool gCheatsIgnoreRideIntensity;
-extern bool gCheatsDisableVandalism;
-extern bool gCheatsDisableLittering;
-extern bool gCheatsNeverendingMarketing;
-extern bool gCheatsFreezeWeather;
-extern bool gCheatsDisableTrainLengthLimit;
-extern bool gCheatsDisablePlantAging;
-extern bool gCheatsDisableRideValueAging;
-extern bool gCheatsEnableChainLiftOnAllTrack;
-extern bool gCheatsAllowArbitraryRideTypeChanges;
-extern bool gCheatsIgnoreResearchStatus;
-extern bool gCheatsEnableAllDrawableTrackPieces;
-extern bool gCheatsAllowTrackPlaceInvalidHeights;
+enum class StaffSpeedCheat
+{
+    None,
+    Frozen,
+    Fast,
+};
+
+struct CheatsState
+{
+    bool sandboxMode;
+    bool disableClearanceChecks;
+    bool disableSupportLimits;
+    bool showAllOperatingModes;
+    bool showVehiclesFromOtherTrackTypes;
+    bool unlockOperatingLimits;
+    bool disableBrakesFailure;
+    bool disableAllBreakdowns;
+    bool buildInPauseMode;
+    bool ignoreRideIntensity;
+    bool ignorePrice;
+    bool disableVandalism;
+    bool disableLittering;
+    bool neverendingMarketing;
+    bool freezeWeather;
+    bool disableTrainLengthLimit;
+    bool disablePlantAging;
+    bool disableRideValueAging;
+    bool enableChainLiftOnAllTrack;
+    bool allowArbitraryRideTypeChanges;
+    bool ignoreResearchStatus;
+    bool enableAllDrawableTrackPieces;
+    bool allowTrackPlaceInvalidHeights;
+    bool allowRegularPathAsQueue;
+    bool allowSpecialColourSchemes;
+    bool makeAllDestructible;
+    StaffSpeedCheat selectedStaffSpeed;
+    int32_t forcedParkRating;
+};
 
 enum class CheatType : int32_t
 {
@@ -76,7 +92,7 @@ enum class CheatType : int32_t
     OpenClosePark,
     HaveFun,
     SetForcedParkRating,
-    NeverEndingMarketing,
+    NeverendingMarketing,
     AllowArbitraryRideTypeChanges,
     OwnAllLand,
     DisableRideValueAging,
@@ -85,6 +101,11 @@ enum class CheatType : int32_t
     CreateDucks,
     RemoveDucks,
     AllowTrackPlaceInvalidHeights,
+    NoCapOnQueueLengthDummy, // Removed; this dummy exists only for deserialisation parks that had it saved
+    AllowRegularPathAsQueue,
+    AllowSpecialColourSchemes,
+    RemoveParkFences,
+    IgnorePrice,
     Count,
 };
 
@@ -108,14 +129,15 @@ enum
     OBJECT_UMBRELLA
 };
 
-#define CHEATS_GIVE_GUESTS_MONEY MONEY(1000, 00)
-#define CHEATS_TRAM_INCREMENT 250
-#define CHEATS_DUCK_INCREMENT 20
-#define CHEATS_STAFF_FAST_SPEED 0xFF
-#define CHEATS_STAFF_NORMAL_SPEED 0x60
-#define CHEATS_STAFF_FREEZE_SPEED 0
+constexpr auto kCheatsGiveGuestsMoney = 1000.00_GBP;
+constexpr int32_t kCheatsTramIncrement = 250;
+constexpr int32_t kCheatsDuckIncrement = 20;
+constexpr int32_t kCheatsStaffFastSpeed = 0xFF;
+constexpr int32_t kCheatsStaffNormalSpeed = 0x60;
+constexpr int32_t kCheatsStaffFreezeSpeed = 0;
+constexpr int32_t kForcedParkRatingDisabled = -1;
 
 void CheatsReset();
 const char* CheatsGetName(CheatType cheatType);
-void CheatsSet(CheatType cheatType, int32_t param1 = 0, int32_t param2 = 0);
+void CheatsSet(CheatType cheatType, int64_t param1 = 0, int64_t param2 = 0);
 void CheatsSerialise(class DataSerialiser& ds);

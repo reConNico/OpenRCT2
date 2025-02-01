@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,26 +11,26 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "../interface/Window.h"
+    #include "../interface/Window.h"
 
-#    include <memory>
-#    include <openrct2/Context.h>
-#    include <openrct2/common.h>
-#    include <openrct2/interface/Viewport.h>
-#    include <openrct2/scripting/Duktape.hpp>
-#    include <openrct2/scripting/ScriptEngine.h>
-#    include <openrct2/world/Map.h>
+    #include <memory>
+    #include <openrct2/Context.h>
+    #include <openrct2/interface/Viewport.h>
+    #include <openrct2/scripting/Duktape.hpp>
+    #include <openrct2/scripting/ScriptEngine.h>
+    #include <openrct2/ui/WindowManager.h>
+    #include <openrct2/world/Map.h>
 
 namespace OpenRCT2::Scripting
 {
     class ScViewport
     {
     private:
-        rct_windowclass _class{};
+        WindowClass _class{};
         rct_windownumber _number{};
 
     public:
-        ScViewport(rct_windowclass c, rct_windownumber n = 0)
+        ScViewport(WindowClass c, rct_windownumber n = 0)
             : _class(c)
             , _number(n)
         {
@@ -78,7 +78,7 @@ namespace OpenRCT2::Scripting
             auto viewport = GetViewport();
             if (viewport != nullptr)
             {
-                return viewport->viewPos.x + viewport->view_width;
+                return viewport->viewPos.x + viewport->ViewWidth();
             }
             return 0;
         }
@@ -87,7 +87,7 @@ namespace OpenRCT2::Scripting
             auto viewport = GetViewport();
             if (viewport != nullptr)
             {
-                SetViewLeftTop(value - viewport->view_width, viewport->viewPos.y);
+                SetViewLeftTop(value - viewport->ViewWidth(), viewport->viewPos.y);
             }
         }
 
@@ -96,7 +96,7 @@ namespace OpenRCT2::Scripting
             auto viewport = GetViewport();
             if (viewport != nullptr)
             {
-                return viewport->viewPos.y + viewport->view_height;
+                return viewport->viewPos.y + viewport->ViewHeight();
             }
             return 0;
         }
@@ -105,13 +105,18 @@ namespace OpenRCT2::Scripting
             auto viewport = GetViewport();
             if (viewport != nullptr)
             {
-                SetViewLeftTop(viewport->viewPos.x, value - viewport->view_height);
+                SetViewLeftTop(viewport->viewPos.x, value - viewport->ViewHeight());
             }
         }
 
         int32_t rotation_get() const
         {
-            return get_current_rotation();
+            auto viewport = GetViewport();
+            if (viewport != nullptr)
+            {
+                return viewport->rotation;
+            }
+            return 0;
         }
         void rotation_set(int32_t value)
         {
@@ -120,9 +125,9 @@ namespace OpenRCT2::Scripting
                 auto w = GetWindow();
                 if (w != nullptr)
                 {
-                    while (get_current_rotation() != value)
+                    while (w->viewport->rotation != value)
                     {
-                        window_rotate_camera(w, 1);
+                        ViewportRotateSingle(w, 1);
                     }
                 }
             }
@@ -143,7 +148,7 @@ namespace OpenRCT2::Scripting
             if (w != nullptr)
             {
                 auto i8Value = static_cast<int8_t>(value);
-                window_zoom_set(w, ZoomLevel{ i8Value }, false);
+                WindowZoomSet(*w, ZoomLevel{ i8Value }, false);
             }
         }
 
@@ -178,8 +183,8 @@ namespace OpenRCT2::Scripting
             auto viewport = GetViewport();
             if (viewport != nullptr)
             {
-                auto centre = viewport->viewPos + ScreenCoordsXY{ viewport->view_width / 2, viewport->view_height / 2 };
-                auto coords = viewport_coord_to_map_coord(centre, 24);
+                auto centre = viewport->viewPos + ScreenCoordsXY{ viewport->ViewWidth() / 2, viewport->ViewHeight() / 2 };
+                auto coords = ViewportPosToMapPos(centre, 24, viewport->rotation);
 
                 auto ctx = GetContext()->GetScriptEngine().GetContext();
                 auto obj = duk_push_object(ctx);
@@ -203,9 +208,9 @@ namespace OpenRCT2::Scripting
                     auto coords = GetCoordsFromObject(position);
                     if (coords)
                     {
-                        auto screenCoords = translate_3d_to_2d_with_z(get_current_rotation(), *coords);
-                        auto left = screenCoords.x - (viewport->view_width / 2);
-                        auto top = screenCoords.y - (viewport->view_height / 2);
+                        auto screenCoords = Translate3DTo2DWithZ(viewport->rotation, *coords);
+                        auto left = screenCoords.x - (viewport->ViewWidth() / 2);
+                        auto top = screenCoords.y - (viewport->ViewHeight() / 2);
                         SetViewLeftTop(left, top);
                     }
                 }
@@ -220,7 +225,7 @@ namespace OpenRCT2::Scripting
                 auto coords = GetCoordsFromObject(position);
                 if (coords)
                 {
-                    window_scroll_to_location(w, *coords);
+                    WindowScrollToLocation(*w, *coords);
                 }
             }
         }
@@ -242,15 +247,16 @@ namespace OpenRCT2::Scripting
         }
 
     private:
-        rct_window* GetWindow() const
+        WindowBase* GetWindow() const
         {
-            if (_class == WC_MAIN_WINDOW)
-                return window_get_main();
+            if (_class == WindowClass::MainWindow)
+                return WindowGetMain();
 
-            return window_find_by_number(_class, _number);
+            auto* windowMgr = Ui::GetWindowManager();
+            return windowMgr->FindByNumber(_class, _number);
         }
 
-        rct_viewport* GetViewport() const
+        Viewport* GetViewport() const
         {
             auto w = GetWindow();
             if (w != nullptr)
@@ -294,7 +300,7 @@ namespace OpenRCT2::Scripting
                         return CoordsXYZ(x, y, dukZ.as_int());
                     }
 
-                    auto z = tile_element_height(CoordsXY(x, y));
+                    auto z = TileElementHeight(CoordsXY(x, y));
                     return CoordsXYZ(x, y, z);
                 }
             }

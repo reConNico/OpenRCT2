@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,9 +11,16 @@
 
 #include "../network/network.h"
 
+using namespace OpenRCT2;
+
 PlayerKickAction::PlayerKickAction(NetworkPlayerId_t playerId)
     : _playerId(playerId)
 {
+}
+
+void PlayerKickAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit("playerId", _playerId);
 }
 
 uint16_t PlayerKickAction::GetActionFlags() const
@@ -29,10 +36,10 @@ void PlayerKickAction::Serialise(DataSerialiser& stream)
 }
 GameActions::Result PlayerKickAction::Query() const
 {
-    return network_kick_player(_playerId, false);
+    return NetworkKickPlayer(_playerId, false);
 }
 
 GameActions::Result PlayerKickAction::Execute() const
 {
-    return network_kick_player(_playerId, true);
+    return NetworkKickPlayer(_playerId, true);
 }

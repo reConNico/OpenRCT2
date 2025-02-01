@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -7,9 +7,10 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
+#pragma once
+
 #include "Location.hpp"
 #include "Map.h"
-#include "TileElement.h"
 
 #include <iterator>
 
@@ -17,7 +18,8 @@ namespace OpenRCT2
 {
     namespace Detail
     {
-        template<typename T, typename T2> T* NextMatchingTile(T2* element)
+        template<typename T, typename T2>
+        T* NextMatchingTile(T2* element)
         {
             if (element == nullptr)
                 return nullptr;
@@ -39,9 +41,10 @@ namespace OpenRCT2
         }
     } // namespace Detail
 
-    template<typename T = TileElement> class TileElementsView
+    template<typename T = TileElement>
+    class TileElementsView
     {
-        const CoordsXY _loc;
+        const TileCoordsXY _loc;
 
     public:
         struct Iterator
@@ -104,6 +107,11 @@ namespace OpenRCT2
             using iterator_category = std::forward_iterator_tag;
         };
 
+        TileElementsView(const TileCoordsXY& loc)
+            : _loc(loc)
+        {
+        }
+
         TileElementsView(const CoordsXY& loc)
             : _loc(loc)
         {
@@ -111,7 +119,7 @@ namespace OpenRCT2
 
         Iterator begin() noexcept
         {
-            T* element = reinterpret_cast<T*>(map_get_first_element_at(_loc));
+            T* element = reinterpret_cast<T*>(MapGetFirstElementAt(_loc));
 
             if constexpr (!std::is_same_v<T, TileElement>)
             {

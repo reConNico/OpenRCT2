@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -14,11 +14,13 @@
 #include "../core/DataSerialiser.h"
 #include "../network/network.h"
 #include "../paint/Paint.h"
+#include "../profiling/Profiling.h"
 #include "../scenario/Scenario.h"
-#include "../util/Util.h"
+#include "../world/tile_element/TrackElement.h"
 #include "EntityRegistry.h"
 
-template<> bool EntityBase::Is<Balloon>() const
+template<>
+bool EntityBase::Is<Balloon>() const
 {
     return Type == EntityType::Balloon;
 }
@@ -46,12 +48,19 @@ void Balloon::Update()
             {
                 frame = 0;
             }
+
+            if (Collides())
+            {
+                Pop(false);
+                return;
+            }
+
             MoveTo({ x, y, z + 1 });
 
             int32_t maxZ = 1967 - ((x ^ y) & 31);
             if (z >= maxZ)
             {
-                Pop();
+                Pop(true);
             }
         }
     }
@@ -63,10 +72,10 @@ void Balloon::Press()
     {
         // There is a random chance that pressing the balloon will not pop it
         // and instead shift it slightly
-        uint32_t random = scenario_rand();
-        if ((sprite_index & 7) || (random & 0xFFFF) < 0x2000)
+        uint32_t random = ScenarioRand();
+        if ((Id.ToUnderlying() & 7) || (random & 0xFFFF) < 0x2000)
         {
-            Pop();
+            Pop(true);
         }
         else
         {
@@ -76,11 +85,14 @@ void Balloon::Press()
     }
 }
 
-void Balloon::Pop()
+void Balloon::Pop(bool playSound)
 {
     popped = 1;
     frame = 0;
-    OpenRCT2::Audio::Play3D(OpenRCT2::Audio::SoundId::BalloonPop, { x, y, z });
+    if (playSound)
+    {
+        OpenRCT2::Audio::Play3D(OpenRCT2::Audio::SoundId::BalloonPop, { x, y, z });
+    }
 }
 
 void Balloon::Create(const CoordsXYZ& balloonPos, int32_t colour, bool isPopped)
@@ -89,9 +101,9 @@ void Balloon::Create(const CoordsXYZ& balloonPos, int32_t colour, bool isPopped)
     if (balloon == nullptr)
         return;
 
-    balloon->sprite_width = 13;
-    balloon->sprite_height_negative = 22;
-    balloon->sprite_height_positive = 11;
+    balloon->SpriteData.Width = 13;
+    balloon->SpriteData.HeightMin = 22;
+    balloon->SpriteData.HeightMax = 11;
     balloon->MoveTo(balloonPos);
     balloon->time_to_move = 0;
     balloon->frame = 0;
@@ -108,14 +120,58 @@ void Balloon::Serialise(DataSerialiser& stream)
     stream << colour;
 }
 
-void Balloon::Paint(paint_session* session, int32_t imageDirection) const
+void Balloon::Paint(PaintSession& session, int32_t imageDirection) const
 {
+    PROFILED_FUNCTION();
+
     uint32_t imageId = 22651 + (frame & 7);
     if (popped != 0)
     {
         imageId += 8;
     }
 
-    imageId = imageId | (colour << 19) | IMAGE_TYPE_REMAP;
-    PaintAddImageAsParent(session, imageId, { 0, 0, z }, { 1, 1, 0 });
+    auto image = ImageId(imageId, colour);
+    PaintAddImageAsParent(session, image, { 0, 0, z }, { 1, 1, 0 });
+}
+
+bool Balloon::Collides() const
+{
+    const TileElement* tileElement = MapGetFirstElementAt(CoordsXY({ x, y }));
+    if (tileElement == nullptr)
+        return false;
+    do
+    {
+        // the balloon has height so we add some padding to prevent it clipping through things.
+        int32_t balloon_top = z + kCoordsZStep * 2;
+        if (balloon_top == tileElement->GetBaseZ())
+        {
+            return true;
+        }
+
+        // check for situations where guests can drop a balloon inside a covered building
+        bool check_ceiling = tileElement->GetType() == TileElementType::Entrance;
+        if (tileElement->GetType() == TileElementType::Track)
+        {
+            const TrackElement* trackElement = tileElement->AsTrack();
+            if (trackElement->GetRideType() == RIDE_TYPE_DODGEMS)
+            {
+                check_ceiling = true;
+            }
+            else
+            {
+                auto* ride = GetRide(trackElement->GetRideIndex());
+                check_ceiling = (ride != nullptr) ? RideHasStationShelter(*ride) : false;
+            }
+        }
+
+        if (check_ceiling)
+        {
+            if (balloon_top > tileElement->GetBaseZ() && z < tileElement->GetClearanceZ())
+            {
+                return true;
+            }
+        }
+
+    } while (!(tileElement++)->IsLastForTile());
+    return false;
 }

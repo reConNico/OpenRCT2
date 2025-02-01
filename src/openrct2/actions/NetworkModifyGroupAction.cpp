@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,7 +10,8 @@
 #include "NetworkModifyGroupAction.h"
 
 #include "../network/network.h"
-#include "../util/Util.h"
+
+using namespace OpenRCT2;
 
 NetworkModifyGroupAction::NetworkModifyGroupAction(
     ModifyGroupType type, uint8_t groupId, const std::string name, uint32_t permissionIndex, PermissionState permissionState)
@@ -20,6 +21,15 @@ NetworkModifyGroupAction::NetworkModifyGroupAction(
     , _permissionIndex(permissionIndex)
     , _permissionState(permissionState)
 {
+}
+
+void NetworkModifyGroupAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit("type", _type);
+    visitor.Visit("groupId", _groupId);
+    visitor.Visit("name", _name);
+    visitor.Visit("permissionIndex", _permissionIndex);
+    visitor.Visit("permissionState", _permissionState);
 }
 
 uint16_t NetworkModifyGroupAction::GetActionFlags() const
@@ -36,10 +46,10 @@ void NetworkModifyGroupAction::Serialise(DataSerialiser& stream)
 
 GameActions::Result NetworkModifyGroupAction::Query() const
 {
-    return network_modify_groups(GetPlayer(), _type, _groupId, _name, _permissionIndex, _permissionState, false);
+    return NetworkModifyGroups(GetPlayer(), _type, _groupId, _name, _permissionIndex, _permissionState, false);
 }
 
 GameActions::Result NetworkModifyGroupAction::Execute() const
 {
-    return network_modify_groups(GetPlayer(), _type, _groupId, _name, _permissionIndex, _permissionState, true);
+    return NetworkModifyGroups(GetPlayer(), _type, _groupId, _name, _permissionIndex, _permissionState, true);
 }

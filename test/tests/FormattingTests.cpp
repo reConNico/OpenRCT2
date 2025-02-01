@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -7,15 +7,16 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
-#include "openrct2/localisation/Formatting.h"
-
 #include <gtest/gtest.h>
+#include <memory>
 #include <openrct2/Context.h>
 #include <openrct2/OpenRCT2.h>
 #include <openrct2/config/Config.h>
 #include <openrct2/core/String.hpp>
-#include <openrct2/localisation/Localisation.h>
+#include <openrct2/localisation/Formatter.h>
+#include <openrct2/localisation/Formatting.h>
 #include <openrct2/localisation/StringIds.h>
+#include <openrct2/ride/RideStringIds.h>
 #include <sstream>
 #include <string>
 
@@ -38,10 +39,10 @@ TEST_F(FmtStringTests, iteration)
     auto fmt = FmtString("{BLACK}Guests: {INT32}");
     for (const auto& t : fmt)
     {
-        actual += String::StdFormat("[%d:%s]", t.kind, std::string(t.text).c_str());
+        actual += String::stdFormat("[%d:%s]", t.kind, std::string(t.text).c_str());
     }
 
-    ASSERT_EQ("[29:{BLACK}][1:Guests: ][8:{INT32}]", actual);
+    ASSERT_EQ("[31:{BLACK}][1:Guests: ][8:{INT32}]", actual);
 }
 
 TEST_F(FmtStringTests, iteration_escaped)
@@ -51,7 +52,7 @@ TEST_F(FmtStringTests, iteration_escaped)
     auto fmt = FmtString("This is an {{ESCAPED}} string.");
     for (const auto& t : fmt)
     {
-        actual += String::StdFormat("[%d:%s]", t.kind, std::string(t.text).c_str());
+        actual += String::stdFormat("[%d:%s]", t.kind, std::string(t.text).c_str());
     }
 
     ASSERT_EQ("[1:This is an ][2:{{][1:ESCAPED][2:}}][1: string.]", actual);
@@ -76,7 +77,7 @@ protected:
         _context = CreateContext();
         ASSERT_TRUE(_context->Initialise());
 
-        language_open(LANGUAGE_ENGLISH_UK);
+        LanguageOpen(LANGUAGE_ENGLISH_UK);
     }
 
     static void TearDownTestCase()
@@ -137,7 +138,7 @@ TEST_F(FormattingTests, comma_large)
 
 TEST_F(FormattingTests, currency)
 {
-    gConfigGeneral.currency_format = CurrencyType::Pounds;
+    Config::Get().general.CurrencyFormat = CurrencyType::Pounds;
     ASSERT_EQ(u8"-£251", FormatString("{CURRENCY}", -2510));
     ASSERT_EQ(u8"£1", FormatString("{CURRENCY}", 4));
     ASSERT_EQ(u8"£1", FormatString("{CURRENCY}", 5));
@@ -148,7 +149,7 @@ TEST_F(FormattingTests, currency)
 
 TEST_F(FormattingTests, currency2dp)
 {
-    gConfigGeneral.currency_format = CurrencyType::Pounds;
+    Config::Get().general.CurrencyFormat = CurrencyType::Pounds;
     ASSERT_EQ(u8"-£251.00", FormatString("{CURRENCY2DP}", -2510));
     ASSERT_EQ(u8"£0.40", FormatString("{CURRENCY2DP}", 4));
     ASSERT_EQ(u8"£0.50", FormatString("{CURRENCY2DP}", 5));
@@ -159,7 +160,7 @@ TEST_F(FormattingTests, currency2dp)
 
 TEST_F(FormattingTests, currency_yen)
 {
-    gConfigGeneral.currency_format = CurrencyType::Yen;
+    Config::Get().general.CurrencyFormat = CurrencyType::Yen;
     ASSERT_EQ(u8"-¥25,100", FormatString("{CURRENCY}", -2510));
     ASSERT_EQ(u8"¥40", FormatString("{CURRENCY2DP}", 4));
     ASSERT_EQ(u8"¥50", FormatString("{CURRENCY2DP}", 5));
@@ -170,7 +171,7 @@ TEST_F(FormattingTests, currency_yen)
 
 TEST_F(FormattingTests, currency2dp_yen)
 {
-    gConfigGeneral.currency_format = CurrencyType::Yen;
+    Config::Get().general.CurrencyFormat = CurrencyType::Yen;
     ASSERT_EQ(u8"-¥25,100", FormatString("{CURRENCY2DP}", -2510));
     ASSERT_EQ(u8"¥40", FormatString("{CURRENCY2DP}", 4));
     ASSERT_EQ(u8"¥50", FormatString("{CURRENCY2DP}", 5));
@@ -181,14 +182,14 @@ TEST_F(FormattingTests, currency2dp_yen)
 
 TEST_F(FormattingTests, currency_pts)
 {
-    gConfigGeneral.currency_format = CurrencyType::Peseta;
+    Config::Get().general.CurrencyFormat = CurrencyType::Peseta;
     ASSERT_EQ("-251Pts", FormatString("{CURRENCY}", -2510));
     ASSERT_EQ("112Pts", FormatString("{CURRENCY}", 1111));
 }
 
 TEST_F(FormattingTests, currency2dp_pts)
 {
-    gConfigGeneral.currency_format = CurrencyType::Peseta;
+    Config::Get().general.CurrencyFormat = CurrencyType::Peseta;
     ASSERT_EQ("-251.00Pts", FormatString("{CURRENCY2DP}", -2510));
     ASSERT_EQ("0.40Pts", FormatString("{CURRENCY2DP}", 4));
     ASSERT_EQ("111.10Pts", FormatString("{CURRENCY2DP}", 1111));
@@ -208,42 +209,42 @@ TEST_F(FormattingTests, escaped_braces)
 
 TEST_F(FormattingTests, velocity_mph)
 {
-    gConfigGeneral.measurement_format = MeasurementFormat::Imperial;
+    Config::Get().general.MeasurementFormat = MeasurementFormat::Imperial;
     auto actual = FormatString("Train is going at {VELOCITY}.", 1024);
     ASSERT_EQ("Train is going at 1,024 mph.", actual);
 }
 
 TEST_F(FormattingTests, velocity_kph)
 {
-    gConfigGeneral.measurement_format = MeasurementFormat::Metric;
+    Config::Get().general.MeasurementFormat = MeasurementFormat::Metric;
     auto actual = FormatString("Train is going at {VELOCITY}.", 1024);
     ASSERT_EQ("Train is going at 1,648 km/h.", actual);
 }
 
 TEST_F(FormattingTests, velocity_mps)
 {
-    gConfigGeneral.measurement_format = MeasurementFormat::SI;
+    Config::Get().general.MeasurementFormat = MeasurementFormat::SI;
     auto actual = FormatString("Train is going at {VELOCITY}.", 1024);
     ASSERT_EQ("Train is going at 457.7 m/s.", actual);
 }
 
 TEST_F(FormattingTests, length_imperial)
 {
-    gConfigGeneral.measurement_format = MeasurementFormat::Imperial;
+    Config::Get().general.MeasurementFormat = MeasurementFormat::Imperial;
     auto actual = FormatString("Height: {LENGTH}", 1024);
     ASSERT_EQ("Height: 3,360 ft", actual);
 }
 
 TEST_F(FormattingTests, length_metric)
 {
-    gConfigGeneral.measurement_format = MeasurementFormat::Metric;
+    Config::Get().general.MeasurementFormat = MeasurementFormat::Metric;
     auto actual = FormatString("Height: {LENGTH}", 1024);
     ASSERT_EQ("Height: 1,024 m", actual);
 }
 
 TEST_F(FormattingTests, length_si)
 {
-    gConfigGeneral.measurement_format = MeasurementFormat::SI;
+    Config::Get().general.MeasurementFormat = MeasurementFormat::SI;
     auto actual = FormatString("Height: {LENGTH}", 2048);
     ASSERT_EQ("Height: 2,048 m", actual);
 }
@@ -290,8 +291,8 @@ TEST_F(FormattingTests, monthyear)
 
 TEST_F(FormattingTests, two_level_format)
 {
-    constexpr rct_string_id strDefault = STR_RIDE_NAME_DEFAULT;
-    constexpr rct_string_id strBoatHire = STR_RIDE_NAME_BOAT_HIRE;
+    constexpr StringId strDefault = STR_RIDE_NAME_DEFAULT;
+    constexpr StringId strBoatHire = STR_RIDE_NAME_BOAT_HIRE;
     auto actual = FormatString("Queuing for {STRINGID}", strDefault, strBoatHire, 2);
     ASSERT_EQ("Queuing for Boat Hire 2", actual);
 }
@@ -305,8 +306,8 @@ TEST_F(FormattingTests, any_string_int_string)
 
 TEST_F(FormattingTests, any_two_level_format)
 {
-    constexpr rct_string_id strDefault = STR_RIDE_NAME_DEFAULT;
-    constexpr rct_string_id strBoatHire = STR_RIDE_NAME_BOAT_HIRE;
+    constexpr StringId strDefault = STR_RIDE_NAME_DEFAULT;
+    constexpr StringId strBoatHire = STR_RIDE_NAME_BOAT_HIRE;
     auto actual = FormatStringAny("Queuing for {STRINGID}", { strDefault, strBoatHire, 2 });
     ASSERT_EQ("Queuing for Boat Hire 2", actual);
 }
@@ -315,8 +316,8 @@ TEST_F(FormattingTests, to_fixed_buffer)
 {
     char buffer[16];
     std::memset(buffer, '\xFF', sizeof(buffer));
-    auto len = FormatStringId(buffer, 8, STR_GUEST_X, 123);
-    ASSERT_EQ(len, 9U);
+    auto len = FormatStringID(buffer, 8, STR_GUEST_X, 123);
+    ASSERT_EQ(len, 9u);
     ASSERT_STREQ("Guest 1", buffer);
 
     // Ensure rest of the buffer was not overwritten
@@ -329,13 +330,13 @@ TEST_F(FormattingTests, to_fixed_buffer)
 TEST_F(FormattingTests, using_legacy_buffer_args)
 {
     auto ft = Formatter();
-    ft.Add<rct_string_id>(STR_RIDE_NAME_DEFAULT);
-    ft.Add<rct_string_id>(STR_RIDE_NAME_BOAT_HIRE);
+    ft.Add<StringId>(STR_RIDE_NAME_DEFAULT);
+    ft.Add<StringId>(STR_RIDE_NAME_BOAT_HIRE);
     ft.Add<uint16_t>(2);
 
     char buffer[32]{};
     auto len = FormatStringLegacy(buffer, sizeof(buffer), STR_QUEUING_FOR, ft.Data());
-    ASSERT_EQ(len, 23U);
+    ASSERT_EQ(len, 23u);
     ASSERT_STREQ("Queuing for Boat Hire 2", buffer);
 }
 

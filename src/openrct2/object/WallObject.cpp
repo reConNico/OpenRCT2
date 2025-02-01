@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,14 +9,16 @@
 
 #include "WallObject.h"
 
+#include "../core/Guard.hpp"
 #include "../core/IStream.hpp"
 #include "../core/Json.hpp"
 #include "../core/String.hpp"
 #include "../drawing/Drawing.h"
-#include "../drawing/Image.h"
 #include "../interface/Cursors.h"
 #include "../localisation/Language.h"
 #include "../world/Banner.h"
+
+using namespace OpenRCT2;
 
 void WallObject::ReadLegacy(IReadObjectContext* context, OpenRCT2::IStream* stream)
 {
@@ -25,20 +27,20 @@ void WallObject::ReadLegacy(IReadObjectContext* context, OpenRCT2::IStream* stre
     _legacyType.flags = stream->ReadValue<uint8_t>();
     _legacyType.height = stream->ReadValue<uint8_t>();
     _legacyType.flags2 = stream->ReadValue<uint8_t>();
-    _legacyType.price = stream->ReadValue<uint16_t>();
-    _legacyType.scenery_tab_id = OBJECT_ENTRY_INDEX_NULL;
+    _legacyType.price = stream->ReadValue<money16>();
+    _legacyType.scenery_tab_id = kObjectEntryIndexNull;
     stream->Seek(1, OpenRCT2::STREAM_SEEK_CURRENT);
     _legacyType.scrolling_mode = stream->ReadValue<uint8_t>();
 
     GetStringTable().Read(context, stream, ObjectStringID::NAME);
 
-    rct_object_entry sgEntry = stream->ReadValue<rct_object_entry>();
+    RCTObjectEntry sgEntry = stream->ReadValue<RCTObjectEntry>();
     SetPrimarySceneryGroup(ObjectEntryDescriptor(sgEntry));
 
     GetImageTable().Read(context, stream);
 
     // Validate properties
-    if (_legacyType.price <= 0)
+    if (_legacyType.price <= 0.00_GBP)
     {
         context->LogError(ObjectError::InvalidProperty, "Price can not be free or negative.");
     }
@@ -55,43 +57,42 @@ void WallObject::ReadLegacy(IReadObjectContext* context, OpenRCT2::IStream* stre
 void WallObject::Load()
 {
     GetStringTable().Sort();
-    _legacyType.name = language_allocate_object_string(GetName());
-    _legacyType.image = gfx_object_allocate_images(GetImageTable().GetImages(), GetImageTable().GetCount());
+    _legacyType.name = LanguageAllocateObjectString(GetName());
+    _legacyType.image = LoadImages();
 }
 
 void WallObject::Unload()
 {
-    language_free_object_string(_legacyType.name);
-    gfx_object_free_images(_legacyType.image, GetImageTable().GetCount());
+    LanguageFreeObjectString(_legacyType.name);
+    UnloadImages();
 
     _legacyType.name = 0;
     _legacyType.image = 0;
 }
 
-void WallObject::DrawPreview(rct_drawpixelinfo* dpi, int32_t width, int32_t height) const
+void WallObject::DrawPreview(DrawPixelInfo& dpi, int32_t width, int32_t height) const
 {
     auto screenCoords = ScreenCoordsXY{ width / 2, height / 2 };
 
     screenCoords.x += 14;
     screenCoords.y += (_legacyType.height * 2) + 16;
 
-    uint32_t imageId = 0x20D00000 | _legacyType.image;
+    auto imageId = ImageId(_legacyType.image, COLOUR_BORDEAUX_RED);
     if (_legacyType.flags & WALL_SCENERY_HAS_SECONDARY_COLOUR)
     {
-        imageId |= 0x92000000;
+        imageId = imageId.WithSecondary(COLOUR_YELLOW);
     }
 
-    gfx_draw_sprite(dpi, imageId, screenCoords, 0);
+    GfxDrawSprite(dpi, imageId, screenCoords);
 
     if (_legacyType.flags & WALL_SCENERY_HAS_GLASS)
     {
-        imageId = _legacyType.image + 0x44500006;
-        gfx_draw_sprite(dpi, imageId, screenCoords, 0);
+        auto glassImageId = imageId.WithTransparency(COLOUR_BORDEAUX_RED).WithIndexOffset(6);
+        GfxDrawSprite(dpi, glassImageId, screenCoords);
     }
     else if (_legacyType.flags & WALL_SCENERY_IS_DOOR)
     {
-        imageId++;
-        gfx_draw_sprite(dpi, imageId, screenCoords, 0);
+        GfxDrawSprite(dpi, imageId.WithIndexOffset(1), screenCoords);
     }
 }
 
@@ -105,7 +106,7 @@ void WallObject::ReadJson(IReadObjectContext* context, json_t& root)
     {
         _legacyType.tool_id = Cursor::FromString(Json::GetString(properties["cursor"]), CursorID::FenceDown);
         _legacyType.height = Json::GetNumber<uint8_t>(properties["height"]);
-        _legacyType.price = Json::GetNumber<int16_t>(properties["price"]);
+        _legacyType.price = Json::GetNumber<money64>(properties["price"]);
 
         _legacyType.scrolling_mode = Json::GetNumber<uint8_t>(properties["scrollingMode"], SCROLLING_MODE_NONE);
 
@@ -118,7 +119,8 @@ void WallObject::ReadJson(IReadObjectContext* context, json_t& root)
                 { "hasPrimaryColour",       WALL_SCENERY_HAS_PRIMARY_COLOUR,    Json::FlagType::Normal },
                 { "isAllowedOnSlope",       WALL_SCENERY_CANT_BUILD_ON_SLOPE,   Json::FlagType::Inverted },
                 { "hasSecondaryColour",     WALL_SCENERY_HAS_SECONDARY_COLOUR,  Json::FlagType::Normal },
-                { "hasTernaryColour",       WALL_SCENERY_HAS_TERNARY_COLOUR,    Json::FlagType::Normal },
+                { "hasTertiaryColour",      WALL_SCENERY_HAS_TERTIARY_COLOUR,   Json::FlagType::Normal },
+                { "hasTernaryColour",       WALL_SCENERY_HAS_TERTIARY_COLOUR,   Json::FlagType::Normal },
                 { "hasGlass",               WALL_SCENERY_HAS_GLASS,             Json::FlagType::Normal },
                 { "isBanner",               WALL_SCENERY_IS_DOUBLE_SIDED,       Json::FlagType::Normal },
                 { "isDoubleSided",          WALL_SCENERY_IS_DOUBLE_SIDED,       Json::FlagType::Normal },
@@ -138,7 +140,7 @@ void WallObject::ReadJson(IReadObjectContext* context, json_t& root)
         //      JSON and handle this on load. We should change code base in future to reflect the JSON.
         if (!(_legacyType.flags & WALL_SCENERY_HAS_PRIMARY_COLOUR))
         {
-            if (_legacyType.flags & (WALL_SCENERY_HAS_SECONDARY_COLOUR | WALL_SCENERY_HAS_TERNARY_COLOUR))
+            if (_legacyType.flags & (WALL_SCENERY_HAS_SECONDARY_COLOUR | WALL_SCENERY_HAS_TERTIARY_COLOUR))
             {
                 _legacyType.flags |= WALL_SCENERY_HAS_PRIMARY_COLOUR;
                 _legacyType.flags2 |= WALL_SCENERY_2_NO_SELECT_PRIMARY_COLOUR;

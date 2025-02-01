@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,18 +9,28 @@
 
 #include "PeepPickupAction.h"
 
+#include "../Diagnostic.h"
 #include "../Input.h"
 #include "../entity/EntityRegistry.h"
 #include "../entity/Peep.h"
 #include "../network/network.h"
-#include "../util/Util.h"
 
-PeepPickupAction::PeepPickupAction(PeepPickupType type, uint32_t spriteId, const CoordsXYZ& loc, NetworkPlayerId_t owner)
+using namespace OpenRCT2;
+
+PeepPickupAction::PeepPickupAction(PeepPickupType type, EntityId entityId, const CoordsXYZ& loc, NetworkPlayerId_t owner)
     : _type(type)
-    , _spriteId(spriteId)
+    , _entityId(entityId)
     , _loc(loc)
     , _owner(owner)
 {
+}
+
+void PeepPickupAction::AcceptParameters(GameActionParameterVisitor& visitor)
+{
+    visitor.Visit("type", _type);
+    visitor.Visit("id", _entityId);
+    visitor.Visit(_loc);
+    visitor.Visit("playerId", _owner);
 }
 
 uint16_t PeepPickupAction::GetActionFlags() const
@@ -32,27 +42,27 @@ void PeepPickupAction::Serialise(DataSerialiser& stream)
 {
     GameAction::Serialise(stream);
 
-    stream << DS_TAG(_type) << DS_TAG(_spriteId) << DS_TAG(_loc) << DS_TAG(_owner);
+    stream << DS_TAG(_type) << DS_TAG(_entityId) << DS_TAG(_loc) << DS_TAG(_owner);
 }
 
 GameActions::Result PeepPickupAction::Query() const
 {
-    if (_spriteId >= MAX_ENTITIES || _spriteId == SPRITE_INDEX_NULL)
+    if (_entityId.ToUnderlying() >= kMaxEntities || _entityId.IsNull())
     {
-        log_error("Failed to pick up peep for sprite %d", _spriteId);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, STR_NONE);
+        LOG_ERROR("Failed to pick up peep for sprite %d", _entityId);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, kStringIdNone);
     }
 
     if (!_loc.IsNull() && !LocationValid(_loc))
     {
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, STR_NONE);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, kStringIdNone);
     }
 
-    auto* const peep = TryGetEntity<Peep>(_spriteId);
+    auto* const peep = TryGetEntity<Peep>(_entityId);
     if (peep == nullptr)
     {
-        log_error("Failed to pick up peep for sprite %d", _spriteId);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, STR_NONE);
+        LOG_ERROR("Failed to pick up peep for sprite %d", _entityId);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, kStringIdNone);
     }
 
     auto res = GameActions::Result();
@@ -64,14 +74,14 @@ GameActions::Result PeepPickupAction::Query() const
             res.Position = peep->GetLocation();
             if (!peep->CanBePickedUp())
             {
-                return GameActions::Result(GameActions::Status::Disallowed, STR_ERR_CANT_PLACE_PERSON_HERE, STR_NONE);
+                return GameActions::Result(GameActions::Status::Disallowed, STR_ERR_CANT_PLACE_PERSON_HERE, kStringIdNone);
             }
-            Peep* existing = network_get_pickup_peep(_owner);
+            Peep* existing = NetworkGetPickupPeep(_owner);
             if (existing != nullptr)
             {
                 // already picking up a peep
                 PeepPickupAction existingPickupAction{
-                    PeepPickupType::Cancel, existing->sprite_index, { network_get_pickup_peep_old_x(_owner), 0, 0 }, _owner
+                    PeepPickupType::Cancel, existing->Id, { NetworkGetPickupPeepOldX(_owner), 0, 0 }, _owner
                 };
                 auto result = GameActions::QueryNested(&existingPickupAction);
 
@@ -87,9 +97,9 @@ GameActions::Result PeepPickupAction::Query() const
             break;
         case PeepPickupType::Place:
             res.Position = _loc;
-            if (network_get_pickup_peep(_owner) != peep)
+            if (NetworkGetPickupPeep(_owner) != peep)
             {
-                return GameActions::Result(GameActions::Status::Unknown, STR_ERR_CANT_PLACE_PERSON_HERE, STR_NONE);
+                return GameActions::Result(GameActions::Status::Unknown, STR_ERR_CANT_PLACE_PERSON_HERE, kStringIdNone);
             }
 
             if (auto res2 = peep->Place(TileCoordsXYZ(_loc), false); res2.Error != GameActions::Status::Ok)
@@ -98,19 +108,19 @@ GameActions::Result PeepPickupAction::Query() const
             }
             break;
         default:
-            log_error("Invalid pickup type: %u", _type);
-            return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, STR_NONE);
+            LOG_ERROR("Invalid peep pickup type %u", _type);
+            return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, kStringIdNone);
     }
     return res;
 }
 
 GameActions::Result PeepPickupAction::Execute() const
 {
-    Peep* const peep = TryGetEntity<Peep>(_spriteId);
+    Peep* const peep = TryGetEntity<Peep>(_entityId);
     if (peep == nullptr)
     {
-        log_error("Failed to pick up peep for sprite %d", _spriteId);
-        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, STR_NONE);
+        LOG_ERROR("Failed to pick up peep for sprite %d", _entityId);
+        return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, kStringIdNone);
     }
 
     auto res = GameActions::Result();
@@ -121,12 +131,12 @@ GameActions::Result PeepPickupAction::Execute() const
         {
             res.Position = peep->GetLocation();
 
-            Peep* existing = network_get_pickup_peep(_owner);
+            Peep* existing = NetworkGetPickupPeep(_owner);
             if (existing != nullptr)
             {
                 // already picking up a peep
                 PeepPickupAction existingPickupAction{
-                    PeepPickupType::Cancel, existing->sprite_index, { network_get_pickup_peep_old_x(_owner), 0, 0 }, _owner
+                    PeepPickupType::Cancel, existing->Id, { NetworkGetPickupPeepOldX(_owner), 0, 0 }, _owner
                 };
                 auto result = GameActions::ExecuteNested(&existingPickupAction);
 
@@ -134,15 +144,15 @@ GameActions::Result PeepPickupAction::Execute() const
                 {
                     return result;
                 }
-                if (_owner == network_get_current_player_id())
+                if (_owner == NetworkGetCurrentPlayerId())
                 {
                     // prevent tool_cancel()
-                    input_set_flag(INPUT_FLAG_TOOL_ACTIVE, false);
+                    InputSetFlag(INPUT_FLAG_TOOL_ACTIVE, false);
                 }
             }
 
-            network_set_pickup_peep(_owner, peep);
-            network_set_pickup_peep_old_x(_owner, peep->x);
+            NetworkSetPickupPeep(_owner, peep);
+            NetworkSetPickupPeepOldX(_owner, peep->x);
             peep->Pickup();
         }
         break;
@@ -150,13 +160,12 @@ GameActions::Result PeepPickupAction::Execute() const
         {
             res.Position = peep->GetLocation();
 
-            Peep* const pickedUpPeep = network_get_pickup_peep(_owner);
+            Peep* const pickedUpPeep = NetworkGetPickupPeep(_owner);
             if (pickedUpPeep != nullptr)
             {
                 pickedUpPeep->PickupAbort(_loc.x);
             }
-
-            network_set_pickup_peep(_owner, nullptr);
+            NetworkSetPickupPeep(_owner, nullptr);
         }
         break;
         case PeepPickupType::Place:
@@ -168,8 +177,8 @@ GameActions::Result PeepPickupAction::Execute() const
             CancelConcurrentPickups(peep);
             break;
         default:
-            log_error("Invalid pickup type: %u", _type);
-            return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, STR_NONE);
+            LOG_ERROR("Invalid peep pickup type %u", _type);
+            return GameActions::Result(GameActions::Status::InvalidParameters, STR_ERR_CANT_PLACE_PERSON_HERE, kStringIdNone);
     }
     return res;
 }
@@ -177,20 +186,20 @@ GameActions::Result PeepPickupAction::Execute() const
 void PeepPickupAction::CancelConcurrentPickups(Peep* pickedPeep) const
 {
     // This part is only relevant in multiplayer games.
-    if (network_get_mode() == NETWORK_MODE_NONE)
+    if (NetworkGetMode() == NETWORK_MODE_NONE)
         return;
 
     // Not relevant for owner, owner gets to place it normally.
-    NetworkPlayerId_t currentPlayerId = network_get_current_player_id();
+    NetworkPlayerId_t currentPlayerId = NetworkGetCurrentPlayerId();
     if (currentPlayerId == _owner)
         return;
 
-    Peep* peep = network_get_pickup_peep(network_get_current_player_id());
+    Peep* peep = NetworkGetPickupPeep(NetworkGetCurrentPlayerId());
     if (peep != pickedPeep)
         return;
 
     // By assigning the peep to null before calling tool_cancel we can avoid
     // resetting the peep to the initial position.
-    network_set_pickup_peep(currentPlayerId, nullptr);
-    tool_cancel();
+    NetworkSetPickupPeep(currentPlayerId, nullptr);
+    ToolCancel();
 }

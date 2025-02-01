@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,30 +9,33 @@
 
 #ifndef DISABLE_NETWORK
 
-#    include "NetworkServerAdvertiser.h"
+    #include "NetworkServerAdvertiser.h"
 
-#    include "../config/Config.h"
-#    include "../core/Console.hpp"
-#    include "../core/Guard.hpp"
-#    include "../core/Http.h"
-#    include "../core/Json.hpp"
-#    include "../core/String.hpp"
-#    include "../entity/Guest.h"
-#    include "../localisation/Date.h"
-#    include "../management/Finance.h"
-#    include "../platform/Platform2.h"
-#    include "../platform/platform.h"
-#    include "../util/Util.h"
-#    include "../world/Map.h"
-#    include "../world/Park.h"
-#    include "Socket.h"
-#    include "network.h"
+    #include "../Diagnostic.h"
+    #include "../GameState.h"
+    #include "../config/Config.h"
+    #include "../core/Console.hpp"
+    #include "../core/Guard.hpp"
+    #include "../core/Http.h"
+    #include "../core/Json.hpp"
+    #include "../core/String.hpp"
+    #include "../entity/Guest.h"
+    #include "../localisation/Localisation.Date.h"
+    #include "../management/Finance.h"
+    #include "../platform/Platform.h"
+    #include "../world/Map.h"
+    #include "../world/Park.h"
+    #include "Socket.h"
+    #include "network.h"
 
-#    include <cstring>
-#    include <iterator>
-#    include <memory>
-#    include <random>
-#    include <string>
+    #include <chrono>
+    #include <cstring>
+    #include <iterator>
+    #include <memory>
+    #include <random>
+    #include <string>
+
+using namespace OpenRCT2;
 
 enum class MasterServerStatus
 {
@@ -42,10 +45,11 @@ enum class MasterServerStatus
     InternalError = 500
 };
 
-#    ifndef DISABLE_HTTP
-constexpr int32_t MASTER_SERVER_REGISTER_TIME = 120 * 1000; // 2 minutes
-constexpr int32_t MASTER_SERVER_HEARTBEAT_TIME = 60 * 1000; // 1 minute
-#    endif
+    #ifndef DISABLE_HTTP
+using namespace std::chrono_literals;
+constexpr int32_t kMasterServerRegisterTime = std::chrono::milliseconds(2min).count();
+constexpr int32_t kMasterServerHeartbeatTime = std::chrono::milliseconds(1min).count();
+    #endif
 
 class NetworkServerAdvertiser final : public INetworkServerAdvertiser
 {
@@ -57,7 +61,7 @@ private:
 
     ADVERTISE_STATUS _status = ADVERTISE_STATUS::UNREGISTERED;
 
-#    ifndef DISABLE_HTTP
+    #ifndef DISABLE_HTTP
     uint32_t _lastAdvertiseTime = 0;
     uint32_t _lastHeartbeatTime = 0;
 
@@ -69,16 +73,16 @@ private:
 
     // See https://github.com/OpenRCT2/OpenRCT2/issues/6277 and 4953
     bool _forceIPv4 = false;
-#    endif
+    #endif
 
 public:
     explicit NetworkServerAdvertiser(uint16_t port)
     {
         _port = port;
         _lanListener = CreateUdpSocket();
-#    ifndef DISABLE_HTTP
+    #ifndef DISABLE_HTTP
         _key = GenerateAdvertiseKey();
-#    endif
+    #endif
     }
 
     ADVERTISE_STATUS GetStatus() const override
@@ -89,12 +93,12 @@ public:
     void Update() override
     {
         UpdateLAN();
-#    ifndef DISABLE_HTTP
-        if (gConfigNetwork.advertise)
+    #ifndef DISABLE_HTTP
+        if (Config::Get().network.Advertise)
         {
             UpdateWAN();
         }
-#    endif
+    #endif
     }
 
 private:
@@ -105,7 +109,7 @@ private:
         {
             if (_lanListener->GetStatus() != SocketStatus::Listening)
             {
-                _lanListener->Listen(NETWORK_LAN_BROADCAST_PORT);
+                _lanListener->Listen(kNetworkLanBroadcastPort);
             }
             else
             {
@@ -116,13 +120,13 @@ private:
                 if (p == NetworkReadPacket::Success)
                 {
                     std::string sender = endpoint->GetHostname();
-                    log_verbose("Received %zu bytes from %s on LAN broadcast port", recievedBytes, sender.c_str());
-                    if (String::Equals(buffer, NETWORK_LAN_BROADCAST_MSG))
+                    LOG_VERBOSE("Received %zu bytes from %s on LAN broadcast port", recievedBytes, sender.c_str());
+                    if (String::equals(buffer, kNetworkLanBroadcastMsg))
                     {
                         auto body = GetBroadcastJson();
                         auto bodyDump = body.dump();
                         size_t sendLen = bodyDump.size() + 1;
-                        log_verbose("Sending %zu bytes back to %s", sendLen, sender.c_str());
+                        LOG_VERBOSE("Sending %zu bytes back to %s", sendLen, sender.c_str());
                         _lanListener->SendData(*endpoint, bodyDump.c_str(), sendLen);
                     }
                 }
@@ -133,18 +137,18 @@ private:
 
     json_t GetBroadcastJson()
     {
-        json_t root = network_get_server_info_as_json();
+        json_t root = NetworkGetServerInfoAsJson();
         root["port"] = _port;
         return root;
     }
 
-#    ifndef DISABLE_HTTP
+    #ifndef DISABLE_HTTP
     void UpdateWAN()
     {
         switch (_status)
         {
             case ADVERTISE_STATUS::UNREGISTERED:
-                if (_lastAdvertiseTime == 0 || platform_get_ticks() > _lastAdvertiseTime + MASTER_SERVER_REGISTER_TIME)
+                if (_lastAdvertiseTime == 0 || Platform::GetTicks() > _lastAdvertiseTime + kMasterServerRegisterTime)
                 {
                     if (_lastAdvertiseTime == 0)
                     {
@@ -154,7 +158,7 @@ private:
                 }
                 break;
             case ADVERTISE_STATUS::REGISTERED:
-                if (platform_get_ticks() > _lastHeartbeatTime + MASTER_SERVER_HEARTBEAT_TIME)
+                if (Platform::GetTicks() > _lastHeartbeatTime + kMasterServerHeartbeatTime)
                 {
                     SendHeartbeat();
                 }
@@ -167,7 +171,7 @@ private:
 
     void SendRegistration(bool forceIPv4)
     {
-        _lastAdvertiseTime = platform_get_ticks();
+        _lastAdvertiseTime = Platform::GetTicks();
 
         // Send the registration request
         Http::Request request;
@@ -180,9 +184,9 @@ private:
             { "port", _port },
         };
 
-        if (!gConfigNetwork.advertise_address.empty())
+        if (!Config::Get().network.AdvertiseAddress.empty())
         {
-            body["address"] = gConfigNetwork.advertise_address;
+            body["address"] = Config::Get().network.AdvertiseAddress;
         }
 
         request.body = body.dump();
@@ -211,7 +215,7 @@ private:
         request.body = body.dump();
         request.header["Content-Type"] = "application/json";
 
-        _lastHeartbeatTime = platform_get_ticks();
+        _lastHeartbeatTime = Platform::GetTicks();
         Http::DoAsync(request, [&](Http::Response response) -> void {
             if (response.status != Http::Status::Ok)
             {
@@ -253,7 +257,7 @@ private:
                 message = "Invalid response from server";
             }
             Console::Error::WriteLine(
-                "Unable to advertise (%d): %s\n  * Check that you have port forwarded %uh\n  * Try setting "
+                "Unable to advertise (%d): %s\n  * Check that you have port forwarded %u\n  * Try setting "
                 "advertise_address in config.ini",
                 status, message.c_str(), _port);
 
@@ -264,7 +268,7 @@ private:
             {
                 _forceIPv4 = true;
                 _lastAdvertiseTime = 0;
-                log_info("Forcing HTTP(S) over IPv4");
+                LOG_INFO("Forcing HTTP(S) over IPv4");
             }
         }
     }
@@ -285,26 +289,34 @@ private:
         else if (status == MasterServerStatus::InvalidToken)
         {
             _status = ADVERTISE_STATUS::UNREGISTERED;
+            _lastAdvertiseTime = 0;
             Console::Error::WriteLine("Master server heartbeat failed: Invalid Token");
         }
     }
 
     json_t GetHeartbeatJson()
     {
-        uint32_t numPlayers = network_get_num_players();
+        uint32_t numPlayers = NetworkGetNumVisiblePlayers();
 
         json_t root = {
             { "token", _token },
             { "players", numPlayers },
         };
 
+        const auto& gameState = GetGameState();
+        const auto& date = GetDate();
+        json_t mapSize = { { "x", gameState.MapSize.x - 2 }, { "y", gameState.MapSize.y - 2 } };
         json_t gameInfo = {
-            { "mapSize", gMapSize - 2 },    { "day", gDateMonthTicks },  { "month", gDateMonthsElapsed },
-            { "guests", gNumGuestsInPark }, { "parkValue", gParkValue },
+            { "mapSize", mapSize },
+            { "day", date.GetMonthTicks() },
+            { "month", date.GetMonthsElapsed() },
+            { "guests", gameState.NumGuestsInPark },
+            { "parkValue", gameState.Park.Value },
         };
-        if (!(gParkFlags & PARK_FLAGS_NO_MONEY))
+
+        if (!(gameState.Park.Flags & PARK_FLAGS_NO_MONEY))
         {
-            gameInfo["cash"] = gCash;
+            gameInfo["cash"] = gameState.Cash;
         }
 
         root["gameInfo"] = gameInfo;
@@ -334,14 +346,14 @@ private:
 
     static std::string GetMasterServerUrl()
     {
-        std::string result = OPENRCT2_MASTER_SERVER_URL;
-        if (!gConfigNetwork.master_server_url.empty())
+        std::string result = kMasterServerURL;
+        if (!Config::Get().network.MasterServerUrl.empty())
         {
-            result = gConfigNetwork.master_server_url;
+            result = Config::Get().network.MasterServerUrl;
         }
         return result;
     }
-#    endif
+    #endif
 };
 
 std::unique_ptr<INetworkServerAdvertiser> CreateServerAdvertiser(uint16_t port)

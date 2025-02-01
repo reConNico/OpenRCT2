@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -7,456 +7,434 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
-#include <algorithm>
+#include "../UiStringIds.h"
+
+#include <memory>
 #include <openrct2-ui/interface/Widget.h>
-#include <openrct2-ui/windows/Window.h>
+#include <openrct2-ui/windows/Windows.h>
 #include <openrct2/Context.h>
+#include <openrct2/Diagnostic.h>
+#include <openrct2/PlatformEnvironment.h>
 #include <openrct2/audio/audio.h>
-#include <openrct2/localisation/Localisation.h>
+#include <openrct2/core/File.h>
+#include <openrct2/core/Path.hpp>
+#include <openrct2/core/UnitConversion.h>
+#include <openrct2/localisation/Formatter.h>
 #include <openrct2/object/ObjectManager.h>
-#include <openrct2/platform/Platform2.h>
+#include <openrct2/ride/RideConstruction.h>
 #include <openrct2/ride/RideData.h>
 #include <openrct2/ride/TrackDesign.h>
 #include <openrct2/ride/TrackDesignRepository.h>
 #include <openrct2/sprites.h>
-#include <openrct2/util/Util.h>
+#include <openrct2/ui/WindowManager.h>
 #include <string>
 #include <vector>
 
-// clang-format off
-enum {
-    WIDX_BACKGROUND,
-    WIDX_TITLE,
-    WIDX_CLOSE,
-    WIDX_TRACK_PREVIEW,
-    WIDX_ROTATE,
-    WIDX_TOGGLE_SCENERY,
-    WIDX_INSTALL,
-    WIDX_CANCEL
-};
-
-static constexpr const rct_string_id WINDOW_TITLE = STR_TRACK_DESIGN_INSTALL_WINDOW_TITLE;
-static constexpr const int32_t WW = 380;
-static constexpr const int32_t WH = 460;
-constexpr int32_t PREVIEW_BUTTONS_LEFT = WW - 25;
-constexpr int32_t ACTION_BUTTONS_LEFT = WW - 100;
-
-static rct_widget window_install_track_widgets[] = {
-    WINDOW_SHIM(WINDOW_TITLE, WW, WH),
-    MakeWidget({                   4,  18}, {372, 219}, WindowWidgetType::FlatBtn, WindowColour::Primary                                                              ),
-    MakeWidget({PREVIEW_BUTTONS_LEFT, 422}, { 22,  24}, WindowWidgetType::FlatBtn, WindowColour::Primary, SPR_ROTATE_ARROW,                     STR_ROTATE_90_TIP     ),
-    MakeWidget({PREVIEW_BUTTONS_LEFT, 398}, { 22,  24}, WindowWidgetType::FlatBtn, WindowColour::Primary, SPR_SCENERY,                          STR_TOGGLE_SCENERY_TIP),
-    MakeWidget({ ACTION_BUTTONS_LEFT, 241}, { 97,  15}, WindowWidgetType::Button,  WindowColour::Primary, STR_INSTALL_NEW_TRACK_DESIGN_INSTALL                        ),
-    MakeWidget({ ACTION_BUTTONS_LEFT, 259}, { 97,  15}, WindowWidgetType::Button,  WindowColour::Primary, STR_INSTALL_NEW_TRACK_DESIGN_CANCEL                         ),
-    WIDGETS_END,
-};
-
-static void WindowInstallTrackClose(rct_window *w);
-static void WindowInstallTrackMouseup(rct_window *w, rct_widgetindex widgetIndex);
-static void WindowInstallTrackInvalidate(rct_window *w);
-static void WindowInstallTrackPaint(rct_window *w, rct_drawpixelinfo *dpi);
-static void WindowInstallTrackTextInput(rct_window *w, rct_widgetindex widgetIndex, char *text);
-
-static rct_window_event_list window_install_track_events([](auto& events)
+namespace OpenRCT2::Ui::Windows
 {
-    events.close = &WindowInstallTrackClose;
-    events.mouse_up = &WindowInstallTrackMouseup;
-    events.text_input = &WindowInstallTrackTextInput;
-    events.invalidate = &WindowInstallTrackInvalidate;
-    events.paint = &WindowInstallTrackPaint;
-});
-// clang-format on
-
-static std::unique_ptr<TrackDesign> _trackDesign;
-static std::string _trackPath;
-static std::string _trackName;
-static std::vector<uint8_t> _trackDesignPreviewPixels;
-
-static void WindowInstallTrackUpdatePreview();
-static void WindowInstallTrackDesign(rct_window* w);
-
-/**
- *
- *  rct2: 0x006D386D
- */
-rct_window* WindowInstallTrackOpen(const utf8* path)
-{
-    _trackDesign = TrackDesignImport(path);
-    if (_trackDesign == nullptr)
+    enum
     {
-        context_show_error(STR_UNABLE_TO_LOAD_FILE, STR_NONE, {});
-        return nullptr;
-    }
+        WIDX_BACKGROUND,
+        WIDX_TITLE,
+        WIDX_CLOSE,
+        WIDX_TRACK_PREVIEW,
+        WIDX_ROTATE,
+        WIDX_TOGGLE_SCENERY,
+        WIDX_INSTALL,
+        WIDX_CANCEL
+    };
 
-    object_manager_unload_all_objects();
-    if (_trackDesign->type == RIDE_TYPE_NULL)
+    static constexpr StringId WINDOW_TITLE = STR_TRACK_DESIGN_INSTALL_WINDOW_TITLE;
+    static constexpr int32_t WW = 380;
+    static constexpr int32_t WH = 460;
+    constexpr int32_t PREVIEW_BUTTONS_LEFT = WW - 25;
+    constexpr int32_t ACTION_BUTTONS_LEFT = WW - 100;
+
+    // clang-format off
+    static constexpr Widget window_install_track_widgets[] = {
+        WINDOW_SHIM(WINDOW_TITLE, WW, WH),
+        MakeWidget({                   4,  18}, {372, 219}, WindowWidgetType::FlatBtn, WindowColour::Primary                                                              ),
+        MakeWidget({PREVIEW_BUTTONS_LEFT, 422}, { 22,  24}, WindowWidgetType::FlatBtn, WindowColour::Primary, ImageId(SPR_ROTATE_ARROW),                     STR_ROTATE_90_TIP     ),
+        MakeWidget({PREVIEW_BUTTONS_LEFT, 398}, { 22,  24}, WindowWidgetType::FlatBtn, WindowColour::Primary, ImageId(SPR_SCENERY),                          STR_TOGGLE_SCENERY_TIP),
+        MakeWidget({ ACTION_BUTTONS_LEFT, 241}, { 97,  15}, WindowWidgetType::Button,  WindowColour::Primary, STR_INSTALL_NEW_TRACK_DESIGN_INSTALL                        ),
+        MakeWidget({ ACTION_BUTTONS_LEFT, 259}, { 97,  15}, WindowWidgetType::Button,  WindowColour::Primary, STR_INSTALL_NEW_TRACK_DESIGN_CANCEL                         ),
+    };
+    // clang-format on
+
+    class InstallTrackWindow final : public Window
     {
-        log_error("Failed to load track (ride type null): %s", path);
-        return nullptr;
-    }
-    if (object_manager_load_object(&_trackDesign->vehicle_object.Entry) == nullptr)
-    {
-        log_error("Failed to load track (vehicle load fail): %s", path);
-        return nullptr;
-    }
+    private:
+        std::unique_ptr<TrackDesign> _trackDesign;
+        std::string _trackPath;
+        std::string _trackName;
+        std::vector<uint8_t> _trackDesignPreviewPixels;
 
-    window_close_by_class(WC_EDITOR_OBJECT_SELECTION);
-    window_close_construction_windows();
-
-    gTrackDesignSceneryToggle = false;
-    _currentTrackPieceDirection = 2;
-
-    int32_t screenWidth = context_get_width();
-    int32_t screenHeight = context_get_height();
-    int32_t x = screenWidth / 2 - 201;
-    int32_t y = std::max(TOP_TOOLBAR_HEIGHT + 1, screenHeight / 2 - 200);
-
-    rct_window* w = WindowCreate(ScreenCoordsXY(x, y), WW, WH, &window_install_track_events, WC_INSTALL_TRACK, 0);
-    w->widgets = window_install_track_widgets;
-    w->enabled_widgets = (1ULL << WIDX_CLOSE) | (1ULL << WIDX_ROTATE) | (1ULL << WIDX_TOGGLE_SCENERY) | (1ULL << WIDX_INSTALL)
-        | (1ULL << WIDX_CANCEL);
-    WindowInitScrollWidgets(w);
-    w->track_list.track_list_being_updated = false;
-    window_push_others_right(w);
-
-    _trackPath = path;
-    _trackName = GetNameFromTrackPath(path);
-    _trackDesignPreviewPixels.resize(4 * TRACK_PREVIEW_IMAGE_SIZE);
-
-    WindowInstallTrackUpdatePreview();
-    w->Invalidate();
-
-    return w;
-}
-
-/**
- *
- *  rct2: 0x006D41DC
- */
-static void WindowInstallTrackClose(rct_window* w)
-{
-    _trackPath.clear();
-    _trackName.clear();
-    _trackDesignPreviewPixels.clear();
-    _trackDesignPreviewPixels.shrink_to_fit();
-    _trackDesign = nullptr;
-}
-
-/**
- *
- *  rct2: 0x006D407A
- */
-static void WindowInstallTrackMouseup(rct_window* w, rct_widgetindex widgetIndex)
-{
-    switch (widgetIndex)
-    {
-        case WIDX_CLOSE:
-        case WIDX_CANCEL:
-            window_close(w);
-            break;
-        case WIDX_ROTATE:
-            _currentTrackPieceDirection++;
-            _currentTrackPieceDirection %= 4;
-            w->Invalidate();
-            break;
-        case WIDX_TOGGLE_SCENERY:
-            gTrackDesignSceneryToggle = !gTrackDesignSceneryToggle;
-            WindowInstallTrackUpdatePreview();
-            w->Invalidate();
-            break;
-        case WIDX_INSTALL:
-            WindowInstallTrackDesign(w);
-            break;
-    }
-}
-
-/**
- *
- *  rct2: 0x006D3B06
- */
-static void WindowInstallTrackInvalidate(rct_window* w)
-{
-    w->pressed_widgets |= 1ULL << WIDX_TRACK_PREVIEW;
-    if (!gTrackDesignSceneryToggle)
-    {
-        w->pressed_widgets |= (1ULL << WIDX_TOGGLE_SCENERY);
-    }
-    else
-    {
-        w->pressed_widgets &= ~(1ULL << WIDX_TOGGLE_SCENERY);
-    }
-}
-
-/**
- *
- *  rct2: 0x006D3B1F
- */
-static void WindowInstallTrackPaint(rct_window* w, rct_drawpixelinfo* dpi)
-{
-    WindowDrawWidgets(w, dpi);
-
-    // Track preview
-    rct_widget* widget = &window_install_track_widgets[WIDX_TRACK_PREVIEW];
-    auto screenPos = w->windowPos + ScreenCoordsXY{ widget->left + 1, widget->top + 1 };
-    int32_t colour = ColourMapA[w->colours[0]].darkest;
-    gfx_fill_rect(dpi, { screenPos, screenPos + ScreenCoordsXY{ 369, 216 } }, colour);
-
-    rct_g1_element g1temp = {};
-    g1temp.offset = _trackDesignPreviewPixels.data() + (_currentTrackPieceDirection * TRACK_PREVIEW_IMAGE_SIZE);
-    g1temp.width = 370;
-    g1temp.height = 217;
-    g1temp.flags = G1_FLAG_BMP;
-    gfx_set_g1_element(SPR_TEMP, &g1temp);
-    drawing_engine_invalidate_image(SPR_TEMP);
-    gfx_draw_sprite(dpi, ImageId(SPR_TEMP), screenPos);
-
-    screenPos = w->windowPos + ScreenCoordsXY{ widget->midX(), widget->bottom - 12 };
-
-    // Warnings
-    const TrackDesign* td6 = _trackDesign.get();
-    if (td6->track_flags & TRACK_DESIGN_FLAG_SCENERY_UNAVAILABLE)
-    {
-        if (!gTrackDesignSceneryToggle)
+    public:
+        void SetupTrack(const utf8* path, std::unique_ptr<TrackDesign> trackDesign)
         {
-            // Scenery not available
-            DrawTextEllipsised(
-                dpi, screenPos, 308, STR_DESIGN_INCLUDES_SCENERY_WHICH_IS_UNAVAILABLE, {}, { TextAlignment::CENTRE });
-            screenPos.y -= LIST_ROW_HEIGHT;
-        }
-    }
+            _trackDesign = std::move(trackDesign);
+            _trackPath = path;
+            _trackName = GetNameFromTrackPath(path);
+            _trackDesignPreviewPixels.resize(4 * kTrackPreviewImageSize);
 
-    // Information
-    screenPos = w->windowPos + ScreenCoordsXY{ widget->left + 1, widget->bottom + 4 };
-    // 0x006D3CF1 -- 0x006d3d71 missing
-
-    // Track design name & type
-    {
-        auto trackName = _trackName.c_str();
-        auto ft = Formatter();
-        ft.Add<const char*>(trackName);
-        DrawTextBasic(dpi, screenPos - ScreenCoordsXY{ 1, 0 }, STR_TRACK_DESIGN_NAME, ft);
-        screenPos.y += LIST_ROW_HEIGHT;
-    }
-
-    // Friendly Track name
-    {
-        auto ft = Formatter();
-
-        const auto* objectEntry = object_manager_load_object(&td6->vehicle_object.Entry);
-        if (objectEntry != nullptr)
-        {
-            auto groupIndex = object_manager_get_loaded_object_entry_index(objectEntry);
-            auto rideName = get_ride_naming(td6->type, get_ride_entry(groupIndex));
-            ft.Add<rct_string_id>(rideName.Name);
-        }
-        else
-        {
-            // Fall back on the technical track name if the vehicle object cannot be loaded
-            ft.Add<rct_string_id>(GetRideTypeDescriptor(td6->type).Naming.Name);
+            UpdatePreview();
+            Invalidate();
         }
 
-        DrawTextBasic(dpi, screenPos, STR_TRACK_DESIGN_TYPE, ft);
-        screenPos.y += LIST_ROW_HEIGHT + 4;
-    }
-
-    // Stats
-    {
-        fixed32_2dp rating = td6->excitement * 10;
-        auto ft = Formatter();
-        ft.Add<int32_t>(rating);
-        DrawTextBasic(dpi, screenPos, STR_TRACK_LIST_EXCITEMENT_RATING, ft);
-        screenPos.y += LIST_ROW_HEIGHT;
-    }
-    {
-        fixed32_2dp rating = td6->intensity * 10;
-        auto ft = Formatter();
-        ft.Add<int32_t>(rating);
-        DrawTextBasic(dpi, screenPos, STR_TRACK_LIST_INTENSITY_RATING, ft);
-        screenPos.y += LIST_ROW_HEIGHT;
-    }
-    {
-        fixed32_2dp rating = td6->nausea * 10;
-        auto ft = Formatter();
-        ft.Add<int32_t>(rating);
-        DrawTextBasic(dpi, screenPos, STR_TRACK_LIST_NAUSEA_RATING, ft);
-        screenPos.y += LIST_ROW_HEIGHT + 4;
-    }
-
-    if (td6->type != RIDE_TYPE_MAZE)
-    {
-        if (td6->type == RIDE_TYPE_MINI_GOLF)
+        void OnOpen() override
         {
-            // Holes
-            uint16_t holes = td6->holes & 0x1F;
-            auto ft = Formatter();
-            ft.Add<uint16_t>(holes);
-            DrawTextBasic(dpi, screenPos, STR_HOLES, ft);
-            screenPos.y += LIST_ROW_HEIGHT;
+            SetWidgets(window_install_track_widgets);
+
+            WindowInitScrollWidgets(*this);
+            WindowPushOthersRight(*this);
         }
-        else
+
+        void OnClose() override
         {
-            // Maximum speed
+            _trackPath.clear();
+            _trackName.clear();
+            _trackDesignPreviewPixels.clear();
+            _trackDesignPreviewPixels.shrink_to_fit();
+            _trackDesign = nullptr;
+        }
+
+        void OnMouseUp(WidgetIndex widgetIndex) override
+        {
+            switch (widgetIndex)
             {
-                uint16_t speed = ((td6->max_speed << 16) * 9) >> 18;
-                auto ft = Formatter();
-                ft.Add<uint16_t>(speed);
-                DrawTextBasic(dpi, screenPos, STR_MAX_SPEED, ft);
-                screenPos.y += LIST_ROW_HEIGHT;
-            }
-            // Average speed
-            {
-                uint16_t speed = ((td6->average_speed << 16) * 9) >> 18;
-                auto ft = Formatter();
-                ft.Add<uint16_t>(speed);
-                DrawTextBasic(dpi, screenPos, STR_AVERAGE_SPEED, ft);
-                screenPos.y += LIST_ROW_HEIGHT;
+                case WIDX_CLOSE:
+                case WIDX_CANCEL:
+                    Close();
+                    break;
+                case WIDX_ROTATE:
+                    _currentTrackPieceDirection++;
+                    _currentTrackPieceDirection %= 4;
+                    Invalidate();
+                    break;
+                case WIDX_TOGGLE_SCENERY:
+                    gTrackDesignSceneryToggle = !gTrackDesignSceneryToggle;
+                    UpdatePreview();
+                    Invalidate();
+                    break;
+                case WIDX_INSTALL:
+                    InstallTrackDesign();
+                    break;
             }
         }
 
-        // Ride length
-        auto ft = Formatter();
-        ft.Add<rct_string_id>(STR_RIDE_LENGTH_ENTRY);
-        ft.Add<uint16_t>(td6->ride_length);
-        DrawTextEllipsised(dpi, screenPos, 214, STR_TRACK_LIST_RIDE_LENGTH, ft);
-        screenPos.y += LIST_ROW_HEIGHT;
-    }
-
-    if (GetRideTypeDescriptor(td6->type).HasFlag(RIDE_TYPE_FLAG_HAS_G_FORCES))
-    {
-        // Maximum positive vertical Gs
+        void OnTextInput(WidgetIndex widgetIndex, std::string_view text) override
         {
-            int32_t gForces = td6->max_positive_vertical_g * 32;
-            auto ft = Formatter();
-            ft.Add<int32_t>(gForces);
-            DrawTextBasic(dpi, screenPos, STR_MAX_POSITIVE_VERTICAL_G, ft);
-            screenPos.y += LIST_ROW_HEIGHT;
+            if (widgetIndex != WIDX_INSTALL || text.empty())
+            {
+                return;
+            }
+
+            _trackName = std::string(text);
+
+            OnMouseUp(WIDX_INSTALL);
         }
-        // Maximum negative vertical Gs
+
+        void OnPrepareDraw() override
         {
-            int32_t gForces = td6->max_negative_vertical_g * 32;
-            auto ft = Formatter();
-            ft.Add<int32_t>(gForces);
-            DrawTextBasic(dpi, screenPos, STR_MAX_NEGATIVE_VERTICAL_G, ft);
-            screenPos.y += LIST_ROW_HEIGHT;
+            pressed_widgets |= 1uLL << WIDX_TRACK_PREVIEW;
+            if (!gTrackDesignSceneryToggle)
+            {
+                pressed_widgets |= (1uLL << WIDX_TOGGLE_SCENERY);
+            }
+            else
+            {
+                pressed_widgets &= ~(1uLL << WIDX_TOGGLE_SCENERY);
+            }
         }
-        // Maximum lateral Gs
+
+        void OnDraw(DrawPixelInfo& dpi) override
         {
-            int32_t gForces = td6->max_lateral_g * 32;
-            auto ft = Formatter();
-            ft.Add<int32_t>(gForces);
-            DrawTextBasic(dpi, screenPos, STR_MAX_LATERAL_G, ft);
-            screenPos.y += LIST_ROW_HEIGHT;
+            DrawWidgets(dpi);
+
+            // Track preview
+            Widget* widget = &widgets[WIDX_TRACK_PREVIEW];
+            auto screenPos = windowPos + ScreenCoordsXY{ widget->left + 1, widget->top + 1 };
+            int32_t colour = ColourMapA[colours[0].colour].darkest;
+            GfxFillRect(dpi, { screenPos, screenPos + ScreenCoordsXY{ 369, 216 } }, colour);
+
+            G1Element g1temp = {};
+            g1temp.offset = _trackDesignPreviewPixels.data() + (_currentTrackPieceDirection * kTrackPreviewImageSize);
+            g1temp.width = 370;
+            g1temp.height = 217;
+            g1temp.flags = G1_FLAG_HAS_TRANSPARENCY;
+            GfxSetG1Element(SPR_TEMP, &g1temp);
+            DrawingEngineInvalidateImage(SPR_TEMP);
+            GfxDrawSprite(dpi, ImageId(SPR_TEMP), screenPos);
+
+            screenPos = windowPos + ScreenCoordsXY{ widget->midX(), widget->bottom - 12 };
+
+            // Warnings
+            const TrackDesign& td = *_trackDesign;
+            if (td.gameStateData.hasFlag(TrackDesignGameStateFlag::SceneryUnavailable))
+            {
+                if (!gTrackDesignSceneryToggle)
+                {
+                    // Scenery not available
+                    DrawTextEllipsised(
+                        dpi, screenPos, 308, STR_DESIGN_INCLUDES_SCENERY_WHICH_IS_UNAVAILABLE, {}, { TextAlignment::CENTRE });
+                    screenPos.y -= kListRowHeight;
+                }
+            }
+
+            // Information
+            screenPos = windowPos + ScreenCoordsXY{ widget->left + 1, widget->bottom + 4 };
+            // 0x006D3CF1 -- 0x006d3d71 missing
+
+            // Track design name & type
+            {
+                auto trackName = _trackName.c_str();
+                auto ft = Formatter();
+                ft.Add<const char*>(trackName);
+                DrawTextBasic(dpi, screenPos - ScreenCoordsXY{ 1, 0 }, STR_TRACK_DESIGN_NAME, ft);
+                screenPos.y += kListRowHeight;
+            }
+
+            // Friendly Track name
+            {
+                auto ft = Formatter();
+
+                const auto* objectEntry = ObjectManagerLoadObject(&td.trackAndVehicle.vehicleObject.Entry);
+                if (objectEntry != nullptr)
+                {
+                    auto groupIndex = ObjectManagerGetLoadedObjectEntryIndex(objectEntry);
+                    auto rideName = GetRideNaming(td.trackAndVehicle.rtdIndex, *GetRideEntryByIndex(groupIndex));
+                    ft.Add<StringId>(rideName.Name);
+                }
+                else
+                {
+                    // Fall back on the technical track name if the vehicle object cannot be loaded
+                    ft.Add<StringId>(GetRideTypeDescriptor(td.trackAndVehicle.rtdIndex).Naming.Name);
+                }
+
+                DrawTextBasic(dpi, screenPos, STR_TRACK_DESIGN_TYPE, ft);
+                screenPos.y += kListRowHeight + 4;
+            }
+
+            // Stats
+            {
+                fixed32_2dp rating = td.statistics.ratings.excitement;
+                auto ft = Formatter();
+                ft.Add<int32_t>(rating);
+                DrawTextBasic(dpi, screenPos, STR_TRACK_LIST_EXCITEMENT_RATING, ft);
+                screenPos.y += kListRowHeight;
+            }
+            {
+                fixed32_2dp rating = td.statistics.ratings.intensity;
+                auto ft = Formatter();
+                ft.Add<int32_t>(rating);
+                DrawTextBasic(dpi, screenPos, STR_TRACK_LIST_INTENSITY_RATING, ft);
+                screenPos.y += kListRowHeight;
+            }
+            {
+                fixed32_2dp rating = td.statistics.ratings.nausea;
+                auto ft = Formatter();
+                ft.Add<int32_t>(rating);
+                DrawTextBasic(dpi, screenPos, STR_TRACK_LIST_NAUSEA_RATING, ft);
+                screenPos.y += kListRowHeight + 4;
+            }
+
+            const auto& rtd = GetRideTypeDescriptor(td.trackAndVehicle.rtdIndex);
+            if (rtd.specialType != RtdSpecialType::maze)
+            {
+                if (rtd.specialType == RtdSpecialType::miniGolf)
+                {
+                    // Holes
+                    auto ft = Formatter();
+                    ft.Add<uint16_t>(td.statistics.holes);
+                    DrawTextBasic(dpi, screenPos, STR_HOLES, ft);
+                    screenPos.y += kListRowHeight;
+                }
+                else
+                {
+                    // Maximum speed
+                    {
+                        uint16_t speed = ToHumanReadableSpeed(td.statistics.maxSpeed << 16);
+                        auto ft = Formatter();
+                        ft.Add<uint16_t>(speed);
+                        DrawTextBasic(dpi, screenPos, STR_MAX_SPEED, ft);
+                        screenPos.y += kListRowHeight;
+                    }
+                    // Average speed
+                    {
+                        uint16_t speed = ToHumanReadableSpeed(td.statistics.averageSpeed << 16);
+                        auto ft = Formatter();
+                        ft.Add<uint16_t>(speed);
+                        DrawTextBasic(dpi, screenPos, STR_AVERAGE_SPEED, ft);
+                        screenPos.y += kListRowHeight;
+                    }
+                }
+
+                // Ride length
+                auto ft = Formatter();
+                ft.Add<StringId>(STR_RIDE_LENGTH_ENTRY);
+                ft.Add<uint16_t>(td.statistics.rideLength);
+                DrawTextEllipsised(dpi, screenPos, 214, STR_TRACK_LIST_RIDE_LENGTH, ft);
+                screenPos.y += kListRowHeight;
+            }
+
+            if (GetRideTypeDescriptor(td.trackAndVehicle.rtdIndex).HasFlag(RtdFlag::hasGForces))
+            {
+                // Maximum positive vertical Gs
+                {
+                    int32_t gForces = td.statistics.maxPositiveVerticalG;
+                    auto ft = Formatter();
+                    ft.Add<int32_t>(gForces);
+                    DrawTextBasic(dpi, screenPos, STR_MAX_POSITIVE_VERTICAL_G, ft);
+                    screenPos.y += kListRowHeight;
+                }
+                // Maximum negative vertical Gs
+                {
+                    int32_t gForces = td.statistics.maxNegativeVerticalG;
+                    auto ft = Formatter();
+                    ft.Add<int32_t>(gForces);
+                    DrawTextBasic(dpi, screenPos, STR_MAX_NEGATIVE_VERTICAL_G, ft);
+                    screenPos.y += kListRowHeight;
+                }
+                // Maximum lateral Gs
+                {
+                    int32_t gForces = td.statistics.maxLateralG;
+                    auto ft = Formatter();
+                    ft.Add<int32_t>(gForces);
+                    DrawTextBasic(dpi, screenPos, STR_MAX_LATERAL_G, ft);
+                    screenPos.y += kListRowHeight;
+                }
+                if (td.statistics.totalAirTime != 0)
+                {
+                    int32_t airTime = ToHumanReadableAirTime(td.statistics.totalAirTime);
+                    auto ft = Formatter();
+                    ft.Add<int32_t>(airTime);
+                    DrawTextBasic(dpi, screenPos, STR_TOTAL_AIR_TIME, ft);
+                    screenPos.y += kListRowHeight;
+                }
+            }
+
+            if (GetRideTypeDescriptor(td.trackAndVehicle.rtdIndex).HasFlag(RtdFlag::hasDrops))
+            {
+                auto ft = Formatter();
+                ft.Add<uint16_t>(td.statistics.drops);
+                DrawTextBasic(dpi, screenPos, STR_DROPS, ft);
+                screenPos.y += kListRowHeight;
+
+                // Drop height is multiplied by 0.75
+                DrawTextBasic(dpi, screenPos, STR_HIGHEST_DROP_HEIGHT, ft);
+                screenPos.y += kListRowHeight;
+            }
+
+            if (td.statistics.inversions != 0)
+            {
+                // Inversions
+                auto ft = Formatter();
+                ft.Add<uint16_t>(td.statistics.inversions);
+                DrawTextBasic(dpi, screenPos, STR_INVERSIONS, ft);
+                screenPos.y += kListRowHeight;
+            }
+
+            screenPos.y += 4;
+
+            if (!td.statistics.spaceRequired.IsNull())
+            {
+                // Space required
+                auto ft = Formatter();
+                ft.Add<uint16_t>(td.statistics.spaceRequired.x);
+                ft.Add<uint16_t>(td.statistics.spaceRequired.y);
+                DrawTextBasic(dpi, screenPos, STR_TRACK_LIST_SPACE_REQUIRED, ft);
+                screenPos.y += kListRowHeight;
+            }
+
+            if (td.gameStateData.cost != 0)
+            {
+                auto ft = Formatter();
+                ft.Add<money64>(td.gameStateData.cost);
+                DrawTextBasic(dpi, screenPos, STR_TRACK_LIST_COST_AROUND, ft);
+            }
         }
-        if (td6->total_air_time != 0)
+
+        void OnResize() override
         {
-            // Total air time
-            int32_t airTime = td6->total_air_time * 25;
-            auto ft = Formatter();
-            ft.Add<int32_t>(airTime);
-            DrawTextBasic(dpi, screenPos, STR_TOTAL_AIR_TIME, ft);
-            screenPos.y += LIST_ROW_HEIGHT;
+            ResizeFrame();
         }
-    }
 
-    if (GetRideTypeDescriptor(td6->type).HasFlag(RIDE_TYPE_FLAG_HAS_DROPS))
-    {
-        // Drops
-        uint16_t drops = td6->drops & 0x3F;
-        auto ft = Formatter();
-        ft.Add<uint16_t>(drops);
-        DrawTextBasic(dpi, screenPos, STR_DROPS, ft);
-        screenPos.y += LIST_ROW_HEIGHT;
-
-        // Drop height is multiplied by 0.75
-        DrawTextBasic(dpi, screenPos, STR_HIGHEST_DROP_HEIGHT, ft);
-        screenPos.y += LIST_ROW_HEIGHT;
-    }
-
-    if (td6->type != RIDE_TYPE_MINI_GOLF)
-    {
-        uint16_t inversions = td6->inversions & 0x1F;
-        if (inversions != 0)
+    private:
+        void UpdatePreview()
         {
-            // Inversions
-            auto ft = Formatter();
-            ft.Add<uint16_t>(inversions);
-            DrawTextBasic(dpi, screenPos, STR_INVERSIONS, ft);
-            screenPos.y += LIST_ROW_HEIGHT;
+            TrackDesignDrawPreview(*_trackDesign, _trackDesignPreviewPixels.data());
         }
-    }
-    screenPos.y += 4;
 
-    if (td6->space_required_x != 0xFF)
-    {
-        // Space required
-        auto ft = Formatter();
-        ft.Add<uint16_t>(td6->space_required_x);
-        ft.Add<uint16_t>(td6->space_required_y);
-        DrawTextBasic(dpi, screenPos, STR_TRACK_LIST_SPACE_REQUIRED, ft);
-        screenPos.y += LIST_ROW_HEIGHT;
-    }
-
-    if (td6->cost != 0)
-    {
-        auto ft = Formatter();
-        ft.Add<money64>(td6->cost);
-        DrawTextBasic(dpi, screenPos, STR_TRACK_LIST_COST_AROUND, ft);
-    }
-}
-
-/**
- *
- *  rct2: 0x006D40A7
- */
-static void WindowInstallTrackTextInput(rct_window* w, rct_widgetindex widgetIndex, char* text)
-{
-    if (widgetIndex != WIDX_INSTALL || str_is_null_or_empty(text))
-    {
-        return;
-    }
-
-    _trackName = text;
-
-    window_event_mouse_up_call(w, WIDX_INSTALL);
-}
-
-static void WindowInstallTrackUpdatePreview()
-{
-    TrackDesignDrawPreview(_trackDesign.get(), _trackDesignPreviewPixels.data());
-}
-
-static void WindowInstallTrackDesign(rct_window* w)
-{
-    utf8 destPath[MAX_PATH];
-
-    platform_get_user_directory(destPath, "track", sizeof(destPath));
-    if (!platform_ensure_directory_exists(destPath))
-    {
-        log_error("Unable to create directory '%s'", destPath);
-        context_show_error(STR_CANT_SAVE_TRACK_DESIGN, STR_NONE, {});
-        return;
-    }
-
-    safe_strcat_path(destPath, _trackName.c_str(), sizeof(destPath));
-    path_append_extension(destPath, ".td6", sizeof(destPath));
-
-    if (Platform::FileExists(destPath))
-    {
-        log_info("%s already exists, prompting user for a different track design name", destPath);
-        context_show_error(STR_UNABLE_TO_INSTALL_THIS_TRACK_DESIGN, STR_NONE, {});
-        WindowTextInputRawOpen(
-            w, WIDX_INSTALL, STR_SELECT_NEW_NAME_FOR_TRACK_DESIGN, STR_AN_EXISTING_TRACK_DESIGN_ALREADY_HAS_THIS_NAME, {},
-            _trackName.c_str(), 255);
-    }
-    else
-    {
-        if (track_repository_install(_trackPath.c_str(), _trackName.c_str()))
+        void InstallTrackDesign()
         {
-            window_close(w);
+            auto env = OpenRCT2::GetContext()->GetPlatformEnvironment();
+            auto destPath = env->GetDirectoryPath(OpenRCT2::DIRBASE::USER, OpenRCT2::DIRID::TRACK);
+            if (!Path::CreateDirectory(destPath))
+            {
+                LOG_ERROR("Unable to create directory '%s'", destPath.c_str());
+                ContextShowError(STR_CANT_SAVE_TRACK_DESIGN, kStringIdNone, {});
+                return;
+            }
+
+            destPath = Path::Combine(destPath, _trackName + u8".td6");
+
+            if (File::Exists(destPath))
+            {
+                LOG_INFO("%s already exists, prompting user for a different track design name", destPath.c_str());
+                ContextShowError(STR_UNABLE_TO_INSTALL_THIS_TRACK_DESIGN, kStringIdNone, {});
+                WindowTextInputRawOpen(
+                    this, WIDX_INSTALL, STR_SELECT_NEW_NAME_FOR_TRACK_DESIGN,
+                    STR_AN_EXISTING_TRACK_DESIGN_ALREADY_HAS_THIS_NAME, {}, _trackName.c_str(), 255);
+            }
+            else
+            {
+                if (TrackRepositoryInstall(_trackPath.c_str(), _trackName.c_str()))
+                {
+                    Close();
+                }
+                else
+                {
+                    ContextShowError(STR_CANT_SAVE_TRACK_DESIGN, kStringIdNone, {});
+                }
+            }
         }
-        else
+    };
+
+    WindowBase* InstallTrackOpen(const utf8* path)
+    {
+        auto trackDesign = TrackDesignImport(path);
+        if (trackDesign == nullptr)
         {
-            context_show_error(STR_CANT_SAVE_TRACK_DESIGN, STR_NONE, {});
+            ContextShowError(STR_UNABLE_TO_LOAD_FILE, kStringIdNone, {});
+            return nullptr;
         }
+
+        ObjectManagerUnloadAllObjects();
+        if (trackDesign->trackAndVehicle.rtdIndex == kRideTypeNull)
+        {
+            LOG_ERROR("Failed to load track (ride type null): %s", path);
+            return nullptr;
+        }
+        if (ObjectManagerLoadObject(&trackDesign->trackAndVehicle.vehicleObject.Entry) == nullptr)
+        {
+            LOG_ERROR("Failed to load track (vehicle load fail): %s", path);
+            return nullptr;
+        }
+
+        auto* windowMgr = Ui::GetWindowManager();
+        windowMgr->CloseByClass(WindowClass::EditorObjectSelection);
+        windowMgr->CloseConstructionWindows();
+
+        gTrackDesignSceneryToggle = false;
+        _currentTrackPieceDirection = 2;
+
+        int32_t screenWidth = ContextGetWidth();
+        int32_t screenHeight = ContextGetHeight();
+        auto screenPos = ScreenCoordsXY{ screenWidth / 2 - 201, std::max(kTopToolbarHeight + 1, screenHeight / 2 - 200) };
+
+        auto* window = windowMgr->FocusOrCreate<InstallTrackWindow>(WindowClass::InstallTrack, screenPos, WW, WH, 0);
+        window->SetupTrack(path, std::move(trackDesign));
+
+        return window;
     }
-}
+} // namespace OpenRCT2::Ui::Windows

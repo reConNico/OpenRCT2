@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -10,7 +10,7 @@
 #pragma once
 
 #include "../Game.h"
-#include "../common.h"
+#include "../localisation/StringIdType.h"
 
 #include <array>
 #include <string>
@@ -48,7 +48,7 @@ enum class NetworkPermission : uint32_t
 class NetworkAction final
 {
 public:
-    rct_string_id Name;
+    StringId Name;
     std::string PermissionName;
     std::vector<GameCommand> Commands;
 };

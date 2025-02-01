@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,22 +9,29 @@
 
 #pragma once
 
-#include "../common.h"
+#include "../Identifiers.h"
 #include "../ride/RideTypes.h"
+#include "AudioMixer.h"
 
+#include <memory>
+#include <string>
+#include <string_view>
 #include <vector>
 
+class AudioObject;
 struct CoordsXYZ;
 
 namespace OpenRCT2::Audio
 {
-    constexpr size_t MaxDeviceNameSize = 256;
-    constexpr size_t MaxVehicleSounds = 14;
-    constexpr size_t MaxDefaultMusic = 46;
-    constexpr uint16_t SoundIdNull = 0xFFFF;
+    constexpr size_t kMaxDeviceNameSize = 256;
+    constexpr size_t kMaxVehicleSounds = 14;
+    constexpr size_t kMaxDefaultMusic = 46;
+    constexpr uint16_t kSoundIdNull = 0xFFFF;
+    constexpr int32_t kAudioPlayAtCentre = 0x8000;
 
-#define AUDIO_PLAY_AT_CENTRE 0x8000
-
+    struct IAudioChannel;
+    struct IAudioSource;
+    enum class MixerGroup : int32_t;
     enum class SoundId : uint8_t;
 
     struct Sound
@@ -33,7 +40,7 @@ namespace OpenRCT2::Audio
         int16_t Volume;
         int16_t Pan;
         uint16_t Frequency;
-        void* Channel;
+        std::shared_ptr<IAudioChannel> Channel;
     };
 
     struct VehicleSound
@@ -119,19 +126,33 @@ namespace OpenRCT2::Audio
         DoorOpen,
         DoorClose,
         Portcullis,
+        CrowdAmbience,
+        LiftRMC,
+        TrackFrictionRMC,
+        LiftFlume,
         NoScream = 254,
         Null = 255
     };
 
-    constexpr uint8_t RCT2SoundCount = static_cast<uint32_t>(SoundId::Portcullis) + 1;
+    constexpr uint8_t kRCT2SoundCount = static_cast<uint32_t>(SoundId::Portcullis) + 1;
+
+    namespace AudioObjectIdentifiers
+    {
+        constexpr std::string_view kRCT1Title = "rct1.audio.title";
+        // virtual name, used by either RCT2Base or RCTCBase, depending on which one is loaded.
+        constexpr std::string_view kRCT2 = "rct2.audio.base";
+        constexpr std::string_view kRCT2Base = "rct2.audio.base.rct2";
+        constexpr std::string_view kRCTCBase = "rct2.audio.base.rctc";
+        constexpr std::string_view kRCT2Title = "rct2.audio.title";
+        constexpr std::string_view kOpenRCT2Title = "openrct2.audio.title";
+        constexpr std::string_view kRCT2Circus = "rct2.audio.circus";
+        constexpr std::string_view kOpenRCT2Additional = "openrct2.audio.additional";
+    } // namespace AudioObjectIdentifiers
 
     extern bool gGameSoundsOff;
     extern int32_t gVolumeAdjustZoom;
 
-    extern void* gTitleMusicChannel;
-    extern void* gWeatherSoundChannel;
-
-    extern VehicleSound gVehicleSoundList[MaxVehicleSounds];
+    extern VehicleSound gVehicleSoundList[kMaxVehicleSounds];
 
     /**
      * Returns false when no audio device is available or when audio is turned off, otherwise true.
@@ -164,6 +185,8 @@ namespace OpenRCT2::Audio
      */
     void Init();
 
+    void LoadAudioObjects();
+
     /**
      * Loads the ride sounds and info.
      * rct2: 0x006BA8E0
@@ -186,7 +209,7 @@ namespace OpenRCT2::Audio
      * Plays the specified sound.
      * @param soundId The sound effect to play.
      * @param volume The volume at which the sound effect should be played.
-     * @param pan The pan at which the sound effect should be played. If set to anything other than AUDIO_PLAY_AT_CENTRE, plays
+     * @param pan The pan at which the sound effect should be played. If set to anything other than kAudioPlayAtCentre, plays
      * the sound at a position relative to the centre of the viewport.
      */
     void Play(SoundId soundId, int32_t volume, int32_t pan);
@@ -210,11 +233,6 @@ namespace OpenRCT2::Audio
      * rct2: 0x006BD0F8
      */
     void PlayTitleMusic();
-
-    /**
-     * Stops the weather sound effect from playing.
-     */
-    void StopWeatherSound();
 
     /**
      * Stops the title music from playing.
@@ -241,5 +259,18 @@ namespace OpenRCT2::Audio
     void Resume();
 
     void StopAll();
+
+    AudioObject* GetBaseAudioObject();
+
+    std::shared_ptr<IAudioChannel> CreateAudioChannel(
+        SoundId soundId, bool loop = false, int32_t volume = kMixerVolumeMax, float pan = 0.5f, double rate = 1,
+        bool forget = false);
+    std::shared_ptr<IAudioChannel> CreateAudioChannel(
+        IAudioSource* source, MixerGroup group, bool loop = false, int32_t volume = kMixerVolumeMax, float pan = 0.5f,
+        double rate = 1, bool forget = false);
+
+    int32_t DStoMixerVolume(int32_t volume);
+    float DStoMixerPan(int32_t pan);
+    double DStoMixerRate(int32_t frequency);
 
 } // namespace OpenRCT2::Audio

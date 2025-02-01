@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,15 +11,18 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "../../../Context.h"
-#    include "../../../common.h"
-#    include "../../../object/ObjectManager.h"
-#    include "../../../object/RideObject.h"
-#    include "../../../object/SmallSceneryObject.h"
-#    include "../../Duktape.hpp"
-#    include "../../ScriptEngine.h"
+    #include "../../../Context.h"
+    #include "../../../object/LargeSceneryObject.h"
+    #include "../../../object/ObjectManager.h"
+    #include "../../../object/RideObject.h"
+    #include "../../../object/SceneryGroupObject.h"
+    #include "../../../object/SmallSceneryObject.h"
+    #include "../../Duktape.hpp"
+    #include "../../ScriptEngine.h"
+    #include "ScInstalledObject.hpp"
 
-#    include <optional>
+    #include <memory>
+    #include <optional>
 
 namespace OpenRCT2::Scripting
 {
@@ -38,11 +41,14 @@ namespace OpenRCT2::Scripting
 
         static void Register(duk_context* ctx)
         {
+            dukglue_register_property(ctx, &ScObject::installedObject_get, nullptr, "installedObject");
             dukglue_register_property(ctx, &ScObject::type_get, nullptr, "type");
             dukglue_register_property(ctx, &ScObject::index_get, nullptr, "index");
             dukglue_register_property(ctx, &ScObject::identifier_get, nullptr, "identifier");
             dukglue_register_property(ctx, &ScObject::legacyIdentifier_get, nullptr, "legacyIdentifier");
             dukglue_register_property(ctx, &ScObject::name_get, nullptr, "name");
+            dukglue_register_property(ctx, &ScObject::baseImageId_get, nullptr, "baseImageId");
+            dukglue_register_property(ctx, &ScObject::numImages_get, nullptr, "numImages");
         }
 
         static std::optional<ObjectType> StringToObjectType(std::string_view type)
@@ -55,36 +61,25 @@ namespace OpenRCT2::Scripting
                     return static_cast<ObjectType>(i);
                 }
             }
-            return ObjectType::None;
-        }
-
-        static std::string_view ObjectTypeToString(uint8_t type)
-        {
-            static constexpr std::string_view Types[] = {
-                "ride",
-                "small_scenery",
-                "large_scenery",
-                "wall",
-                "banner",
-                "footpath",
-                "footpath_addition",
-                "scenery_group",
-                "park_entrance",
-                "water",
-                "stex",
-                "terrain_surface",
-                "terrain_edge",
-                "station",
-                "music",
-                "footpath_surface",
-                "footpath_railings",
-            };
-            if (type >= std::size(Types))
-                return "unknown";
-            return Types[type];
+            return std::nullopt;
         }
 
     private:
+        std::shared_ptr<ScInstalledObject> installedObject_get() const
+        {
+            auto obj = GetObject();
+            if (obj != nullptr)
+            {
+                auto& objectRepository = GetContext()->GetObjectRepository();
+                auto installedObject = objectRepository.FindObject(obj->GetDescriptor());
+                if (installedObject != nullptr)
+                {
+                    return std::make_shared<ScInstalledObject>(installedObject->Id);
+                }
+            }
+            return {};
+        }
+
         std::string type_get() const
         {
             return std::string(ObjectTypeToString(EnumValue(_type)));
@@ -100,7 +95,14 @@ namespace OpenRCT2::Scripting
             auto obj = GetObject();
             if (obj != nullptr)
             {
-                return std::string(obj->GetIdentifier());
+                if (obj->GetGeneration() == ObjectGeneration::DAT)
+                {
+                    return obj->GetDescriptor().ToString();
+                }
+                else
+                {
+                    return std::string(obj->GetIdentifier());
+                }
             }
             return {};
         }
@@ -125,6 +127,26 @@ namespace OpenRCT2::Scripting
             return {};
         }
 
+        uint32_t baseImageId_get() const
+        {
+            auto obj = GetObject();
+            if (obj != nullptr)
+            {
+                return obj->GetBaseImageId();
+            }
+            return 0;
+        }
+
+        uint32_t numImages_get() const
+        {
+            auto obj = GetObject();
+            if (obj != nullptr)
+            {
+                return obj->GetNumImages();
+            }
+            return 0;
+        }
+
     protected:
         Object* GetObject() const
         {
@@ -136,14 +158,12 @@ namespace OpenRCT2::Scripting
     class ScRideObjectVehicle
     {
     private:
-        ObjectType _objectType{};
         ObjectEntryIndex _objectIndex{};
         size_t _vehicleIndex{};
 
     public:
-        ScRideObjectVehicle(ObjectType objectType, ObjectEntryIndex objectIndex, size_t vehicleIndex)
-            : _objectType(objectType)
-            , _objectIndex(objectIndex)
+        ScRideObjectVehicle(ObjectEntryIndex objectIndex, size_t vehicleIndex)
+            : _objectIndex(objectIndex)
             , _vehicleIndex(vehicleIndex)
         {
         }
@@ -151,8 +171,6 @@ namespace OpenRCT2::Scripting
         static void Register(duk_context* ctx)
         {
             dukglue_register_property(ctx, &ScRideObjectVehicle::rotationFrameMask_get, nullptr, "rotationFrameMask");
-            dukglue_register_property(ctx, &ScRideObjectVehicle::numVerticalFrames_get, nullptr, "numVerticalFrames");
-            dukglue_register_property(ctx, &ScRideObjectVehicle::numHorizontalFrames_get, nullptr, "numHorizontalFrames");
             dukglue_register_property(ctx, &ScRideObjectVehicle::spacing_get, nullptr, "spacing");
             dukglue_register_property(ctx, &ScRideObjectVehicle::carMass_get, nullptr, "carMass");
             dukglue_register_property(ctx, &ScRideObjectVehicle::tabHeight_get, nullptr, "tabHeight");
@@ -165,25 +183,7 @@ namespace OpenRCT2::Scripting
             dukglue_register_property(ctx, &ScRideObjectVehicle::flags_get, nullptr, "flags");
             dukglue_register_property(ctx, &ScRideObjectVehicle::baseNumFrames_get, nullptr, "baseNumFrames");
             dukglue_register_property(ctx, &ScRideObjectVehicle::baseImageId_get, nullptr, "baseImageId");
-            dukglue_register_property(ctx, &ScRideObjectVehicle::restraintImageId_get, nullptr, "restraintImageId");
-            dukglue_register_property(ctx, &ScRideObjectVehicle::gentleSlopeImageId_get, nullptr, "gentleSlopeImageId");
-            dukglue_register_property(ctx, &ScRideObjectVehicle::steepSlopeImageId_get, nullptr, "steepSlopeImageId");
-            dukglue_register_property(ctx, &ScRideObjectVehicle::verticalSlopeImageId_get, nullptr, "verticalSlopeImageId");
-            dukglue_register_property(ctx, &ScRideObjectVehicle::diagonalSlopeImageId_get, nullptr, "diagonalSlopeImageId");
-            dukglue_register_property(ctx, &ScRideObjectVehicle::bankedImageId_get, nullptr, "bankedImageId");
-            dukglue_register_property(ctx, &ScRideObjectVehicle::inlineTwistImageId_get, nullptr, "inlineTwistImageId");
-            dukglue_register_property(
-                ctx, &ScRideObjectVehicle::flatToGentleBankImageId_get, nullptr, "flatToGentleBankImageId");
-            dukglue_register_property(
-                ctx, &ScRideObjectVehicle::diagonalToGentleSlopeBankImageId_get, nullptr, "diagonalToGentleSlopeBankImageId");
-            dukglue_register_property(
-                ctx, &ScRideObjectVehicle::gentleSlopeToBankImageId_get, nullptr, "gentleSlopeToBankImageId");
-            dukglue_register_property(
-                ctx, &ScRideObjectVehicle::gentleSlopeBankTurnImageId_get, nullptr, "gentleSlopeBankTurnImageId");
-            dukglue_register_property(
-                ctx, &ScRideObjectVehicle::flatBankToGentleSlopeImageId_get, nullptr, "flatBankToGentleSlopeImageId");
-            dukglue_register_property(ctx, &ScRideObjectVehicle::curvedLiftHillImageId_get, nullptr, "curvedLiftHillImageId");
-            dukglue_register_property(ctx, &ScRideObjectVehicle::corkscrewImageId_get, nullptr, "corkscrewImageId");
+            dukglue_register_property(ctx, &ScRideObjectVehicle::spriteGroups_get, nullptr, "spriteGroups");
             dukglue_register_property(ctx, &ScRideObjectVehicle::noVehicleImages_get, nullptr, "noVehicleImages");
             dukglue_register_property(ctx, &ScRideObjectVehicle::noSeatingRows_get, nullptr, "noSeatingRows");
             dukglue_register_property(ctx, &ScRideObjectVehicle::spinningInertia_get, nullptr, "spinningInertia");
@@ -208,27 +208,7 @@ namespace OpenRCT2::Scripting
             auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->rotation_frame_mask;
-            }
-            return 0;
-        }
-
-        uint8_t numVerticalFrames_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->num_vertical_frames;
-            }
-            return 0;
-        }
-
-        uint8_t numHorizontalFrames_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->num_horizontal_frames;
+                return entry->TabRotationMask;
             }
             return 0;
         }
@@ -275,11 +255,6 @@ namespace OpenRCT2::Scripting
 
         uint16_t spriteFlags_get() const
         {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->sprite_flags;
-            }
             return 0;
         }
 
@@ -318,7 +293,7 @@ namespace OpenRCT2::Scripting
             auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->animation;
+                return EnumValue(entry->animation);
             }
             return 0;
         }
@@ -353,144 +328,22 @@ namespace OpenRCT2::Scripting
             return 0;
         }
 
-        uint32_t restraintImageId_get() const
+        DukValue spriteGroups_get() const
         {
+            auto& scriptEngine = GetContext()->GetScriptEngine();
+            auto* ctx = scriptEngine.GetContext();
+            DukObject groups(ctx);
             auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->restraint_image_id;
+                for (uint8_t g = 0; g < EnumValue<SpriteGroupType>(SpriteGroupType::Count); g++)
+                {
+                    auto group = entry->SpriteGroups[g];
+                    if (group.Enabled())
+                        groups.Set(SpriteGroupNames[g], ToDuk<VehicleSpriteGroup>(ctx, group));
+                }
             }
-            return 0;
-        }
-
-        uint32_t gentleSlopeImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->gentle_slope_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t steepSlopeImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->steep_slope_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t verticalSlopeImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->vertical_slope_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t diagonalSlopeImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->diagonal_slope_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t bankedImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->banked_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t inlineTwistImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->inline_twist_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t flatToGentleBankImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->flat_to_gentle_bank_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t diagonalToGentleSlopeBankImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->diagonal_to_gentle_slope_bank_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t gentleSlopeToBankImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->gentle_slope_to_bank_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t gentleSlopeBankTurnImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->gentle_slope_bank_turn_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t flatBankToGentleSlopeImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->flat_bank_to_gentle_slope_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t curvedLiftHillImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->curved_lift_hill_image_id;
-            }
-            return 0;
-        }
-
-        uint32_t corkscrewImageId_get() const
-        {
-            auto entry = GetEntry();
-            if (entry != nullptr)
-            {
-                return entry->corkscrew_image_id;
-            }
-            return 0;
+            return groups.Take();
         }
 
         uint32_t noVehicleImages_get() const
@@ -498,7 +351,7 @@ namespace OpenRCT2::Scripting
             auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->no_vehicle_images;
+                return entry->NumCarImages;
             }
             return 0;
         }
@@ -548,7 +401,7 @@ namespace OpenRCT2::Scripting
             auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->log_flume_reverser_vehicle_type;
+                return entry->ReversedCarIndex;
             }
             return 0;
         }
@@ -598,7 +451,7 @@ namespace OpenRCT2::Scripting
             auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->car_visual;
+                return entry->PaintStyle;
             }
             return 0;
         }
@@ -633,21 +486,21 @@ namespace OpenRCT2::Scripting
             return 0;
         }
 
-        Object* GetObject() const
+        const RideObject* GetObject() const
         {
             auto& objManager = GetContext()->GetObjectManager();
-            return static_cast<RideObject*>(objManager.GetLoadedObject(_objectType, _objectIndex));
+            return objManager.GetLoadedObject<RideObject>(_objectIndex);
         }
 
-        const rct_ride_entry_vehicle* GetEntry() const
+        const CarEntry* GetEntry() const
         {
             auto obj = GetObject();
             if (obj != nullptr)
             {
-                auto rideEntry = static_cast<rct_ride_entry*>(obj->GetLegacyData());
-                if (rideEntry != nullptr && _vehicleIndex < std::size(rideEntry->vehicles))
+                auto rideEntry = &obj->GetEntry();
+                if (rideEntry != nullptr && _vehicleIndex < std::size(rideEntry->Cars))
                 {
-                    return rideEntry->GetVehicle(_vehicleIndex);
+                    return rideEntry->GetCar(_vehicleIndex);
                 }
             }
             return nullptr;
@@ -712,7 +565,7 @@ namespace OpenRCT2::Scripting
 
         uint32_t firstImageId_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return entry->images_offset;
@@ -722,7 +575,7 @@ namespace OpenRCT2::Scripting
 
         uint32_t flags_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return entry->flags;
@@ -733,7 +586,7 @@ namespace OpenRCT2::Scripting
         std::vector<uint8_t> rideType_get() const
         {
             std::vector<uint8_t> result;
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 for (auto rideType : entry->ride_type)
@@ -746,7 +599,7 @@ namespace OpenRCT2::Scripting
 
         uint8_t minCarsInTrain_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return entry->min_cars_in_train;
@@ -756,7 +609,7 @@ namespace OpenRCT2::Scripting
 
         uint8_t maxCarsInTrain_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return entry->max_cars_in_train;
@@ -766,7 +619,7 @@ namespace OpenRCT2::Scripting
 
         uint8_t carsPerFlatRide_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return entry->cars_per_flat_ride;
@@ -776,7 +629,7 @@ namespace OpenRCT2::Scripting
 
         uint8_t zeroCars_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return entry->zero_cars;
@@ -786,60 +639,60 @@ namespace OpenRCT2::Scripting
 
         uint8_t tabVehicle_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->tab_vehicle;
+                return entry->TabCar;
             }
             return 0;
         }
 
         uint8_t defaultVehicle_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->default_vehicle;
+                return entry->DefaultCar;
             }
             return 0;
         }
 
         uint8_t frontVehicle_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->front_vehicle;
+                return entry->FrontCar;
             }
             return 0;
         }
 
         uint8_t secondVehicle_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->second_vehicle;
+                return entry->SecondCar;
             }
             return 0;
         }
 
         uint8_t rearVehicle_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->rear_vehicle;
+                return entry->RearCar;
             }
             return 0;
         }
 
         uint8_t thirdVehicle_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
-                return entry->third_vehicle;
+                return entry->ThirdCar;
             }
             return 0;
         }
@@ -847,12 +700,12 @@ namespace OpenRCT2::Scripting
         std::vector<std::shared_ptr<ScRideObjectVehicle>> vehicles_get() const
         {
             std::vector<std::shared_ptr<ScRideObjectVehicle>> result;
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
-                for (size_t i = 0; i < std::size(entry->vehicles); i++)
+                for (size_t i = 0; i < std::size(entry->Cars); i++)
                 {
-                    result.push_back(std::make_shared<ScRideObjectVehicle>(static_cast<ObjectType>(_type), _index, i));
+                    result.push_back(std::make_shared<ScRideObjectVehicle>(_index, i));
                 }
             }
             return result;
@@ -860,7 +713,7 @@ namespace OpenRCT2::Scripting
 
         int8_t excitementMultiplier_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return entry->excitement_multiplier;
@@ -870,7 +723,7 @@ namespace OpenRCT2::Scripting
 
         int8_t intensityMultiplier_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return entry->intensity_multiplier;
@@ -880,7 +733,7 @@ namespace OpenRCT2::Scripting
 
         int8_t nauseaMultiplier_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return entry->nausea_multiplier;
@@ -890,7 +743,7 @@ namespace OpenRCT2::Scripting
 
         uint8_t maxHeight_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return entry->max_height;
@@ -900,7 +753,7 @@ namespace OpenRCT2::Scripting
 
         uint8_t shopItem_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return EnumValue(entry->shop_item[0]);
@@ -910,7 +763,7 @@ namespace OpenRCT2::Scripting
 
         uint8_t shopItemSecondary_get() const
         {
-            auto entry = GetLegacyData();
+            auto entry = GetEntry();
             if (entry != nullptr)
             {
                 return EnumValue(entry->shop_item[1]);
@@ -924,28 +777,64 @@ namespace OpenRCT2::Scripting
             return static_cast<RideObject*>(ScObject::GetObject());
         }
 
-        const rct_ride_entry* GetLegacyData() const
+        const RideObjectEntry* GetEntry() const
         {
             auto obj = GetObject();
             if (obj != nullptr)
             {
-                return static_cast<rct_ride_entry*>(obj->GetLegacyData());
+                return &obj->GetEntry();
             }
             return nullptr;
         }
     };
 
-    class ScSmallSceneryObject : public ScObject
+    class ScSceneryObject : public ScObject
     {
     public:
-        ScSmallSceneryObject(ObjectType type, int32_t index)
+        ScSceneryObject(ObjectType type, int32_t index)
             : ScObject(type, index)
         {
         }
 
         static void Register(duk_context* ctx)
         {
-            dukglue_set_base_class<ScObject, ScSmallSceneryObject>(ctx);
+            dukglue_set_base_class<ScObject, ScSceneryObject>(ctx);
+            dukglue_register_property(ctx, &ScSceneryObject::sceneryGroups_get, nullptr, "sceneryGroups");
+        }
+
+    private:
+        std::vector<std::string> sceneryGroups_get() const
+        {
+            std::vector<std::string> result;
+            auto obj = GetObject();
+            if (obj != nullptr)
+            {
+                auto& scgDescriptor = obj->GetPrimarySceneryGroup();
+                if (scgDescriptor.HasValue())
+                {
+                    result.push_back(scgDescriptor.ToString());
+                }
+            }
+            return result;
+        }
+
+        SceneryObject* GetObject() const
+        {
+            return static_cast<SceneryObject*>(ScObject::GetObject());
+        }
+    };
+
+    class ScSmallSceneryObject : public ScSceneryObject
+    {
+    public:
+        ScSmallSceneryObject(ObjectType type, int32_t index)
+            : ScSceneryObject(type, index)
+        {
+        }
+
+        static void Register(duk_context* ctx)
+        {
+            dukglue_set_base_class<ScSceneryObject, ScSmallSceneryObject>(ctx);
             dukglue_register_property(ctx, &ScSmallSceneryObject::flags_get, nullptr, "flags");
             dukglue_register_property(ctx, &ScSmallSceneryObject::height_get, nullptr, "height");
             dukglue_register_property(ctx, &ScSmallSceneryObject::price_get, nullptr, "price");
@@ -973,7 +862,7 @@ namespace OpenRCT2::Scripting
             return 0;
         }
 
-        uint8_t price_get() const
+        money64 price_get() const
         {
             auto sceneryEntry = GetLegacyData();
             if (sceneryEntry != nullptr)
@@ -983,7 +872,7 @@ namespace OpenRCT2::Scripting
             return 0;
         }
 
-        uint8_t removalPrice_get() const
+        money64 removalPrice_get() const
         {
             auto sceneryEntry = GetLegacyData();
             if (sceneryEntry != nullptr)
@@ -1007,6 +896,187 @@ namespace OpenRCT2::Scripting
         SmallSceneryObject* GetObject() const
         {
             return static_cast<SmallSceneryObject*>(ScObject::GetObject());
+        }
+    };
+
+    class ScLargeSceneryObjectTile
+    {
+    private:
+        LargeSceneryTile _tile{};
+
+    public:
+        ScLargeSceneryObjectTile(const LargeSceneryTile& tile)
+            : _tile(tile)
+        {
+        }
+
+        static void Register(duk_context* ctx)
+        {
+            dukglue_register_property(ctx, &ScLargeSceneryObjectTile::offset_get, nullptr, "offset");
+            dukglue_register_property(ctx, &ScLargeSceneryObjectTile::zClearance_get, nullptr, "zClearance");
+            dukglue_register_property(ctx, &ScLargeSceneryObjectTile::hasSupports_get, nullptr, "hasSupports");
+            dukglue_register_property(ctx, &ScLargeSceneryObjectTile::allowSupportsAbove_get, nullptr, "allowSupportsAbove");
+            dukglue_register_property(ctx, &ScLargeSceneryObjectTile::corners_get, nullptr, "corners");
+            dukglue_register_property(ctx, &ScLargeSceneryObjectTile::walls_get, nullptr, "walls");
+        }
+
+    private:
+        DukValue offset_get() const
+        {
+            auto ctx = GetContext()->GetScriptEngine().GetContext();
+
+            auto start = _tile.offset;
+            return ToDuk(ctx, start);
+        }
+
+        int32_t zClearance_get() const
+        {
+            return _tile.zClearance;
+        }
+
+        bool hasSupports_get() const
+        {
+            return _tile.hasSupports;
+        }
+
+        bool allowSupportsAbove_get() const
+        {
+            return _tile.allowSupportsAbove;
+        }
+
+        uint8_t corners_get() const
+        {
+            return _tile.corners;
+        }
+
+        uint8_t walls_get() const
+        {
+            return _tile.walls;
+        }
+    };
+
+    class ScLargeSceneryObject : public ScSceneryObject
+    {
+    public:
+        ScLargeSceneryObject(ObjectType type, int32_t index)
+            : ScSceneryObject(type, index)
+        {
+        }
+
+        static void Register(duk_context* ctx)
+        {
+            dukglue_set_base_class<ScSceneryObject, ScLargeSceneryObject>(ctx);
+
+            dukglue_register_property(ctx, &ScLargeSceneryObject::tiles_get, nullptr, "tiles");
+        }
+
+    private:
+        std::vector<std::shared_ptr<ScLargeSceneryObjectTile>> tiles_get() const
+        {
+            std::vector<std::shared_ptr<ScLargeSceneryObjectTile>> result;
+            auto entry = GetEntry();
+            if (entry != nullptr)
+            {
+                for (auto& tile : entry->tiles)
+                {
+                    result.push_back(std::make_shared<ScLargeSceneryObjectTile>(tile));
+                }
+            }
+            return result;
+        }
+
+        LargeSceneryObject* GetObject() const
+        {
+            return static_cast<LargeSceneryObject*>(ScObject::GetObject());
+        }
+
+        const LargeSceneryEntry* GetEntry() const
+        {
+            auto obj = GetObject();
+            if (obj != nullptr)
+            {
+                return static_cast<LargeSceneryEntry*>(obj->GetLegacyData());
+            }
+            return nullptr;
+        }
+    };
+
+    class ScWallObject : public ScSceneryObject
+    {
+    public:
+        ScWallObject(ObjectType type, int32_t index)
+            : ScSceneryObject(type, index)
+        {
+        }
+
+        static void Register(duk_context* ctx)
+        {
+            dukglue_set_base_class<ScSceneryObject, ScWallObject>(ctx);
+        }
+    };
+
+    class ScFootpathAdditionObject : public ScSceneryObject
+    {
+    public:
+        ScFootpathAdditionObject(ObjectType type, int32_t index)
+            : ScSceneryObject(type, index)
+        {
+        }
+
+        static void Register(duk_context* ctx)
+        {
+            dukglue_set_base_class<ScSceneryObject, ScFootpathAdditionObject>(ctx);
+        }
+    };
+
+    class ScBannerObject : public ScSceneryObject
+    {
+    public:
+        ScBannerObject(ObjectType type, int32_t index)
+            : ScSceneryObject(type, index)
+        {
+        }
+
+        static void Register(duk_context* ctx)
+        {
+            dukglue_set_base_class<ScSceneryObject, ScBannerObject>(ctx);
+        }
+    };
+
+    class ScSceneryGroupObject : public ScObject
+    {
+    public:
+        ScSceneryGroupObject(ObjectType type, int32_t index)
+            : ScObject(type, index)
+        {
+        }
+
+        static void Register(duk_context* ctx)
+        {
+            dukglue_set_base_class<ScObject, ScSceneryGroupObject>(ctx);
+            dukglue_register_property(ctx, &ScSceneryGroupObject::items_get, nullptr, "items");
+        }
+
+    private:
+        std::vector<std::string> items_get() const
+        {
+            std::vector<std::string> result;
+            auto obj = GetObject();
+            if (obj != nullptr)
+            {
+                auto& items = obj->GetItems();
+                for (const auto& item : items)
+                {
+                    result.push_back(item.ToString());
+                }
+            }
+            return result;
+        }
+
+    protected:
+        SceneryGroupObject* GetObject() const
+        {
+            return static_cast<SceneryGroupObject*>(ScObject::GetObject());
         }
     };
 } // namespace OpenRCT2::Scripting

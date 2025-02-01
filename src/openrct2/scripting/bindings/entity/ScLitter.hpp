@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,7 +11,7 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "ScEntity.hpp"
+    #include "ScEntity.hpp"
 
 struct Litter;
 
@@ -20,7 +20,7 @@ namespace OpenRCT2::Scripting
     class ScLitter : public ScEntity
     {
     public:
-        ScLitter(uint16_t Id);
+        ScLitter(EntityId Id);
 
         static void Register(duk_context* ctx);
 

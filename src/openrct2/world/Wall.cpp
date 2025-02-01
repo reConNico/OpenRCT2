@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,37 +9,21 @@
 
 #include "Wall.h"
 
-#include "../Cheats.h"
-#include "../Game.h"
-#include "../OpenRCT2.h"
-#include "../common.h"
-#include "../localisation/StringIds.h"
-#include "../management/Finance.h"
-#include "../network/network.h"
-#include "../ride/Track.h"
-#include "../ride/TrackData.h"
-#include "Banner.h"
-#include "LargeScenery.h"
 #include "Map.h"
-#include "MapAnimation.h"
-#include "Park.h"
-#include "Scenery.h"
-#include "SmallScenery.h"
-#include "Surface.h"
-#include "Wall.h"
+#include "tile_element/TileElement.h"
+#include "tile_element/WallElement.h"
 
 /**
  *
  *  rct2: 0x006E588E
  */
-void wall_remove_at(const CoordsXYRangedZ& wallPos)
+void WallRemoveAt(const CoordsXYRangedZ& wallPos)
 {
-    for (auto wallElement = map_get_wall_element_at(wallPos); wallElement != nullptr;
-         wallElement = map_get_wall_element_at(wallPos))
+    for (auto wallElement = MapGetWallElementAt(wallPos); wallElement != nullptr; wallElement = MapGetWallElementAt(wallPos))
     {
         reinterpret_cast<TileElement*>(wallElement)->RemoveBannerEntry();
-        map_invalidate_tile_zoom1({ wallPos, wallElement->GetBaseZ(), wallElement->GetBaseZ() + 72 });
-        tile_element_remove(reinterpret_cast<TileElement*>(wallElement));
+        MapInvalidateTileZoom1({ wallPos, wallElement->GetBaseZ(), wallElement->GetBaseZ() + 72 });
+        TileElementRemove(reinterpret_cast<TileElement*>(wallElement));
     }
 }
 
@@ -47,20 +31,20 @@ void wall_remove_at(const CoordsXYRangedZ& wallPos)
  *
  *  rct2: 0x006E57E6
  */
-void wall_remove_at_z(const CoordsXYZ& wallPos)
+void WallRemoveAtZ(const CoordsXYZ& wallPos)
 {
-    wall_remove_at({ wallPos, wallPos.z, wallPos.z + 48 });
+    WallRemoveAt({ wallPos, wallPos.z, wallPos.z + 48 });
 }
 
 /**
  *
  *  rct2: 0x006E5935
  */
-void wall_remove_intersecting_walls(const CoordsXYRangedZ& wallPos, Direction direction)
+void WallRemoveIntersectingWalls(const CoordsXYRangedZ& wallPos, Direction direction)
 {
     TileElement* tileElement;
 
-    tileElement = map_get_first_element_at(wallPos);
+    tileElement = MapGetFirstElementAt(wallPos);
     if (tileElement == nullptr)
         return;
     do
@@ -75,114 +59,56 @@ void wall_remove_intersecting_walls(const CoordsXYRangedZ& wallPos, Direction di
             continue;
 
         tileElement->RemoveBannerEntry();
-        map_invalidate_tile_zoom1({ wallPos, tileElement->GetBaseZ(), tileElement->GetBaseZ() + 72 });
-        tile_element_remove(tileElement);
+        MapInvalidateTileZoom1({ wallPos, tileElement->GetBaseZ(), tileElement->GetBaseZ() + 72 });
+        TileElementRemove(tileElement);
         tileElement--;
     } while (!(tileElement++)->IsLastForTile());
 }
 
-uint8_t WallElement::GetSlope() const
-{
-    return (type & TILE_ELEMENT_QUADRANT_MASK) >> 6;
-}
+#pragma region Edge Slopes Table
 
-void WallElement::SetSlope(uint8_t newSlope)
-{
-    type &= ~TILE_ELEMENT_QUADRANT_MASK;
-    type |= (newSlope << 6);
-}
+// clang-format off
+// rct2: 0x009A3FEC
+constexpr static uint8_t kLandSlopeToWallSlope[][kNumOrthogonalDirections] = {
+    //  Top right                        Bottom right                   Bottom left                       Top left
+    { 0,                             0,                             0,                             0                             },
+    { 0,                             EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_DOWNWARDS,          0                             },
+    { 0,                             0,                             EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_DOWNWARDS          },
+    { 0,                             EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_DOWNWARDS          },
+    { EDGE_SLOPE_DOWNWARDS,          0,                             0,                             EDGE_SLOPE_UPWARDS            },
+    { EDGE_SLOPE_DOWNWARDS,          EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_DOWNWARDS,          EDGE_SLOPE_UPWARDS            },
+    { EDGE_SLOPE_DOWNWARDS,          0,                             EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_ELEVATED           },
+    { EDGE_SLOPE_DOWNWARDS,          EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_ELEVATED           },
+    { EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_DOWNWARDS,          0,                             0                             },
+    { EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_DOWNWARDS,          0                             },
+    { EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_DOWNWARDS,          EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_DOWNWARDS          },
+    { EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_DOWNWARDS          },
+    { EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_DOWNWARDS,          0,                             EDGE_SLOPE_UPWARDS            },
+    { EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_DOWNWARDS,          EDGE_SLOPE_UPWARDS            },
+    { EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_DOWNWARDS,          EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_ELEVATED           },
+    { EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_ELEVATED,           EDGE_SLOPE_ELEVATED           },
+    { 0,                             0,                             0,                             0                             },
+    { 0,                             0,                             0,                             0                             },
+    { 0,                             0,                             0,                             0                             },
+    { 0,                             0,                             0,                             0                             },
+    { 0,                             0,                             0,                             0                             },
+    { 0,                             0,                             0,                             0                             },
+    { 0,                             0,                             0,                             0                             },
+    { EDGE_SLOPE_DOWNWARDS,          EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_UPWARDS_ELEVATED,   EDGE_SLOPE_DOWNWARDS_ELEVATED },
+    { 0,                             0,                             0,                             0                             },
+    { 0,                             0,                             0,                             0                             },
+    { 0,                             0,                             0,                             0                             },
+    { EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_UPWARDS_ELEVATED,   EDGE_SLOPE_DOWNWARDS_ELEVATED, EDGE_SLOPE_DOWNWARDS          },
+    { 0,                             0,                             0,                             0                             },
+    { EDGE_SLOPE_UPWARDS_ELEVATED,   EDGE_SLOPE_DOWNWARDS_ELEVATED, EDGE_SLOPE_DOWNWARDS,          EDGE_SLOPE_UPWARDS            },
+    { EDGE_SLOPE_DOWNWARDS_ELEVATED, EDGE_SLOPE_DOWNWARDS,          EDGE_SLOPE_UPWARDS,            EDGE_SLOPE_UPWARDS_ELEVATED   },
+    { 0,                             0,                             0,                             0                             },
+};
+// clang-format on
 
-colour_t WallElement::GetPrimaryColour() const
-{
-    return colour_1;
-}
+#pragma endregion
 
-colour_t WallElement::GetSecondaryColour() const
+uint8_t GetWallSlopeFromEdgeSlope(uint8_t Slope, uint8_t Edge)
 {
-    return colour_2;
-}
-
-colour_t WallElement::GetTertiaryColour() const
-{
-    return colour_3;
-}
-
-void WallElement::SetPrimaryColour(colour_t newColour)
-{
-    colour_1 = newColour;
-}
-
-void WallElement::SetSecondaryColour(colour_t newColour)
-{
-    colour_2 = newColour;
-}
-
-void WallElement::SetTertiaryColour(colour_t newColour)
-{
-    colour_3 = newColour;
-}
-
-uint8_t WallElement::GetAnimationFrame() const
-{
-    return (animation >> 3) & 0xF;
-}
-
-void WallElement::SetAnimationFrame(uint8_t frameNum)
-{
-    animation &= WALL_ANIMATION_FLAG_ALL_FLAGS;
-    animation |= (frameNum & 0xF) << 3;
-}
-
-uint16_t WallElement::GetEntryIndex() const
-{
-    return entryIndex;
-}
-
-WallSceneryEntry* WallElement::GetEntry() const
-{
-    return get_wall_entry(entryIndex);
-}
-
-void WallElement::SetEntryIndex(uint16_t newIndex)
-{
-    entryIndex = newIndex;
-}
-
-Banner* WallElement::GetBanner() const
-{
-    return ::GetBanner(GetBannerIndex());
-}
-
-BannerIndex WallElement::GetBannerIndex() const
-{
-    return banner_index;
-}
-
-void WallElement::SetBannerIndex(BannerIndex newIndex)
-{
-    banner_index = newIndex;
-}
-
-bool WallElement::IsAcrossTrack() const
-{
-    return (animation & WALL_ANIMATION_FLAG_ACROSS_TRACK) != 0;
-}
-
-void WallElement::SetAcrossTrack(bool acrossTrack)
-{
-    animation &= ~WALL_ANIMATION_FLAG_ACROSS_TRACK;
-    if (acrossTrack)
-        animation |= WALL_ANIMATION_FLAG_ACROSS_TRACK;
-}
-
-bool WallElement::AnimationIsBackwards() const
-{
-    return (animation & WALL_ANIMATION_FLAG_DIRECTION_BACKWARD) != 0;
-}
-
-void WallElement::SetAnimationIsBackwards(bool isBackwards)
-{
-    animation &= ~WALL_ANIMATION_FLAG_DIRECTION_BACKWARD;
-    if (isBackwards)
-        animation |= WALL_ANIMATION_FLAG_DIRECTION_BACKWARD;
+    return kLandSlopeToWallSlope[Slope][Edge];
 }

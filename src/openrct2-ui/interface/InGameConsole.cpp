@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,6 +9,7 @@
 
 #include "InGameConsole.h"
 
+#include "../UiStringIds.h"
 #include "Theme.h"
 
 #include <algorithm>
@@ -16,30 +17,33 @@
 #include <openrct2/Context.h>
 #include <openrct2/Version.h>
 #include <openrct2/config/Config.h>
+#include <openrct2/core/UTF8.h>
 #include <openrct2/drawing/Drawing.h>
 #include <openrct2/interface/Colour.h>
+#include <openrct2/interface/Viewport.h>
 #include <openrct2/interface/Window.h>
 #include <openrct2/localisation/Language.h>
 #include <openrct2/localisation/LocalisationService.h>
 
+using namespace OpenRCT2;
 using namespace OpenRCT2::Ui;
 
 static InGameConsole _inGameConsole;
 
-static FontSpriteBase InGameConsoleGetFontSpriteBase()
+static FontStyle InGameConsoleGetFontStyle()
 {
-    return (gConfigInterface.console_small_font ? FontSpriteBase::SMALL : FontSpriteBase::MEDIUM);
+    return (Config::Get().interface.ConsoleSmallFont ? FontStyle::Small : FontStyle::Medium);
 }
 
 static int32_t InGameConsoleGetLineHeight()
 {
-    return font_get_line_height(InGameConsoleGetFontSpriteBase());
+    return FontGetLineHeight(InGameConsoleGetFontStyle());
 }
 
-InGameConsole::InGameConsole()
+void InGameConsole::WriteInitial()
 {
-    InteractiveConsole::WriteLine(OPENRCT2_NAME " " OPENRCT2_VERSION);
-    InteractiveConsole::WriteLine("Type 'help' for a list of available commands. Type 'hide' to hide the console.");
+    InteractiveConsole::WriteLine(OPENRCT2_NAME " " kOpenRCT2Version);
+    InteractiveConsole::WriteLine(LanguageGetString(STR_CONSOLE_HELPER_TEXT));
     InteractiveConsole::WriteLine("");
     WritePrompt();
 }
@@ -51,6 +55,12 @@ void InGameConsole::WritePrompt()
 
 void InGameConsole::Input(ConsoleInput input)
 {
+    if (_isCommandAwaitingCompletion)
+    {
+        // Do not process input while a command is running
+        return;
+    }
+
     switch (input)
     {
         case ConsoleInput::LineClear:
@@ -63,10 +73,17 @@ void InGameConsole::Input(ConsoleInput input)
                 HistoryAdd(_consoleCurrentLine);
 
                 // Append text we are executing to prompt line
-                _consoleLines.back().append(_consoleCurrentLine);
+                _consoleLines.back().first.append(_consoleCurrentLine);
 
                 Execute(_consoleCurrentLine);
-                WritePrompt();
+                if (IsExecuting())
+                {
+                    _isCommandAwaitingCompletion = true;
+                }
+                else
+                {
+                    WritePrompt();
+                }
                 ClearInput();
                 RefreshCaret();
             }
@@ -76,26 +93,26 @@ void InGameConsole::Input(ConsoleInput input)
             if (_consoleHistoryIndex > 0)
             {
                 _consoleHistoryIndex--;
-                std::memcpy(_consoleCurrentLine, _consoleHistory[_consoleHistoryIndex], CONSOLE_INPUT_SIZE);
+                _consoleCurrentLine = _consoleHistory[_consoleHistoryIndex];
             }
-            _consoleTextInputSession->Size = strlen(_consoleTextInputSession->Buffer);
-            _consoleTextInputSession->Length = utf8_length(_consoleTextInputSession->Buffer);
-            _consoleTextInputSession->SelectionStart = strlen(_consoleCurrentLine);
+            _consoleTextInputSession->Length = UTF8Length(_consoleCurrentLine.c_str());
+            _consoleTextInputSession->SelectionStart = _consoleCurrentLine.size();
+            RefreshCaret(_consoleTextInputSession->SelectionStart);
             break;
         case ConsoleInput::HistoryNext:
-            if (_consoleHistoryIndex < _consoleHistoryCount - 1)
+            if (_consoleHistoryIndex + 1 < _consoleHistory.size())
             {
                 _consoleHistoryIndex++;
-                std::memcpy(_consoleCurrentLine, _consoleHistory[_consoleHistoryIndex], CONSOLE_INPUT_SIZE);
-                _consoleTextInputSession->Size = strlen(_consoleTextInputSession->Buffer);
-                _consoleTextInputSession->Length = utf8_length(_consoleTextInputSession->Buffer);
-                _consoleTextInputSession->SelectionStart = strlen(_consoleCurrentLine);
+                _consoleCurrentLine = _consoleHistory[_consoleHistoryIndex];
+                _consoleTextInputSession->Length = UTF8Length(_consoleCurrentLine.c_str());
+                _consoleTextInputSession->SelectionStart = _consoleCurrentLine.size();
             }
             else
             {
-                _consoleHistoryIndex = _consoleHistoryCount;
+                _consoleHistoryIndex = _consoleHistory.size();
                 ClearInput();
             }
+            RefreshCaret(_consoleTextInputSession->SelectionStart);
             break;
         case ConsoleInput::ScrollPrevious:
         {
@@ -116,23 +133,21 @@ void InGameConsole::Input(ConsoleInput input)
 
 void InGameConsole::ClearInput()
 {
-    _consoleCurrentLine[0] = 0;
+    _consoleCurrentLine.clear();
     if (_isOpen)
     {
-        context_start_text_input(_consoleCurrentLine, sizeof(_consoleCurrentLine));
+        _consoleTextInputSession = ContextStartTextInput(_consoleCurrentLine, kConsoleInputSize);
     }
 }
 
-void InGameConsole::HistoryAdd(const utf8* src)
+void InGameConsole::HistoryAdd(const u8string& src)
 {
-    if (_consoleHistoryCount >= CONSOLE_HISTORY_SIZE)
+    if (_consoleHistory.size() >= kConsoleHistorySize)
     {
-        for (int32_t i = 0; i < _consoleHistoryCount - 1; i++)
-            std::memcpy(_consoleHistory[i], _consoleHistory[i + 1], CONSOLE_INPUT_SIZE);
-        _consoleHistoryCount--;
+        _consoleHistory.pop_front();
     }
-    std::memcpy(_consoleHistory[_consoleHistoryCount++], src, CONSOLE_INPUT_SIZE);
-    _consoleHistoryIndex = _consoleHistoryCount;
+    _consoleHistory.push_back(src);
+    _consoleHistoryIndex = _consoleHistory.size();
 }
 
 void InGameConsole::ScrollToEnd()
@@ -148,9 +163,9 @@ void InGameConsole::RefreshCaret(size_t position)
 {
     _consoleCaretTicks = 0;
     _selectionStart = position;
-    char tempString[TEXT_INPUT_SIZE] = { 0 };
-    std::memcpy(tempString, &_consoleCurrentLine, _selectionStart);
-    _caretScreenPosX = gfx_get_string_width_no_formatting(tempString, InGameConsoleGetFontSpriteBase());
+
+    auto text = u8string_view{ _consoleCurrentLine }.substr(0, _selectionStart);
+    _caretScreenPosX = GfxGetStringWidthNoFormatting(text, InGameConsoleGetFontStyle());
 }
 
 void InGameConsole::Scroll(int32_t linesToScroll)
@@ -178,10 +193,16 @@ void InGameConsole::ClearLine()
 
 void InGameConsole::Open()
 {
+    if (!_isInitialised)
+    {
+        WriteInitial();
+        _isInitialised = true;
+    }
+
     _isOpen = true;
     ScrollToEnd();
     RefreshCaret();
-    _consoleTextInputSession = context_start_text_input(_consoleCurrentLine, sizeof(_consoleCurrentLine));
+    _consoleTextInputSession = ContextStartTextInput(_consoleCurrentLine, kConsoleInputSize);
 }
 
 void InGameConsole::Close()
@@ -189,7 +210,7 @@ void InGameConsole::Close()
     _consoleTextInputSession = nullptr;
     _isOpen = false;
     Invalidate();
-    context_stop_text_input();
+    ContextStopTextInput();
 }
 
 void InGameConsole::Hide()
@@ -211,12 +232,6 @@ void InGameConsole::Toggle()
 
 void InGameConsole::WriteLine(const std::string& input, FormatToken colourFormat)
 {
-    // Include text colour format only for special cases
-    // The draw function handles the default text colour differently
-    auto colourCodepoint = "";
-    if (colourFormat != FormatToken::ColourWindow2)
-        colourCodepoint = "{WINDOW_COLOUR_2}";
-
     std::string line;
     std::size_t splitPos = 0;
     std::size_t stringOffset = 0;
@@ -224,139 +239,163 @@ void InGameConsole::WriteLine(const std::string& input, FormatToken colourFormat
     {
         splitPos = input.find('\n', stringOffset);
         line = input.substr(stringOffset, splitPos - stringOffset);
-        _consoleLines.push_back(colourCodepoint + line);
+        _consoleLines.emplace_back(line, colourFormat);
         stringOffset = splitPos + 1;
     }
 
-    if (_consoleLines.size() > CONSOLE_MAX_LINES)
+    if (_consoleLines.size() > kConsoleMaxLines)
     {
-        const std::size_t linesToErase = _consoleLines.size() - CONSOLE_MAX_LINES;
+        const std::size_t linesToErase = _consoleLines.size() - kConsoleMaxLines;
         _consoleLines.erase(_consoleLines.begin(), _consoleLines.begin() + linesToErase);
     }
 }
 
 void InGameConsole::Invalidate() const
 {
-    gfx_set_dirty_blocks({ _consoleTopLeft, _consoleBottomRight });
+    GfxSetDirtyBlocks({ _consoleTopLeft, _consoleBottomRight });
 }
 
 void InGameConsole::Update()
 {
     _consoleTopLeft = { 0, 0 };
-    _consoleBottomRight = { context_get_width(), 322 };
+    _consoleBottomRight = { ContextGetWidth(), 322 };
 
     if (_isOpen)
     {
         // When scrolling the map, the console pixels get copied... therefore invalidate the screen
-        rct_window* mainWindow = window_get_main();
+        WindowBase* mainWindow = WindowGetMain();
         if (mainWindow != nullptr)
         {
-            rct_viewport* mainViewport = window_get_viewport(mainWindow);
+            Viewport* mainViewport = WindowGetViewport(mainWindow);
             if (mainViewport != nullptr)
             {
                 if (_lastMainViewport != mainViewport->viewPos)
                 {
                     _lastMainViewport = mainViewport->viewPos;
 
-                    gfx_invalidate_screen();
+                    GfxInvalidateScreen();
                 }
             }
         }
+    }
+
+    if (_isCommandAwaitingCompletion && !IsExecuting())
+    {
+        WritePrompt();
+        _isCommandAwaitingCompletion = false;
     }
 
     // Flash the caret
     _consoleCaretTicks = (_consoleCaretTicks + 1) % 30;
 }
 
-void InGameConsole::Draw(rct_drawpixelinfo* dpi) const
+void InGameConsole::Draw(DrawPixelInfo& dpi) const
 {
     if (!_isOpen)
         return;
 
     // Set font
-    uint8_t textColour = NOT_TRANSLUCENT(ThemeGetColour(WC_CONSOLE, 1));
+    ColourWithFlags textColour = { ThemeGetColour(WindowClass::Console, 1).colour, 0 };
+    const FontStyle style = InGameConsoleGetFontStyle();
     const int32_t lineHeight = InGameConsoleGetLineHeight();
     const int32_t maxLines = GetNumVisibleLines();
-
-    // This is something of a hack to ensure the text is actually black
-    // as opposed to a desaturated grey
-    thread_local std::string colourFormatStr;
-    colourFormatStr.clear();
-    if (textColour == COLOUR_BLACK)
-    {
-        colourFormatStr = "{BLACK}";
-    }
 
     // TTF looks far better without the outlines
     if (!LocalisationService_UseTrueTypeFont())
     {
-        textColour |= COLOUR_FLAG_OUTLINE;
+        textColour.setFlag(ColourFlag::withOutline, true);
     }
 
     Invalidate();
 
     // Give console area a translucent effect.
-    gfx_filter_rect(dpi, { _consoleTopLeft, _consoleBottomRight }, FilterPaletteID::Palette51);
+    GfxFilterRect(dpi, { _consoleTopLeft, _consoleBottomRight }, FilterPaletteID::Palette51);
 
     // Make input area more opaque.
-    gfx_filter_rect(
+    GfxFilterRect(
         dpi, { { _consoleTopLeft.x, _consoleBottomRight.y - lineHeight - 10 }, _consoleBottomRight - ScreenCoordsXY{ 0, 1 } },
         FilterPaletteID::Palette51);
 
     // Paint background colour.
-    uint8_t backgroundColour = ThemeGetColour(WC_CONSOLE, 0);
-    gfx_fill_rect_inset(dpi, { _consoleTopLeft, _consoleBottomRight }, backgroundColour, INSET_RECT_FLAG_FILL_NONE);
-    gfx_fill_rect_inset(
+    auto backgroundColour = ThemeGetColour(WindowClass::Console, 0);
+    GfxFillRectInset(dpi, { _consoleTopLeft, _consoleBottomRight }, backgroundColour, INSET_RECT_FLAG_FILL_NONE);
+    GfxFillRectInset(
         dpi, { _consoleTopLeft + ScreenCoordsXY{ 1, 1 }, _consoleBottomRight - ScreenCoordsXY{ 1, 1 } }, backgroundColour,
         INSET_RECT_FLAG_BORDER_INSET);
 
     std::string lineBuffer;
-    auto screenCoords = _consoleTopLeft + ScreenCoordsXY{ CONSOLE_EDGE_PADDING, CONSOLE_EDGE_PADDING };
+    auto screenCoords = _consoleTopLeft + ScreenCoordsXY{ kConsoleEdgePadding, kConsoleEdgePadding };
 
     // Draw text inside console
     for (std::size_t i = 0; i < _consoleLines.size() && i < static_cast<size_t>(maxLines); i++)
     {
         const size_t index = i + _consoleScrollPos;
-        lineBuffer = colourFormatStr + _consoleLines[index];
-        gfx_draw_string(dpi, screenCoords, lineBuffer.c_str(), { textColour, InGameConsoleGetFontSpriteBase() });
+        if (_consoleLines[index].second == FormatToken::ColourWindow2)
+        {
+            // This is something of a hack to ensure the text is actually black
+            // as opposed to a desaturated grey
+            if (textColour.colour == COLOUR_BLACK)
+            {
+                DrawText(dpi, screenCoords, { textColour, style }, "{BLACK}");
+                DrawText(dpi, screenCoords, { kTextColour255, style }, _consoleLines[index].first.c_str(), true);
+            }
+            else
+            {
+                DrawText(dpi, screenCoords, { textColour, style }, _consoleLines[index].first.c_str(), true);
+            }
+        }
+        else
+        {
+            std::string lineColour = FormatTokenToStringWithBraces(_consoleLines[index].second);
+            DrawText(dpi, screenCoords, { textColour, style }, lineColour.c_str());
+            DrawText(dpi, screenCoords, { kTextColour255, style }, _consoleLines[index].first.c_str(), true);
+        }
+
         screenCoords.y += lineHeight;
     }
 
-    screenCoords.y = _consoleBottomRight.y - lineHeight - CONSOLE_EDGE_PADDING - 1;
+    screenCoords.y = _consoleBottomRight.y - lineHeight - kConsoleEdgePadding - 1;
 
     // Draw current line
-    lineBuffer = colourFormatStr + _consoleCurrentLine;
-    gfx_draw_string_no_formatting(dpi, screenCoords, lineBuffer.c_str(), { TEXT_COLOUR_255, InGameConsoleGetFontSpriteBase() });
+    if (textColour.colour == COLOUR_BLACK)
+    {
+        DrawText(dpi, screenCoords, { textColour, style }, "{BLACK}");
+        DrawText(dpi, screenCoords, { kTextColour255, style }, _consoleCurrentLine.c_str(), true);
+    }
+    else
+    {
+        DrawText(dpi, screenCoords, { textColour, style }, _consoleCurrentLine.c_str(), true);
+    }
 
     // Draw caret
-    if (_consoleCaretTicks < CONSOLE_CARET_FLASH_THRESHOLD)
+    if (_consoleCaretTicks < kConsoleCaretFlashThreshold)
     {
         auto caret = screenCoords + ScreenCoordsXY{ _caretScreenPosX, lineHeight };
-        uint8_t caretColour = ColourMapA[BASE_COLOUR(textColour)].lightest;
-        gfx_fill_rect(dpi, { caret, caret + ScreenCoordsXY{ CONSOLE_CARET_WIDTH, 1 } }, caretColour);
+        uint8_t caretColour = ColourMapA[textColour.colour].lightest;
+        GfxFillRect(dpi, { caret, caret + ScreenCoordsXY{ kConsoleCaretWidth, 1 } }, caretColour);
     }
 
     // What about border colours?
-    uint8_t borderColour1 = ColourMapA[BASE_COLOUR(backgroundColour)].light;
-    uint8_t borderColour2 = ColourMapA[BASE_COLOUR(backgroundColour)].mid_dark;
+    uint8_t borderColour1 = ColourMapA[backgroundColour.colour].light;
+    uint8_t borderColour2 = ColourMapA[backgroundColour.colour].mid_dark;
 
     // Input area top border
-    gfx_fill_rect(
+    GfxFillRect(
         dpi,
         { { _consoleTopLeft.x, _consoleBottomRight.y - lineHeight - 11 },
           { _consoleBottomRight.x, _consoleBottomRight.y - lineHeight - 11 } },
         borderColour1);
-    gfx_fill_rect(
+    GfxFillRect(
         dpi,
         { { _consoleTopLeft.x, _consoleBottomRight.y - lineHeight - 10 },
           { _consoleBottomRight.x, _consoleBottomRight.y - lineHeight - 10 } },
         borderColour2);
 
     // Input area bottom border
-    gfx_fill_rect(
+    GfxFillRect(
         dpi, { { _consoleTopLeft.x, _consoleBottomRight.y - 1 }, { _consoleBottomRight.x, _consoleBottomRight.y - 1 } },
         borderColour1);
-    gfx_fill_rect(dpi, { { _consoleTopLeft.x, _consoleBottomRight.y }, _consoleBottomRight }, borderColour2);
+    GfxFillRect(dpi, { { _consoleTopLeft.x, _consoleBottomRight.y }, _consoleBottomRight }, borderColour2);
 }
 
 // Calculates the amount of visible lines, based on the console size, excluding the input line.

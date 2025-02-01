@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2021 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -11,20 +11,18 @@
 
 #ifdef ENABLE_SCRIPTING
 
-#    include "../../../Context.h"
-#    include "../../../common.h"
-#    include "../../../core/Guard.hpp"
-#    include "../../../entity/EntityRegistry.h"
-#    include "../../../ride/Track.h"
-#    include "../../../world/Footpath.h"
-#    include "../../../world/Scenery.h"
-#    include "../../../world/Surface.h"
-#    include "../../Duktape.hpp"
-#    include "../../ScriptEngine.h"
+    #include "../../../Context.h"
+    #include "../../../core/Guard.hpp"
+    #include "../../../entity/EntityRegistry.h"
+    #include "../../../ride/Track.h"
+    #include "../../../world/Footpath.h"
+    #include "../../../world/Scenery.h"
+    #include "../../Duktape.hpp"
+    #include "../../ScriptEngine.h"
 
-#    include <cstdio>
-#    include <cstring>
-#    include <utility>
+    #include <cstdio>
+    #include <cstring>
+    #include <utility>
 
 namespace OpenRCT2::Scripting
 {
@@ -79,40 +77,43 @@ namespace OpenRCT2::Scripting
         void parkFences_set(uint8_t value);
 
         DukValue trackType_get() const;
-        void trackType_set(uint8_t value);
+        void trackType_set(uint16_t value);
 
         DukValue rideType_get() const;
         void rideType_set(uint16_t value);
 
         DukValue sequence_get() const;
-        void sequence_set(uint8_t value);
+        void sequence_set(const DukValue& value);
 
         DukValue ride_get() const;
-        void ride_set(int32_t value);
+        void ride_set(const DukValue& value);
 
         DukValue station_get() const;
-        void station_set(uint8_t value);
+        void station_set(const DukValue& value);
 
         DukValue hasChainLift_get() const;
         void hasChainLift_set(bool value);
 
         DukValue mazeEntry_get() const;
-        void mazeEntry_set(uint16_t value);
+        void mazeEntry_set(const DukValue& value);
 
         DukValue colourScheme_get() const;
-        void colourScheme_set(uint8_t value);
+        void colourScheme_set(const DukValue& value);
 
         DukValue seatRotation_get() const;
-        void seatRotation_set(uint8_t value);
+        void seatRotation_set(const DukValue& value);
 
         DukValue brakeBoosterSpeed_get() const;
-        void brakeBoosterSpeed_set(uint8_t value);
+        void brakeBoosterSpeed_set(const DukValue& value);
 
         DukValue isInverted_get() const;
         void isInverted_set(bool value);
 
         DukValue hasCableLift_get() const;
         void hasCableLift_set(bool value);
+
+        DukValue isHighlighted_get() const;
+        void isHighlighted_set(bool value);
 
         DukValue object_get() const;
         void object_set(const DukValue& value);
@@ -142,7 +143,7 @@ namespace OpenRCT2::Scripting
         void tertiaryColour_set(uint8_t value);
 
         DukValue bannerIndex_get() const;
-        void bannerIndex_set(uint16_t value);
+        void bannerIndex_set(const DukValue& value);
 
         // Deprecated in favor of seperate 'edges' and 'corners' properties,
         // left here to maintain compatibility with older plugins.
@@ -182,13 +183,13 @@ namespace OpenRCT2::Scripting
         void railingsObject_set(const DukValue& value);
 
         DukValue additionStatus_get() const;
-        void additionStatus_set(uint8_t value);
+        void additionStatus_set(const DukValue& value);
 
         DukValue isAdditionBroken_get() const;
-        void isAdditionBroken_set(bool value);
+        void isAdditionBroken_set(const DukValue& value);
 
         DukValue isAdditionGhost_get() const;
-        void isAdditionGhost_set(bool value);
+        void isAdditionGhost_set(const DukValue& value);
 
         DukValue footpathObject_get() const;
         void footpathObject_set(const DukValue& value);
@@ -199,9 +200,20 @@ namespace OpenRCT2::Scripting
         DukValue direction_get() const;
         void direction_set(uint8_t value);
 
+        DukValue bannerText_get() const;
+        void bannerText_set(std::string value);
+
+        DukValue isNoEntry_get() const;
+        void isNoEntry_set(bool value);
+
         void Invalidate();
 
+        void RemoveBannerEntryIfNeeded();
+        void CreateBannerEntryIfNeeded();
+
     public:
+        static const LargeSceneryElement* GetOtherLargeSceneryElement(
+            const CoordsXY& loc, const LargeSceneryElement* const largeScenery);
         static void Register(duk_context* ctx);
     };
 

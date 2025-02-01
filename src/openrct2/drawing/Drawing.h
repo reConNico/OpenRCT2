@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,100 +9,66 @@
 
 #pragma once
 
-#include "../common.h"
+#include "../core/CallingConventions.h"
+#include "../core/StringTypes.h"
 #include "../interface/Colour.h"
 #include "../interface/ZoomLevel.h"
 #include "../world/Location.hpp"
+#include "ColourPalette.h"
 #include "Font.h"
 #include "ImageId.hpp"
 #include "Text.h"
 
+#include <array>
+#include <cassert>
 #include <memory>
 #include <optional>
+#include <span>
 #include <vector>
 
 struct ScreenCoordsXY;
 struct ScreenLine;
 struct ScreenRect;
+
 namespace OpenRCT2
 {
     struct IPlatformEnvironment;
-}
+    struct IStream;
+} // namespace OpenRCT2
 
 namespace OpenRCT2::Drawing
 {
     struct IDrawingEngine;
 }
 
-struct PaletteBGRA
+struct G1Element
 {
-    uint8_t Blue{};
-    uint8_t Green{};
-    uint8_t Red{};
-    uint8_t Alpha{};
-};
-
-constexpr const auto PALETTE_SIZE = 256;
-
-struct GamePalette
-{
-    PaletteBGRA Colour[PALETTE_SIZE]{};
-
-    PaletteBGRA& operator[](uint16_t idx)
-    {
-        assert(idx < PALETTE_SIZE);
-        if (idx >= PALETTE_SIZE)
-        {
-            static PaletteBGRA dummy;
-            return dummy;
-        }
-
-        return Colour[idx];
-    }
-
-    const PaletteBGRA operator[](uint16_t idx) const
-    {
-        assert(idx < PALETTE_SIZE);
-        if (idx >= PALETTE_SIZE)
-            return {};
-
-        return Colour[idx];
-    }
-
-    explicit operator uint8_t*()
-    {
-        return reinterpret_cast<uint8_t*>(Colour);
-    }
-};
-
-struct rct_g1_element
-{
-    uint8_t* offset;       // 0x00
-    int16_t width;         // 0x04
-    int16_t height;        // 0x06
-    int16_t x_offset;      // 0x08
-    int16_t y_offset;      // 0x0A
-    uint16_t flags;        // 0x0C
-    int32_t zoomed_offset; // 0x0E
+    uint8_t* offset = nullptr; // 0x00
+    int16_t width = 0;         // 0x04
+    int16_t height = 0;        // 0x06
+    int16_t x_offset = 0;      // 0x08
+    int16_t y_offset = 0;      // 0x0A
+    uint16_t flags = 0;        // 0x0C
+    int32_t zoomed_offset = 0; // 0x0E
 };
 
 #pragma pack(push, 1)
-struct rct_g1_header
+struct RCTG1Header
 {
-    uint32_t num_entries;
-    uint32_t total_size;
+    uint32_t num_entries = 0;
+    uint32_t total_size = 0;
 };
-assert_struct_size(rct_g1_header, 8);
+static_assert(sizeof(RCTG1Header) == 8);
 #pragma pack(pop)
 
-struct rct_gx
+struct Gx
 {
-    rct_g1_header header;
-    std::vector<rct_g1_element> elements;
+    RCTG1Header header;
+    std::vector<G1Element> elements;
     std::unique_ptr<uint8_t[]> data;
 };
 
-struct rct_drawpixelinfo
+struct DrawPixelInfo
 {
     uint8_t* bits{};
     int32_t x{};
@@ -112,25 +78,64 @@ struct rct_drawpixelinfo
     int32_t pitch{}; // note: this is actually (pitch - width)
     ZoomLevel zoom_level{};
 
-    /**
-     * As x and y are based on 1:1 units, zooming in will cause a reduction in precision when mapping zoomed-in
-     * pixels to 1:1 pixels. When x, y are not a multiple of the zoom level, the remainder will be non-zero.
-     * The drawing of sprites will need to be offset by this amount.
-     */
-    uint8_t remX{};
-    uint8_t remY{};
-
     // Last position of drawn text.
     ScreenCoordsXY lastStringPos{};
 
     OpenRCT2::Drawing::IDrawingEngine* DrawingEngine{};
 
-    size_t GetBytesPerRow() const;
     uint8_t* GetBitsOffset(const ScreenCoordsXY& pos) const;
-    rct_drawpixelinfo Crop(const ScreenCoordsXY& pos, const ScreenSize& size) const;
+    DrawPixelInfo Crop(const ScreenCoordsXY& pos, const ScreenSize& size) const;
+
+    [[nodiscard]] constexpr int32_t WorldX() const
+    {
+        return zoom_level.ApplyTo(x);
+    }
+    [[nodiscard]] constexpr int32_t WorldY() const
+    {
+        return zoom_level.ApplyTo(y);
+    }
+    [[nodiscard]] constexpr int32_t WorldWidth() const
+    {
+        return zoom_level.ApplyTo(width);
+    }
+    [[nodiscard]] constexpr int32_t WorldHeight() const
+    {
+        return zoom_level.ApplyTo(height);
+    }
+
+    [[nodiscard]] constexpr int32_t LineStride() const
+    {
+        return width + pitch;
+    }
 };
 
-struct rct_g1_element_32bit
+struct TextDrawInfo
+{
+    int32_t startX;
+    int32_t startY;
+    int32_t x;
+    int32_t y;
+    int32_t maxX;
+    int32_t maxY;
+    int32_t flags;
+    uint8_t palette[8];
+    ::FontStyle FontStyle;
+    const int8_t* y_offset;
+};
+
+enum : uint32_t
+{
+    TEXT_DRAW_FLAG_INSET = 1 << 0,
+    TEXT_DRAW_FLAG_OUTLINE = 1 << 1,
+    TEXT_DRAW_FLAG_DARK = 1 << 2,
+    TEXT_DRAW_FLAG_EXTRA_DARK = 1 << 3,
+    TEXT_DRAW_FLAG_NO_FORMATTING = 1 << 28,
+    TEXT_DRAW_FLAG_Y_OFFSET_EFFECT = 1 << 29,
+    TEXT_DRAW_FLAG_TTF = 1 << 30,
+    TEXT_DRAW_FLAG_NO_DRAW = 1u << 31
+};
+
+struct RCTG1Element
 {
     uint32_t offset;        // 0x00 note: uint32_t always!
     int16_t width;          // 0x04
@@ -140,11 +145,11 @@ struct rct_g1_element_32bit
     uint16_t flags;         // 0x0C
     uint16_t zoomed_offset; // 0x0E
 };
-assert_struct_size(rct_g1_element_32bit, 0x10);
+static_assert(sizeof(RCTG1Element) == 0x10);
 
 enum
 {
-    G1_FLAG_BMP = (1 << 0), // Image data is encoded as raw pixels (no transparency)
+    G1_FLAG_HAS_TRANSPARENCY = (1 << 0), // Image data contains transparent pixels (0XFF) which will not be rendered
     G1_FLAG_1 = (1 << 1),
     G1_FLAG_RLE_COMPRESSION = (1 << 2), // Image data is encoded using RCT2's form of run length encoding
     G1_FLAG_PALETTE = (1 << 3),         // Image data is a sequence of palette entries R8G8B8
@@ -152,37 +157,27 @@ enum
     G1_FLAG_NO_ZOOM_DRAW = (1 << 5),    // Does not get drawn at higher zoom levels (only zoom 0)
 };
 
-enum : uint32_t
-{
-    IMAGE_TYPE_DEFAULT = 0,
-    IMAGE_TYPE_REMAP = (1 << 29),
-    IMAGE_TYPE_TRANSPARENT = (1 << 30),
-    IMAGE_TYPE_REMAP_2_PLUS = (1u << 31)
-    // REMAP_2_PLUS + REMAP = REMAP 2
-    // REMAP_2_PLUS = REMAP 3
-};
-
 using DrawBlendOp = uint8_t;
 
-constexpr DrawBlendOp BLEND_NONE = 0;
+constexpr DrawBlendOp kBlendNone = 0;
 
 /**
  * Only supported by BITMAP. RLE images always encode transparency via the encoding.
  * Pixel value of 0 represents transparent.
  */
-constexpr DrawBlendOp BLEND_TRANSPARENT = 1 << 0;
+constexpr DrawBlendOp kBlendTransparent = 1 << 0;
 
 /**
  * Whether to use the pixel value from the source image.
  * This is usually only unset for glass images where there the src is only a transparency mask.
  */
-constexpr DrawBlendOp BLEND_SRC = 1 << 1;
+constexpr DrawBlendOp kBlendSrc = 1 << 1;
 
 /**
  * Whether to use the pixel value of the destination image for blending.
  * This is used for any image that filters the target image, e.g. glass or water.
  */
-constexpr DrawBlendOp BLEND_DST = 2 << 2;
+constexpr DrawBlendOp kBlendDst = 2 << 2;
 
 enum
 {
@@ -192,86 +187,99 @@ enum
     INSET_RECT_FLAG_BORDER_INSET = (1 << 5),      // 0x20
     INSET_RECT_FLAG_FILL_DONT_LIGHTEN = (1 << 6), // 0x40
     INSET_RECT_FLAG_FILL_MID_LIGHT = (1 << 7),    // 0x80
+
+    INSET_RECT_F_30 = (INSET_RECT_FLAG_BORDER_INSET | INSET_RECT_FLAG_FILL_NONE),
+    INSET_RECT_F_60 = (INSET_RECT_FLAG_BORDER_INSET | INSET_RECT_FLAG_FILL_DONT_LIGHTEN),
+    INSET_RECT_F_E0 = (INSET_RECT_FLAG_BORDER_INSET | INSET_RECT_FLAG_FILL_DONT_LIGHTEN | INSET_RECT_FLAG_FILL_MID_LIGHT),
 };
 
 enum class FilterPaletteID : int32_t
 {
     PaletteNull = 0,
 
-    PaletteWater = 32,
+    PaletteWater = COLOUR_COUNT,
 
-    Palette34 = 34,
+    PaletteLandMarker0, // North (corner/edge)
+    PaletteLandMarker1, // East (corner/edge)
+    PaletteLandMarker2, // South (corner/edge)
+    PaletteLandMarker3, // West (corner/edge)
+    PaletteSceneryGroundMarker,
+    PaletteWaterMarker,
+    PaletteQuarterMarker0, // North (not sure why it couldn't just use PaletteLandMarker0)
+    PaletteQuarterMarker1, // East
+    PaletteQuarterMarker2, // South
+    PaletteQuarterMarker3, // West
+    PaletteRideGroundMarker,
+    PaletteGhost, // Construction marker
+    Palette45,    // Decolourise + lighten
+    Palette46,
 
-    Palette44 = 44, // Construction marker
-    Palette45 = 45, // Decolourise + lighten
-    Palette46 = 46,
+    PaletteDarken3,
 
-    PaletteDarken3 = 47,
-
-    PaletteDarken1 = 49,
-    PaletteDarken2 = 50,
-    Palette51 = 51, // Decolourise + darken
-    PaletteTranslucentGrey = 52,
-    PaletteTranslucentGreyHighlight = 53,
-    PaletteTranslucentGreyShadow = 54,
-    PaletteTranslucentLightBlue = 55,
-    PaletteTranslucentLightBlueHighlight = 56,
-    PaletteTranslucentLightBlueShadow = 57,
-    PaletteTranslucentBordeauxRed = 58,
-    PaletteTranslucentBordeauxRedHighlight = 59,
-    PaletteTranslucentBordeauxRedShadow = 60,
-    PaletteTranslucentDarkGreen = 61,
-    PaletteTranslucentDarkGreenHighlight = 62,
-    PaletteTranslucentDarkGreenShadow = 63,
-    PaletteTranslucentLightPurple = 64,
-    PaletteTranslucentLightPurpleHighlight = 65,
-    PaletteTranslucentLightPurpleShadow = 66,
-    PaletteTranslucentDarkOliveGreen = 67,
-    PaletteTranslucentDarkOliveGreenHighlight = 68,
-    PaletteTranslucentDarkOliveGreenShadow = 69,
-    PaletteTranslucentLightBrown = 70,
-    PaletteTranslucentLightBrownHighlight = 71,
-    PaletteTranslucentLightBrownShadow = 72,
-    PaletteTranslucentYellow = 73,
-    PaletteTranslucentYellowHighlight = 74,
-    PaletteTranslucentYellowShadow = 75,
-    PaletteTranslucentMossGreen = 76,
-    PaletteTranslucentMossGreenHighlight = 77,
-    PaletteTranslucentMossGreenShadow = 78,
-    PaletteTranslucentOliveGreen = 79,
-    PaletteTranslucentOliveGreenHighlight = 80,
-    PaletteTranslucentOliveGreenShadow = 81,
-    PaletteTranslucentBrightGreen = 82,
-    PaletteTranslucentBrightGreenHighlight = 83,
-    PaletteTranslucentBrightGreenShadow = 84,
-    PaletteTranslucentSalmonPink = 85,
-    PaletteTranslucentSalmonPinkHighlight = 86,
-    PaletteTranslucentSalmonPinkShadow = 87,
-    PaletteTranslucentBrightPurple = 88,
-    PaletteTranslucentBrightPurpleHighlight = 89,
-    PaletteTranslucentBrightPurpleShadow = 90,
-    PaletteTranslucentBrightRed = 91,
-    PaletteTranslucentBrightRedHighlight = 92,
-    PaletteTranslucentBrightRedShadow = 93,
-    PaletteTranslucentLightOrange = 94,
-    PaletteTranslucentLightOrangeHighlight = 95,
-    PaletteTranslucentLightOrangeShadow = 96,
-    PaletteTranslucentTeal = 97,
-    PaletteTranslucentTealHighlight = 98,
-    PaletteTranslucentTealShadow = 99,
-    PaletteTranslucentBrightPink = 100,
-    PaletteTranslucentBrightPinkHighlight = 101,
-    PaletteTranslucentBrightPinkShadow = 102,
-    PaletteTranslucentDarkBrown = 103,
-    PaletteTranslucentDarkBrownHighlight = 104,
-    PaletteTranslucentDarkBrownShadow = 105,
-    PaletteTranslucentLightPink = 106,
-    PaletteTranslucentLightPinkHighlight = 107,
-    PaletteTranslucentLightPinkShadow = 108,
-    PaletteTranslucentWhite = 109,
-    PaletteTranslucentWhiteHighlight = 110,
-    PaletteTranslucentWhiteShadow = 111,
-    PaletteGlass = 112,
+    PaletteDarken1 = PaletteDarken3 + 2,
+    PaletteDarken2,
+    Palette51, // Decolourise + darken
+    PaletteTranslucentGrey,
+    PaletteTranslucentGreyHighlight,
+    PaletteTranslucentGreyShadow,
+    PaletteTranslucentLightBlue,
+    PaletteTranslucentLightBlueHighlight,
+    PaletteTranslucentLightBlueShadow,
+    PaletteTranslucentBordeauxRed,
+    PaletteTranslucentBordeauxRedHighlight,
+    PaletteTranslucentBordeauxRedShadow,
+    PaletteTranslucentDarkGreen,
+    PaletteTranslucentDarkGreenHighlight,
+    PaletteTranslucentDarkGreenShadow,
+    PaletteTranslucentLightPurple,
+    PaletteTranslucentLightPurpleHighlight,
+    PaletteTranslucentLightPurpleShadow,
+    PaletteTranslucentDarkOliveGreen,
+    PaletteTranslucentDarkOliveGreenHighlight,
+    PaletteTranslucentDarkOliveGreenShadow,
+    PaletteTranslucentLightBrown,
+    PaletteTranslucentLightBrownHighlight,
+    PaletteTranslucentLightBrownShadow,
+    PaletteTranslucentYellow,
+    PaletteTranslucentYellowHighlight,
+    PaletteTranslucentYellowShadow,
+    PaletteTranslucentMossGreen,
+    PaletteTranslucentMossGreenHighlight,
+    PaletteTranslucentMossGreenShadow,
+    PaletteTranslucentOliveGreen,
+    PaletteTranslucentOliveGreenHighlight,
+    PaletteTranslucentOliveGreenShadow,
+    PaletteTranslucentBrightGreen,
+    PaletteTranslucentBrightGreenHighlight,
+    PaletteTranslucentBrightGreenShadow,
+    PaletteTranslucentSalmonPink,
+    PaletteTranslucentSalmonPinkHighlight,
+    PaletteTranslucentSalmonPinkShadow,
+    PaletteTranslucentBrightPurple,
+    PaletteTranslucentBrightPurpleHighlight,
+    PaletteTranslucentBrightPurpleShadow,
+    PaletteTranslucentBrightRed,
+    PaletteTranslucentBrightRedHighlight,
+    PaletteTranslucentBrightRedShadow,
+    PaletteTranslucentLightOrange,
+    PaletteTranslucentLightOrangeHighlight,
+    PaletteTranslucentLightOrangeShadow,
+    PaletteTranslucentTeal,
+    PaletteTranslucentTealHighlight,
+    PaletteTranslucentTealShadow,
+    PaletteTranslucentBrightPink,
+    PaletteTranslucentBrightPinkHighlight,
+    PaletteTranslucentBrightPinkShadow,
+    PaletteTranslucentDarkBrown,
+    PaletteTranslucentDarkBrownHighlight,
+    PaletteTranslucentDarkBrownShadow,
+    PaletteTranslucentLightPink,
+    PaletteTranslucentLightPinkHighlight,
+    PaletteTranslucentLightPinkShadow,
+    PaletteTranslucentWhite,
+    PaletteTranslucentWhiteHighlight,
+    PaletteTranslucentWhiteShadow,
+    PaletteGlass,
     PaletteGlassBlack = PaletteGlass + COLOUR_BLACK,
     PaletteGlassGrey = PaletteGlass + COLOUR_GREY,
     PaletteGlassWhite = PaletteGlass + COLOUR_WHITE,
@@ -304,19 +312,37 @@ enum class FilterPaletteID : int32_t
     PaletteGlassDarkPink = PaletteGlass + COLOUR_DARK_PINK,
     PaletteGlassBrightPink = PaletteGlass + COLOUR_BRIGHT_PINK,
     PaletteGlassLightPink = PaletteGlass + COLOUR_LIGHT_PINK,
+    PaletteGlassDarkOliveDark = PaletteGlass + COLOUR_DARK_OLIVE_DARK,
+    PaletteGlassDarkOliveLight = PaletteGlass + COLOUR_DARK_OLIVE_LIGHT,
+    PaletteGlassSaturatedBrownLight = PaletteGlass + COLOUR_SATURATED_BROWN_LIGHT,
+    PaletteGlassBordeauxRedDark = PaletteGlass + COLOUR_BORDEAUX_RED_DARK,
+    PaletteGlassBordeauxRedLight = PaletteGlass + COLOUR_BORDEAUX_RED_LIGHT,
+    PaletteGlassGrassGreenDark = PaletteGlass + COLOUR_GRASS_GREEN_DARK,
+    PaletteGlassGrassGreenLight = PaletteGlass + COLOUR_GRASS_GREEN_LIGHT,
+    PaletteGlassOliveDark = PaletteGlass + COLOUR_OLIVE_DARK,
+    PaletteGlassOliveLight = PaletteGlass + COLOUR_OLIVE_LIGHT,
+    PaletteGlassSaturatedGreenLight = PaletteGlass + COLOUR_SATURATED_GREEN_LIGHT,
+    PaletteGlassTanDark = PaletteGlass + COLOUR_TAN_DARK,
+    PaletteGlassTanLight = PaletteGlass + COLOUR_TAN_LIGHT,
+    PaletteGlassDullPurpleLight = PaletteGlass + COLOUR_DULL_PURPLE_LIGHT,
+    PaletteGlassDullGreenDark = PaletteGlass + COLOUR_DULL_GREEN_DARK,
+    PaletteGlassDullGreenLight = PaletteGlass + COLOUR_DULL_GREEN_LIGHT,
+    PaletteGlassSaturatedPurpleDark = PaletteGlass + COLOUR_SATURATED_PURPLE_DARK,
+    PaletteGlassSaturatedPurpleLight = PaletteGlass + COLOUR_SATURATED_PURPLE_LIGHT,
+    PaletteGlassOrangeLight = PaletteGlass + COLOUR_ORANGE_LIGHT,
+    PaletteGlassAquaDark = PaletteGlass + COLOUR_AQUA_DARK,
+    PaletteGlassMagentaLight = PaletteGlass + COLOUR_MAGENTA_LIGHT,
+    PaletteGlassDullBrownDark = PaletteGlass + COLOUR_DULL_BROWN_DARK,
+    PaletteGlassDullBrownLight = PaletteGlass + COLOUR_DULL_BROWN_LIGHT,
+    PaletteGlassInvisible = PaletteGlass + COLOUR_INVISIBLE,
+    PaletteGlassVoid = PaletteGlass + COLOUR_VOID,
 };
 
-struct translucent_window_palette
+struct TranslucentWindowPalette
 {
     FilterPaletteID base;
     FilterPaletteID highlight;
     FilterPaletteID shadow;
-};
-
-struct rct_size16
-{
-    int16_t width;
-    int16_t height;
 };
 
 /**
@@ -325,38 +351,39 @@ struct rct_size16
 struct PaletteMap
 {
 private:
-    uint8_t* _data{};
-    uint32_t _dataLength{};
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-private-field"
-    uint16_t _numMaps;
-#pragma clang diagnostic pop
-    uint16_t _mapLength;
+    std::span<uint8_t> _data{};
+#ifdef _DEBUG
+    // We only require those fields for the asserts in debug builds.
+    size_t _numMaps{};
+    size_t _mapLength{};
+#endif
 
 public:
-    static const PaletteMap& GetDefault();
+    static PaletteMap GetDefault();
 
-    PaletteMap() = default;
+    constexpr PaletteMap() = default;
 
-    PaletteMap(uint8_t* data, uint16_t numMaps, uint16_t mapLength)
-        : _data(data)
-        , _dataLength(numMaps * mapLength)
+    constexpr PaletteMap(uint8_t* data, size_t numMaps, size_t mapLength)
+        : _data{ data, numMaps * mapLength }
+#ifdef _DEBUG
         , _numMaps(numMaps)
         , _mapLength(mapLength)
+#endif
     {
     }
 
-    template<std::size_t TSize>
-    PaletteMap(uint8_t (&map)[TSize])
+    constexpr PaletteMap(std::span<uint8_t> map)
         : _data(map)
-        , _dataLength(static_cast<uint32_t>(std::size(map)))
+#ifdef _DEBUG
         , _numMaps(1)
-        , _mapLength(static_cast<uint16_t>(std::size(map)))
+        , _mapLength(map.size())
+#endif
     {
     }
 
     uint8_t& operator[](size_t index);
     uint8_t operator[](size_t index) const;
+
     uint8_t Blend(uint8_t src, uint8_t dst) const;
     void Copy(size_t dstIndex, const PaletteMap& src, size_t srcIndex, size_t length);
 };
@@ -364,8 +391,8 @@ public:
 struct DrawSpriteArgs
 {
     ImageId Image;
-    const PaletteMap& PalMap;
-    const rct_g1_element& SourceImage;
+    PaletteMap PalMap;
+    const G1Element& SourceImage;
     int32_t SrcX;
     int32_t SrcY;
     int32_t Width;
@@ -373,7 +400,7 @@ struct DrawSpriteArgs
     uint8_t* DestinationBits;
 
     DrawSpriteArgs(
-        ImageId image, const PaletteMap& palMap, const rct_g1_element& sourceImage, int32_t srcX, int32_t srcY, int32_t width,
+        ImageId image, const PaletteMap& palMap, const G1Element& sourceImage, int32_t srcX, int32_t srcY, int32_t width,
         int32_t height, uint8_t* destinationBits)
         : Image(image)
         , PalMap(palMap)
@@ -387,9 +414,10 @@ struct DrawSpriteArgs
     }
 };
 
-template<DrawBlendOp TBlendOp> bool FASTCALL BlitPixel(const uint8_t* src, uint8_t* dst, const PaletteMap& paletteMap)
+template<DrawBlendOp TBlendOp>
+bool FASTCALL BlitPixel(const uint8_t* src, uint8_t* dst, const PaletteMap& paletteMap)
 {
-    if constexpr (TBlendOp & BLEND_TRANSPARENT)
+    if constexpr (TBlendOp & kBlendTransparent)
     {
         // Ignore transparent pixels
         if (*src == 0)
@@ -398,10 +426,10 @@ template<DrawBlendOp TBlendOp> bool FASTCALL BlitPixel(const uint8_t* src, uint8
         }
     }
 
-    if constexpr (((TBlendOp & BLEND_SRC) != 0) && ((TBlendOp & BLEND_DST) != 0))
+    if constexpr (((TBlendOp & kBlendSrc) != 0) && ((TBlendOp & kBlendDst) != 0))
     {
         auto pixel = paletteMap.Blend(*src, *dst);
-        if constexpr (TBlendOp & BLEND_TRANSPARENT)
+        if constexpr (TBlendOp & kBlendTransparent)
         {
             if (pixel == 0)
             {
@@ -411,10 +439,10 @@ template<DrawBlendOp TBlendOp> bool FASTCALL BlitPixel(const uint8_t* src, uint8
         *dst = pixel;
         return true;
     }
-    else if constexpr ((TBlendOp & BLEND_SRC) != 0)
+    else if constexpr ((TBlendOp & kBlendSrc) != 0)
     {
         auto pixel = paletteMap[*src];
-        if constexpr (TBlendOp & BLEND_TRANSPARENT)
+        if constexpr (TBlendOp & kBlendTransparent)
         {
             if (pixel == 0)
             {
@@ -424,10 +452,10 @@ template<DrawBlendOp TBlendOp> bool FASTCALL BlitPixel(const uint8_t* src, uint8
         *dst = pixel;
         return true;
     }
-    else if constexpr ((TBlendOp & BLEND_DST) != 0)
+    else if constexpr ((TBlendOp & kBlendDst) != 0)
     {
         auto pixel = paletteMap[*dst];
-        if constexpr (TBlendOp & BLEND_TRANSPARENT)
+        if constexpr (TBlendOp & kBlendTransparent)
         {
             if (pixel == 0)
             {
@@ -459,28 +487,16 @@ void FASTCALL BlitPixels(const uint8_t* src, uint8_t* dst, const PaletteMap& pal
     }
 }
 
-#define SPRITE_ID_PALETTE_COLOUR_1(colourId) (IMAGE_TYPE_REMAP | ((colourId) << 19))
-#define SPRITE_ID_PALETTE_COLOUR_2(primaryId, secondaryId)                                                                     \
-    (IMAGE_TYPE_REMAP_2_PLUS | IMAGE_TYPE_REMAP | (((primaryId) << 19) | ((secondaryId) << 24)))
-#define SPRITE_ID_PALETTE_COLOUR_3(primaryId, secondaryId)                                                                     \
-    (IMAGE_TYPE_REMAP_2_PLUS | (((primaryId) << 19) | ((secondaryId) << 24)))
+constexpr uint8_t kPaletteTotalOffsets = 192;
 
-#define PALETTE_TO_G1_OFFSET_COUNT 144
+constexpr int8_t kMaxScrollingTextModes = 38;
 
-#define INSET_RECT_F_30 (INSET_RECT_FLAG_BORDER_INSET | INSET_RECT_FLAG_FILL_NONE)
-#define INSET_RECT_F_60 (INSET_RECT_FLAG_BORDER_INSET | INSET_RECT_FLAG_FILL_DONT_LIGHTEN)
-#define INSET_RECT_F_E0 (INSET_RECT_FLAG_BORDER_INSET | INSET_RECT_FLAG_FILL_DONT_LIGHTEN | INSET_RECT_FLAG_FILL_MID_LIGHT)
-
-#define MAX_SCROLLING_TEXT_MODES 38
-
-extern GamePalette gPalette;
-extern uint8_t gGamePalette[256 * 4];
+extern OpenRCT2::Drawing::GamePalette gPalette;
+extern OpenRCT2::Drawing::GamePalette gGamePalette;
 extern uint32_t gPaletteEffectFrame;
-extern const FilterPaletteID GlassPaletteIds[COLOUR_COUNT];
-extern thread_local uint8_t gPeepPalette[256];
-extern thread_local uint8_t gOtherPalette[256];
-extern uint8_t text_palette[];
-extern const translucent_window_palette TranslucentWindowPalettes[COLOUR_COUNT];
+
+extern uint8_t gTextPalette[];
+extern const TranslucentWindowPalette TranslucentWindowPalettes[COLOUR_COUNT];
 
 extern ImageId gPickupPeepImage;
 extern int32_t gPickupPeepX;
@@ -488,116 +504,113 @@ extern int32_t gPickupPeepY;
 
 extern bool gTinyFontAntiAliased;
 
-bool clip_drawpixelinfo(
-    rct_drawpixelinfo* dst, rct_drawpixelinfo* src, const ScreenCoordsXY& coords, int32_t width, int32_t height);
-void gfx_set_dirty_blocks(const ScreenRect& rect);
-void gfx_invalidate_screen();
+bool ClipDrawPixelInfo(DrawPixelInfo& dst, DrawPixelInfo& src, const ScreenCoordsXY& coords, int32_t width, int32_t height);
+void GfxSetDirtyBlocks(const ScreenRect& rect);
+void GfxInvalidateScreen();
 
 // palette
-void gfx_transpose_palette(int32_t pal, uint8_t product);
-void load_palette();
+void GfxTransposePalette(int32_t pal, uint8_t product);
+void LoadPalette();
 
 // other
-void gfx_clear(rct_drawpixelinfo* dpi, uint8_t paletteIndex);
-void gfx_filter_pixel(rct_drawpixelinfo* dpi, const ScreenCoordsXY& coords, FilterPaletteID palette);
-void gfx_invalidate_pickedup_peep();
-void gfx_draw_pickedup_peep(rct_drawpixelinfo* dpi);
+void GfxClear(DrawPixelInfo& dpi, uint8_t paletteIndex);
+void GfxFilterPixel(DrawPixelInfo& dpi, const ScreenCoordsXY& coords, FilterPaletteID palette);
+void GfxInvalidatePickedUpPeep();
+void GfxDrawPickedUpPeep(DrawPixelInfo& dpi);
 
 // line
-void gfx_draw_line(rct_drawpixelinfo* dpi, const ScreenLine& line, int32_t colour);
-void gfx_draw_line_software(rct_drawpixelinfo* dpi, const ScreenLine& line, int32_t colour);
-void gfx_draw_dashed_line(
-    rct_drawpixelinfo* dpi, const ScreenLine& screenLine, const int32_t dashedLineSegmentLength, const int32_t color);
+void GfxDrawLine(DrawPixelInfo& dpi, const ScreenLine& line, int32_t colour);
+void GfxDrawLineSoftware(DrawPixelInfo& dpi, const ScreenLine& line, int32_t colour);
+void GfxDrawDashedLine(
+    DrawPixelInfo& dpi, const ScreenLine& screenLine, const int32_t dashedLineSegmentLength, const int32_t color);
 
 // rect
-void gfx_fill_rect(rct_drawpixelinfo* dpi, const ScreenRect& rect, int32_t colour);
-void gfx_fill_rect_inset(rct_drawpixelinfo* dpi, const ScreenRect& rect, int32_t colour, uint8_t flags);
-void gfx_filter_rect(rct_drawpixelinfo* dpi, const ScreenRect& rect, FilterPaletteID palette);
+void GfxFillRect(DrawPixelInfo& dpi, const ScreenRect& rect, int32_t colour);
+void GfxFillRectInset(DrawPixelInfo& dpi, const ScreenRect& rect, ColourWithFlags colour, uint8_t flags);
+void GfxFilterRect(DrawPixelInfo& dpi, const ScreenRect& rect, FilterPaletteID palette);
 
 // sprite
-bool gfx_load_g1(const OpenRCT2::IPlatformEnvironment& env);
-bool gfx_load_g2();
-bool gfx_load_csg();
-void gfx_unload_g1();
-void gfx_unload_g2();
-void gfx_unload_csg();
-const rct_g1_element* gfx_get_g1_element(ImageId imageId);
-const rct_g1_element* gfx_get_g1_element(ImageIndex image_id);
-void gfx_set_g1_element(ImageIndex imageId, const rct_g1_element* g1);
-bool is_csg_loaded();
-void FASTCALL gfx_sprite_to_buffer(rct_drawpixelinfo& dpi, const DrawSpriteArgs& args);
-void FASTCALL gfx_bmp_sprite_to_buffer(rct_drawpixelinfo& dpi, const DrawSpriteArgs& args);
-void FASTCALL gfx_rle_sprite_to_buffer(rct_drawpixelinfo& dpi, const DrawSpriteArgs& args);
-void FASTCALL gfx_draw_sprite(rct_drawpixelinfo* dpi, ImageId image_id, const ScreenCoordsXY& coords);
-void FASTCALL gfx_draw_sprite(rct_drawpixelinfo* dpi, int32_t image_id, const ScreenCoordsXY& coords, uint32_t tertiary_colour);
-void FASTCALL
-    gfx_draw_glyph(rct_drawpixelinfo* dpi, int32_t image_id, const ScreenCoordsXY& coords, const PaletteMap& paletteMap);
-void FASTCALL gfx_draw_sprite_solid(rct_drawpixelinfo* dpi, uint32_t image, const ScreenCoordsXY& coords, uint8_t colour);
-void FASTCALL gfx_draw_sprite_solid(rct_drawpixelinfo* dpi, ImageId image, const ScreenCoordsXY& coords, uint8_t colour);
-void FASTCALL
-    gfx_draw_sprite_raw_masked(rct_drawpixelinfo* dpi, const ScreenCoordsXY& coords, ImageId maskImage, ImageId colourImage);
-void FASTCALL gfx_draw_sprite_software(rct_drawpixelinfo* dpi, ImageId imageId, const ScreenCoordsXY& spriteCoords);
-void FASTCALL gfx_draw_sprite_palette_set_software(
-    rct_drawpixelinfo* dpi, ImageId imageId, const ScreenCoordsXY& coords, const PaletteMap& paletteMap);
-void FASTCALL gfx_draw_sprite_raw_masked_software(
-    rct_drawpixelinfo* dpi, const ScreenCoordsXY& scrCoords, ImageId maskImage, ImageId colourImage);
+bool GfxLoadG1(const OpenRCT2::IPlatformEnvironment& env);
+bool GfxLoadG2();
+bool GfxLoadCsg();
+void GfxUnloadG1();
+void GfxUnloadG2();
+void GfxUnloadCsg();
+const G1Element* GfxGetG1Element(const ImageId imageId);
+const G1Element* GfxGetG1Element(ImageIndex image_id);
+void GfxSetG1Element(ImageIndex imageId, const G1Element* g1);
+std::optional<Gx> GfxLoadGx(const std::vector<uint8_t>& buffer);
+bool IsCsgLoaded();
+void FASTCALL GfxSpriteToBuffer(DrawPixelInfo& dpi, const DrawSpriteArgs& args);
+void FASTCALL GfxBmpSpriteToBuffer(DrawPixelInfo& dpi, const DrawSpriteArgs& args);
+void FASTCALL GfxRleSpriteToBuffer(DrawPixelInfo& dpi, const DrawSpriteArgs& args);
+void FASTCALL GfxDrawSprite(DrawPixelInfo& dpi, const ImageId image_id, const ScreenCoordsXY& coords);
+void FASTCALL GfxDrawGlyph(DrawPixelInfo& dpi, const ImageId image, const ScreenCoordsXY& coords, const PaletteMap& paletteMap);
+void FASTCALL GfxDrawSpriteSolid(DrawPixelInfo& dpi, const ImageId image, const ScreenCoordsXY& coords, uint8_t colour);
+void FASTCALL GfxDrawSpriteRawMasked(
+    DrawPixelInfo& dpi, const ScreenCoordsXY& coords, const ImageId maskImage, const ImageId colourImage);
+void FASTCALL GfxDrawSpriteSoftware(DrawPixelInfo& dpi, const ImageId imageId, const ScreenCoordsXY& spriteCoords);
+void FASTCALL GfxDrawSpritePaletteSetSoftware(
+    DrawPixelInfo& dpi, const ImageId imageId, const ScreenCoordsXY& coords, const PaletteMap& paletteMap);
+void FASTCALL GfxDrawSpriteRawMaskedSoftware(
+    DrawPixelInfo& dpi, const ScreenCoordsXY& scrCoords, const ImageId maskImage, const ImageId colourImage);
 
 // string
-void gfx_draw_string(rct_drawpixelinfo* dpi, const ScreenCoordsXY& coords, const_utf8string buffer, TextPaint textPaint = {});
-void gfx_draw_string_no_formatting(
-    rct_drawpixelinfo* dpi, const ScreenCoordsXY& coords, const_utf8string buffer, TextPaint textPaint);
-
-void gfx_draw_string_left_centred(
-    rct_drawpixelinfo* dpi, rct_string_id format, void* args, colour_t colour, const ScreenCoordsXY& coords);
-void draw_string_centred_raw(
-    rct_drawpixelinfo* dpi, const ScreenCoordsXY& coords, int32_t numLines, char* text, FontSpriteBase fontSpriteBase);
+void GfxDrawStringLeftCentred(
+    DrawPixelInfo& dpi, StringId format, void* args, ColourWithFlags colour, const ScreenCoordsXY& coords);
+void DrawStringCentredRaw(
+    DrawPixelInfo& dpi, const ScreenCoordsXY& coords, int32_t numLines, const utf8* text, FontStyle fontStyle);
 void DrawNewsTicker(
-    rct_drawpixelinfo* dpi, const ScreenCoordsXY& coords, int32_t width, colour_t colour, rct_string_id format, void* args,
+    DrawPixelInfo& dpi, const ScreenCoordsXY& coords, int32_t width, colour_t colour, StringId format, u8string_view args,
     int32_t ticks);
-void gfx_draw_string_with_y_offsets(
-    rct_drawpixelinfo* dpi, const utf8* text, int32_t colour, const ScreenCoordsXY& coords, const int8_t* yOffsets,
-    bool forceSpriteFont, FontSpriteBase fontSpriteBase);
+void GfxDrawStringWithYOffsets(
+    DrawPixelInfo& dpi, const utf8* text, ColourWithFlags colour, const ScreenCoordsXY& coords, const int8_t* yOffsets,
+    bool forceSpriteFont, FontStyle fontStyle);
 
-int32_t gfx_wrap_string(char* buffer, int32_t width, FontSpriteBase fontSpriteBase, int32_t* num_lines);
-int32_t gfx_get_string_width(std::string_view text, FontSpriteBase fontSpriteBase);
-int32_t gfx_get_string_width_new_lined(std::string_view text, FontSpriteBase fontSpriteBase);
-int32_t gfx_get_string_width_no_formatting(std::string_view text, FontSpriteBase fontSpriteBase);
-int32_t string_get_height_raw(std::string_view text, FontSpriteBase fontBase);
-int32_t gfx_clip_string(char* buffer, int32_t width, FontSpriteBase fontSpriteBase);
-void shorten_path(utf8* buffer, size_t bufferSize, const utf8* path, int32_t availableWidth, FontSpriteBase fontSpriteBase);
-void ttf_draw_string(
-    rct_drawpixelinfo* dpi, const_utf8string text, int32_t colour, const ScreenCoordsXY& coords, bool noFormatting,
-    FontSpriteBase fontSpriteBase);
+int32_t GfxWrapString(u8string_view text, int32_t width, FontStyle fontStyle, u8string* outWrappedText, int32_t* outNumLines);
+int32_t GfxGetStringWidth(std::string_view text, FontStyle fontStyle);
+int32_t GfxGetStringWidthNewLined(std::string_view text, FontStyle fontStyle);
+int32_t GfxGetStringWidthNoFormatting(std::string_view text, FontStyle fontStyle);
+int32_t StringGetHeightRaw(std::string_view text, FontStyle fontStyle);
+int32_t GfxClipString(char* buffer, int32_t width, FontStyle fontStyle);
+u8string ShortenPath(const u8string& path, int32_t availableWidth, FontStyle fontStyle);
+void TTFDrawString(
+    DrawPixelInfo& dpi, const_utf8string text, ColourWithFlags colour, const ScreenCoordsXY& coords, bool noFormatting,
+    FontStyle fontStyle, TextDarkness darkness);
 
 // scrolling text
-void scrolling_text_initialise_bitmaps();
-void scrolling_text_invalidate();
+void ScrollingTextInitialiseBitmaps();
+void ScrollingTextInvalidate();
 
 class Formatter;
 
-int32_t scrolling_text_setup(
-    struct paint_session* session, rct_string_id stringId, Formatter& ft, uint16_t scroll, uint16_t scrollingMode,
-    colour_t colour);
+ImageId ScrollingTextSetup(
+    struct PaintSession& session, StringId stringId, Formatter& ft, uint16_t scroll, uint16_t scrollingMode, colour_t colour);
 
-rct_size16 FASTCALL gfx_get_sprite_size(uint32_t image_id);
-size_t g1_calculate_data_size(const rct_g1_element* g1);
+size_t G1CalculateDataSize(const G1Element* g1);
 
-void mask_scalar(
+void MaskScalar(
     int32_t width, int32_t height, const uint8_t* RESTRICT maskSrc, const uint8_t* RESTRICT colourSrc, uint8_t* RESTRICT dst,
     int32_t maskWrap, int32_t colourWrap, int32_t dstWrap);
-void mask_sse4_1(
+void MaskSse4_1(
     int32_t width, int32_t height, const uint8_t* RESTRICT maskSrc, const uint8_t* RESTRICT colourSrc, uint8_t* RESTRICT dst,
     int32_t maskWrap, int32_t colourWrap, int32_t dstWrap);
-void mask_avx2(
+void MaskAvx2(
     int32_t width, int32_t height, const uint8_t* RESTRICT maskSrc, const uint8_t* RESTRICT colourSrc, uint8_t* RESTRICT dst,
     int32_t maskWrap, int32_t colourWrap, int32_t dstWrap);
-void mask_init();
 
-extern void (*mask_fn)(
+void MaskFn(
     int32_t width, int32_t height, const uint8_t* RESTRICT maskSrc, const uint8_t* RESTRICT colourSrc, uint8_t* RESTRICT dst,
     int32_t maskWrap, int32_t colourWrap, int32_t dstWrap);
 
 std::optional<uint32_t> GetPaletteG1Index(colour_t paletteId);
 std::optional<PaletteMap> GetPaletteMapForColour(colour_t paletteId);
+void UpdatePalette(std::span<const OpenRCT2::Drawing::PaletteBGRA> palette, int32_t start_index, int32_t num_colours);
+void UpdatePaletteEffects();
+
+void RefreshVideo();
+void ToggleWindowedMode();
+
+void DebugDPI(DrawPixelInfo& dpi);
 
 #include "NewDrawing.h"

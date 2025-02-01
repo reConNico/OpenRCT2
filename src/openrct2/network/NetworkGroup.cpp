@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (c) 2014-2020 OpenRCT2 developers
+ * Copyright (c) 2014-2025 OpenRCT2 developers
  *
  * For a complete list of all authors, please refer to contributors.md
  * Interested in contributing? Visit https://github.com/OpenRCT2/OpenRCT2
@@ -9,13 +9,15 @@
 
 #ifndef DISABLE_NETWORK
 
-#    include "NetworkGroup.h"
+    #include "NetworkGroup.h"
 
-#    include "../openrct2/core/Json.hpp"
-#    include "NetworkAction.h"
-#    include "NetworkTypes.h"
+    #include "../openrct2/core/Json.hpp"
+    #include "NetworkAction.h"
+    #include "NetworkTypes.h"
 
-NetworkGroup NetworkGroup::FromJson(json_t& jsonData)
+using namespace OpenRCT2;
+
+NetworkGroup NetworkGroup::FromJson(const json_t& jsonData)
 {
     Guard::Assert(jsonData.is_object(), "NetworkGroup::FromJson expects parameter jsonData to be object");
 
@@ -64,7 +66,7 @@ json_t NetworkGroup::ToJson() const
     return jsonGroup;
 }
 
-const std::string& NetworkGroup::GetName() const
+const std::string& NetworkGroup::GetName() const noexcept
 {
     return _name;
 }
@@ -84,7 +86,7 @@ void NetworkGroup::Read(NetworkPacket& packet)
     }
 }
 
-void NetworkGroup::Write(NetworkPacket& packet)
+void NetworkGroup::Write(NetworkPacket& packet) const
 {
     packet << Id;
     packet.WriteString(GetName().c_str());
@@ -106,7 +108,7 @@ void NetworkGroup::ToggleActionPermission(NetworkPermission index)
     ActionsAllowed[byte] ^= (1 << bit);
 }
 
-bool NetworkGroup::CanPerformAction(NetworkPermission index) const
+bool NetworkGroup::CanPerformAction(NetworkPermission index) const noexcept
 {
     size_t index_st = static_cast<size_t>(index);
     size_t byte = index_st / 8;
